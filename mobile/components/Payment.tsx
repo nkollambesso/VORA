@@ -52,9 +52,9 @@ const Payment = ({
           currencyCode: "usd",
         },
         confirmHandler: async (
-          paymentMethod,
-          shouldSavePaymentMethod,
-          intentCreationCallback,
+          paymentMethod: { id: string; type: string; liveMode: boolean; [key: string]: any },
+          _shouldSavePaymentMethod: boolean,
+          intentCreationCallback: (result: { clientSecret: string; error?: { code: string; message: string } }) => void,
         ) => {
           const { paymentIntent, customer } = await fetchAPI(
             "/(api)/(stripe)/create",

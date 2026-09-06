@@ -151,8 +151,8 @@ const Home = () => {
     <SafeAreaView style={styles.container}>
       <FlatList
         data={recentRides?.slice(0, 5)}
-        renderItem={({ item }) => <RideCard ride={item} />}
-        keyExtractor={(item, index) => index.toString()}
+        renderItem={({ item }: { item: Ride }) => <RideCard ride={item} />}
+        keyExtractor={(_item: Ride, index: number) => index.toString()}
         contentContainerStyle={[
           styles.flatListContent,
           isWide && { width: "100%", maxWidth: 1080, alignSelf: "center" },

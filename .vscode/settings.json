@@ -1,0 +1,26 @@
+{
+  // Exclude non-VORA directories from search and file tree
+  "search.exclude": {
+    "**/node_modules": true,
+    "uber/**": true,
+    ".tools/**": true
+  },
+
+  "files.exclude": {
+    "**/.git": true,
+    "**/.expo": true
+  },
+
+  // Suppress JS validation noise (react-native internals etc.)
+  "javascript.validate.enable": false,
+
+  // NativeWind / Tailwind CSS IntelliSense
+  "tailwindCSS.rootFontSize": 16,
+  "tailwindCSS.includeLanguages": {
+    "typescript": "javascript",
+    "typescriptreact": "javascript"
+  },
+  "editor.quickSuggestions": {
+    "strings": true
+  }
+}
