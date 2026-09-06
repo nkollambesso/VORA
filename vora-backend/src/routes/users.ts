@@ -1,11 +1,11 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { query } from '../db';
 import { generatePublicId, formatDisplayName } from '../utils/anonymize';
 
 const router = Router();
 
 // Créer ou mettre à jour un utilisateur (Clerk Sync)
-router.post('/', async (req, res) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const { id, name, email, phone, role, avatar_url } = req.body;
     const newPublicId = generatePublicId();
@@ -50,7 +50,7 @@ router.post('/', async (req, res) => {
 });
 
 // Récupérer le profil utilisateur privé complet (pour le propriétaire lui-même)
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     let result = await query(`SELECT * FROM users WHERE id = $1`, [id]);
@@ -84,7 +84,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Récupérer uniquement le profil PUBLIC anonymisé (pour les autres utilisateurs)
-router.get('/public/:id', async (req, res) => {
+router.get('/public/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const result = await query(`SELECT id, public_id, name, avatar_url, role FROM users WHERE id = $1 OR public_id = $1`, [id]);

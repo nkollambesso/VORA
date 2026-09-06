@@ -9,7 +9,7 @@ interface DriverLocation {
 }
 
 // Map pour gérer les timers d'auto-confirmation des courses (key: rideId)
-const autoConfirmTimers = new Map<string, NodeJS.Timeout>();
+const autoConfirmTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 export function setupSocketIO(io: SocketIOServer) {
   io.on('connection', (socket: Socket) => {

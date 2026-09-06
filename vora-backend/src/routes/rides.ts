@@ -1,10 +1,10 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { query } from '../db';
 
 const router = Router();
 
 // Créer une nouvelle demande de course
-router.post('/', async (req, res) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const {
       rider_id,
@@ -67,7 +67,7 @@ router.post('/', async (req, res) => {
 });
 
 // Récupérer les détails d'une course
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const result = await query(
@@ -91,7 +91,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Historique des courses d'un passager
-router.get('/user/:userId', async (req, res) => {
+router.get('/user/:userId', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const result = await query(
@@ -106,7 +106,7 @@ router.get('/user/:userId', async (req, res) => {
 });
 
 // Historique des courses d'un chauffeur
-router.get('/driver/:driverId', async (req, res) => {
+router.get('/driver/:driverId', async (req: Request, res: Response) => {
   try {
     const { driverId } = req.params;
     const result = await query(
