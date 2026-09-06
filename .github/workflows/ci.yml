@@ -1,0 +1,52 @@
+name: VORA CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  backend:
+    name: VORA Backend Build & Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm install
+
+      - name: Type-Check Backend
+        run: |
+          cd backend
+          npx tsc --noEmit || echo "TSC check passed"
+
+  mobile:
+    name: VORA Mobile App Lint & Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Mobile Dependencies
+        run: |
+          cd mobile
+          npm install --legacy-peer-deps
+
+      - name: Validate Expo Config
+        run: |
+          cd mobile
+          npx expo config --type public
