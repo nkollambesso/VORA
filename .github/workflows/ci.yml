@@ -62,6 +62,12 @@ jobs:
           cd mobile
           npx expo prebuild --platform android --no-install
 
+      - name: Patch Android Gradle Plugin to support compileSdk 35
+        run: |
+          sed -i 's/com\.android\.tools\.build:gradle:[0-9.]*/com.android.tools.build:gradle:8.3.2/' mobile/android/build.gradle
+          echo "AGP version after patch:"
+          grep "com.android.tools.build:gradle" mobile/android/build.gradle
+
       - name: Build APK
         run: |
           cd mobile/android
