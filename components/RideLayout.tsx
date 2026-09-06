@@ -4,7 +4,16 @@ import BottomSheet, {
 } from "@gorhom/bottom-sheet";
 import { router } from "expo-router";
 import React, { useRef } from "react";
-import { Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Image,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import Map from "@/components/Map";
@@ -20,27 +29,49 @@ const RideLayout = ({
   children: React.ReactNode;
 }) => {
   const bottomSheetRef = useRef<BottomSheet>(null);
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
 
   if (Platform.OS === "web") {
     return (
       <View style={styles.webContainer}>
-        {/* Header */}
-        <View style={styles.webHeader}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Image source={icons.backArrow} resizeMode="contain" style={styles.backIcon} />
-          </TouchableOpacity>
-          <Text style={styles.webHeaderTitle}>{title || "Retour"}</Text>
-        </View>
+        <View style={isWide ? styles.wideWrapper : styles.mobileWebWrapper}>
+          {/* Header */}
+          <View style={styles.webHeader}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+              <Image source={icons.backArrow} resizeMode="contain" style={styles.backIcon} />
+            </TouchableOpacity>
+            <Text style={styles.webHeaderTitle}>{title || "Retour"}</Text>
+          </View>
 
-        {/* Map */}
-        <View style={styles.webMapContainer}>
-          <Map />
+          {isWide ? (
+            /* 2-Column Desktop / Tablet Split View */
+            <View style={styles.wideRow}>
+              <View style={styles.wideMapCol}>
+                <Map />
+              </View>
+              <ScrollView
+                style={styles.wideContentCol}
+                contentContainerStyle={{ padding: 24 }}
+              >
+                {children}
+              </ScrollView>
+            </View>
+          ) : (
+            /* Standard Mobile Web View */
+            <>
+              <View style={styles.webMapContainer}>
+                <Map />
+              </View>
+              <ScrollView
+                style={styles.webContentBox}
+                contentContainerStyle={{ padding: 20 }}
+              >
+                {children}
+              </ScrollView>
+            </>
+          )}
         </View>
-
-        {/* Content Box */}
-        <ScrollView style={styles.webContentBox} contentContainerStyle={{ padding: 20 }}>
-          {children}
-        </ScrollView>
       </View>
     );
   }
@@ -90,23 +121,47 @@ export default RideLayout;
 const styles = StyleSheet.create({
   webContainer: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#F1F5F9",
+  },
+  mobileWebWrapper: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+  },
+  wideWrapper: {
+    flex: 1,
+    width: "100%",
+    maxWidth: 1200,
+    alignSelf: "center",
+    backgroundColor: "#ffffff",
+    boxShadow: "0px 10px 30px rgba(0, 0, 0, 0.06)",
   },
   webHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 12,
+    paddingBottom: 16,
     backgroundColor: "#ffffff",
     borderBottomWidth: 1,
     borderBottomColor: "#e2e8f0",
-    gap: 12,
+    gap: 14,
   },
   webHeaderTitle: {
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 20,
+    fontWeight: "800",
     color: "#0f172a",
+  },
+  wideRow: {
+    flex: 1,
+    flexDirection: "row",
+  },
+  wideMapCol: {
+    flex: 1.1,
+    backgroundColor: "#e2e8f0",
+  },
+  wideContentCol: {
+    flex: 0.9,
+    backgroundColor: "#ffffff",
   },
   webMapContainer: {
     height: 260,

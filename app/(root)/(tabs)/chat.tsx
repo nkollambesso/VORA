@@ -1,12 +1,20 @@
-import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { images } from "@/constants";
 
 const Chat = () => {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          isWide && { width: "100%", maxWidth: 840, alignSelf: "center" },
+        ]}
+      >
         <Text style={styles.title}>Discussion</Text>
         <View style={styles.emptyCenter}>
           <Image

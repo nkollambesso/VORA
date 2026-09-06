@@ -1,5 +1,5 @@
 import { useClerkUser } from "@/lib/useClerkSafe";
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Image, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import RideCard from "@/components/RideCard";
@@ -8,6 +8,8 @@ import { useFetch } from "@/lib/fetch";
 import { Ride } from "@/types/type";
 
 const Rides = () => {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
   const { user } = useClerkUser();
 
   const {
@@ -22,7 +24,10 @@ const Rides = () => {
         data={recentRides}
         renderItem={({ item }) => <RideCard ride={item} />}
         keyExtractor={(item, index) => index.toString()}
-        contentContainerStyle={styles.flatListContent}
+        contentContainerStyle={[
+          styles.flatListContent,
+          isWide && { width: "100%", maxWidth: 1080, alignSelf: "center" },
+        ]}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>

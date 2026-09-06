@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -25,6 +26,8 @@ import { Ride } from "@/types/type";
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const Home = () => {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
   const { user } = useClerkUser();
   const { signOut } = useClerkAuth();
 
@@ -82,7 +85,10 @@ const Home = () => {
         data={recentRides?.slice(0, 5)}
         renderItem={({ item }) => <RideCard ride={item} />}
         keyExtractor={(item, index) => index.toString()}
-        contentContainerStyle={styles.flatListContent}
+        contentContainerStyle={[
+          styles.flatListContent,
+          isWide && { width: "100%", maxWidth: 1080, alignSelf: "center" },
+        ]}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>

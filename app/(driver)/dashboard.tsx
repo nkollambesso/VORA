@@ -5,6 +5,7 @@ import {
   Switch,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { router } from "expo-router";
@@ -114,8 +115,17 @@ export default function DriverDashboard() {
     }
   };
 
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[
+        styles.scroll,
+        isWide && { width: "100%", maxWidth: 1080, alignSelf: "center" },
+      ]}
+    >
       {/* Header Sky Blue Glass */}
       <View style={styles.header}>
         <View style={styles.headerRow}>

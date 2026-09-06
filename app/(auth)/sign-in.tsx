@@ -1,11 +1,13 @@
 import { Link, router } from "expo-router";
-import { useCallback, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   Alert,
   Image,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -21,6 +23,9 @@ try {
 } catch {}
 
 const SignIn = () => {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
+
   let signInHook: any = { signIn: null, setActive: null, isLoaded: false };
   try {
     if (_useSignIn) {
@@ -59,76 +64,103 @@ const SignIn = () => {
   }, [isLoaded, form, role, signIn, setActive]);
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scroll}>
-      {/* Hero banner */}
-      <View style={styles.hero}>
-        <Image
-          source={images.signUpCar}
-          style={styles.heroImg}
-          resizeMode="cover"
-        />
-        <View style={styles.heroOverlay}>
-          <Text style={styles.heroTitle}>Bienvenue sur VORA</Text>
-          <Text style={styles.heroSub}>Connectez-vous à votre compte</Text>
+    <View style={isWide ? styles.rootWide : styles.rootMobile}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={isWide ? styles.scrollContentWide : styles.scrollContentMobile}
+      >
+        <View style={isWide ? styles.cardWide : styles.cardMobile}>
+          {/* Hero banner */}
+          <View style={styles.hero}>
+            <Image
+              source={images.signUpCar}
+              style={styles.heroImg}
+              resizeMode="cover"
+            />
+            <View style={styles.heroOverlay}>
+              <Text style={styles.heroTitle}>Bienvenue sur VORA</Text>
+              <Text style={styles.heroSub}>Connectez-vous à votre compte</Text>
+            </View>
+          </View>
+
+          <View style={styles.body}>
+            {/* Role Selector */}
+            <Text style={styles.sectionLabel}>Connexion en tant que :</Text>
+            <View style={styles.roleRow}>
+              <TouchableOpacity
+                onPress={() => setRole("PASSENGER")}
+                style={[
+                  styles.roleBtn,
+                  role === "PASSENGER" && styles.roleBtnActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.roleBtnText,
+                    role === "PASSENGER" && styles.roleBtnTextActive,
+                  ]}
+                >
+                  Passager
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setRole("DRIVER")}
+                style={[
+                  styles.roleBtn,
+                  role === "DRIVER" && styles.roleBtnActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.roleBtnText,
+                    role === "DRIVER" && styles.roleBtnTextActive,
+                  ]}
+                >
+                  Chauffeur
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <InputField
+              label="Email"
+              placeholder="Votre adresse email"
+              icon={icons.email}
+              textContentType="emailAddress"
+              autoCapitalize="none"
+              value={form.email}
+              onChangeText={(v) => setForm({ ...form, email: v })}
+            />
+            <InputField
+              label="Mot de passe"
+              placeholder="Votre mot de passe"
+              icon={icons.lock}
+              secureTextEntry
+              textContentType="password"
+              value={form.password}
+              onChangeText={(v) => setForm({ ...form, password: v })}
+            />
+
+            <View style={{ marginTop: 20 }}>
+              <CustomButton
+                title={
+                  role === "DRIVER"
+                    ? "Se connecter en Chauffeur"
+                    : "Se connecter en Passager"
+                }
+                onPress={onSignInPress}
+              />
+            </View>
+
+            <OAuth />
+
+            <Link href="/sign-up" style={styles.linkRow}>
+              <Text style={styles.linkGray}>Pas encore de compte ? </Text>
+              <Text style={styles.linkBlue}>S'inscrire</Text>
+            </Link>
+          </View>
         </View>
-      </View>
-
-      <View style={styles.body}>
-        {/* Role Selector */}
-        <Text style={styles.sectionLabel}>Connexion en tant que :</Text>
-        <View style={styles.roleRow}>
-          <TouchableOpacity
-            onPress={() => setRole("PASSENGER")}
-            style={[styles.roleBtn, role === "PASSENGER" && styles.roleBtnActive]}
-          >
-            <Text style={[styles.roleBtnText, role === "PASSENGER" && styles.roleBtnTextActive]}>
-              Passager
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setRole("DRIVER")}
-            style={[styles.roleBtn, role === "DRIVER" && styles.roleBtnActive]}
-          >
-            <Text style={[styles.roleBtnText, role === "DRIVER" && styles.roleBtnTextActive]}>
-              Chauffeur
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <InputField
-          label="Email"
-          placeholder="Votre adresse email"
-          icon={icons.email}
-          textContentType="emailAddress"
-          autoCapitalize="none"
-          value={form.email}
-          onChangeText={(v) => setForm({ ...form, email: v })}
-        />
-        <InputField
-          label="Mot de passe"
-          placeholder="Votre mot de passe"
-          icon={icons.lock}
-          secureTextEntry
-          textContentType="password"
-          value={form.password}
-          onChangeText={(v) => setForm({ ...form, password: v })}
-        />
-
-        <View style={{ marginTop: 20 }}>
-          <CustomButton
-            title={role === "DRIVER" ? "Se connecter en Chauffeur" : "Se connecter en Passager"}
-            onPress={onSignInPress}
-          />
-        </View>
-
-        <OAuth />
-
-        <Link href="/sign-up" style={styles.linkRow}>
-          <Text style={styles.linkGray}>Pas encore de compte ? </Text>
-          <Text style={styles.linkBlue}>S'inscrire</Text>
-        </Link>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
@@ -138,18 +170,48 @@ export default SignIn;
 const PRIMARY = "#0EA5E9";
 
 const styles = StyleSheet.create({
-  root: {
+  rootMobile: {
     flex: 1,
     backgroundColor: "#ffffff",
+    width: "100%",
+  },
+  rootWide: {
+    flex: 1,
+    backgroundColor: "#F1F5F9",
+    width: "100%",
   },
   scroll: {
+    flex: 1,
+    width: "100%",
+  },
+  scrollContentMobile: {
     flexGrow: 1,
     paddingBottom: 40,
+  },
+  scrollContentWide: {
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+  },
+  cardMobile: {
+    width: "100%",
+    backgroundColor: "#ffffff",
+  },
+  cardWide: {
+    width: "100%",
+    maxWidth: 540,
+    backgroundColor: "#ffffff",
+    borderRadius: 24,
+    overflow: "hidden",
+    boxShadow: "0px 10px 30px rgba(0, 0, 0, 0.08)",
+    elevation: 6,
   },
   // Hero
   hero: {
     width: "100%",
-    height: 220,
+    height: 200,
     overflow: "hidden",
     position: "relative",
     backgroundColor: "#0f172a",
@@ -165,7 +227,7 @@ const styles = StyleSheet.create({
     left: 20,
   },
   heroTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "800",
     color: "#ffffff",
     letterSpacing: -0.3,
@@ -178,11 +240,11 @@ const styles = StyleSheet.create({
   },
   // Body
   body: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 28,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     color: "#475569",
     marginBottom: 8,

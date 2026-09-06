@@ -1,11 +1,13 @@
 import { Link, router } from "expo-router";
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { ReactNativeModal } from "react-native-modal";
@@ -13,7 +15,7 @@ import { ReactNativeModal } from "react-native-modal";
 import CustomButton from "@/components/CustomButton";
 import InputField from "@/components/InputField";
 import OAuth from "@/components/OAuth";
-import { icons } from "@/constants";
+import { icons, images } from "@/constants";
 import { fetchAPI } from "@/lib/fetch";
 
 // Lazy-load Clerk hook only when context is available
@@ -23,6 +25,9 @@ try {
 } catch {}
 
 const SignUp = () => {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
+
   let signUpHook: any = { isLoaded: false, signUp: null, setActive: null };
   try {
     if (_useSignUp) {
@@ -34,7 +39,7 @@ const SignUp = () => {
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [role, setRole] = useState<"PASSENGER" | "DRIVER">("PASSENGER");
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", gender: "MALE" });
   const [verification, setVerification] = useState({
     state: "default",
     error: "",
@@ -43,7 +48,11 @@ const SignUp = () => {
 
   const onSignUpPress = async () => {
     if (!isLoaded || !signUp) {
-      router.replace("/(root)/(tabs)/home");
+      if (role === "DRIVER") {
+        router.replace("/(driver)/dashboard" as any);
+      } else {
+        router.replace("/(root)/(tabs)/home");
+      }
       return;
     }
     try {
@@ -82,134 +91,143 @@ const SignUp = () => {
   };
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.scroll}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Créer un compte VORA</Text>
-        <Text style={styles.headerSub}>
-          Vos déplacements et courses en toute simplicité
-        </Text>
-      </View>
+    <View style={isWide ? styles.rootWide : styles.rootMobile}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={isWide ? styles.scrollContentWide : styles.scrollContentMobile}
+      >
+        <View style={isWide ? styles.cardWide : styles.cardMobile}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Créer un compte VORA</Text>
+            <Text style={styles.headerSub}>
+              Vos déplacements et courses en toute simplicité
+            </Text>
+          </View>
 
-      <View style={styles.body}>
-        {/* Role selector */}
-        <Text style={styles.sectionLabel}>Je m'inscris en tant que :</Text>
-        <View style={styles.roleRow}>
-          <TouchableOpacity
-            onPress={() => setRole("PASSENGER")}
-            style={[styles.roleBtn, role === "PASSENGER" && styles.roleBtnActive]}
-          >
-            <Text style={[styles.roleBtnText, role === "PASSENGER" && styles.roleBtnTextActive]}>
-              Passager
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setRole("DRIVER")}
-            style={[styles.roleBtn, role === "DRIVER" && styles.roleBtnActive]}
-          >
-            <Text style={[styles.roleBtnText, role === "DRIVER" && styles.roleBtnTextActive]}>
-              Chauffeur
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.body}>
+            {/* Role selector */}
+            <Text style={styles.sectionLabel}>Je m'inscris en tant que :</Text>
+            <View style={styles.roleRow}>
+              <TouchableOpacity
+                onPress={() => setRole("PASSENGER")}
+                style={[styles.roleBtn, role === "PASSENGER" && styles.roleBtnActive]}
+              >
+                <Text style={[styles.roleBtnText, role === "PASSENGER" && styles.roleBtnTextActive]}>
+                  Passager
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setRole("DRIVER")}
+                style={[styles.roleBtn, role === "DRIVER" && styles.roleBtnActive]}
+              >
+                <Text style={[styles.roleBtnText, role === "DRIVER" && styles.roleBtnTextActive]}>
+                  Chauffeur
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Form */}
+            <InputField
+              label="Nom complet"
+              placeholder="Ex: Jean Tchouamo"
+              icon={icons.person}
+              value={form.name}
+              onChangeText={(v: string) => setForm({ ...form, name: v })}
+            />
+
+            {/* Gender selection */}
+            <Text style={styles.sectionLabel}>Genre / Sexe :</Text>
+            <View style={styles.roleRow}>
+              <TouchableOpacity
+                onPress={() => setForm({ ...form, gender: "MALE" })}
+                style={[
+                  styles.roleBtn,
+                  form.gender === "MALE" && styles.roleBtnActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.roleBtnText,
+                    form.gender === "MALE" && styles.roleBtnTextActive,
+                  ]}
+                >
+                  Homme
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setForm({ ...form, gender: "FEMALE" })}
+                style={[
+                  styles.roleBtn,
+                  form.gender === "FEMALE" && styles.roleBtnActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.roleBtnText,
+                    form.gender === "FEMALE" && styles.roleBtnTextActive,
+                  ]}
+                >
+                  Femme
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setForm({ ...form, gender: "OTHER" })}
+                style={[
+                  styles.roleBtn,
+                  form.gender === "OTHER" && styles.roleBtnActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.roleBtnText,
+                    form.gender === "OTHER" && styles.roleBtnTextActive,
+                  ]}
+                >
+                  Autre
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <InputField
+              label="Email"
+              placeholder="votre.email@domaine.cm"
+              icon={icons.email}
+              textContentType="emailAddress"
+              autoCapitalize="none"
+              value={form.email}
+              onChangeText={(v: string) => setForm({ ...form, email: v })}
+            />
+            <InputField
+              label="Mot de passe"
+              placeholder="Choisissez un mot de passe"
+              icon={icons.lock}
+              secureTextEntry
+              textContentType="password"
+              value={form.password}
+              onChangeText={(v: string) => setForm({ ...form, password: v })}
+            />
+
+            <View style={{ marginTop: 20 }}>
+              <CustomButton
+                title={role === "DRIVER" ? "S'inscrire comme Chauffeur" : "Créer mon compte Passager"}
+                onPress={onSignUpPress}
+              />
+            </View>
+
+            <OAuth />
+
+            <View style={styles.linkRow}>
+              <Text style={styles.linkGray}>Déjà un compte ? </Text>
+              <TouchableOpacity onPress={() => router.push("/sign-in")}>
+                <Text style={styles.linkBlue}>Se connecter</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
+      </ScrollView>
 
-        {/* Form */}
-        <InputField
-          label="Nom complet"
-          placeholder="Ex: Jean Tchouamo"
-          icon={icons.person}
-          value={form.name}
-          onChangeText={(v: string) => setForm({ ...form, name: v })}
-        />
-
-        {/* Gender selection */}
-        <Text style={styles.sectionLabel}>Genre / Sexe :</Text>
-        <View style={styles.roleRow}>
-          <TouchableOpacity
-            onPress={() => setForm({ ...form, gender: "MALE" } as any)}
-            style={[
-              styles.roleBtn,
-              (form as any).gender !== "FEMALE" && (form as any).gender !== "OTHER" && styles.roleBtnActive,
-            ]}
-          >
-            <Text
-              style={[
-                styles.roleBtnText,
-                (form as any).gender !== "FEMALE" && (form as any).gender !== "OTHER" && styles.roleBtnTextActive,
-              ]}
-            >
-              Homme
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setForm({ ...form, gender: "FEMALE" } as any)}
-            style={[
-              styles.roleBtn,
-              (form as any).gender === "FEMALE" && styles.roleBtnActive,
-            ]}
-          >
-            <Text
-              style={[
-                styles.roleBtnText,
-                (form as any).gender === "FEMALE" && styles.roleBtnTextActive,
-              ]}
-            >
-              Femme
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setForm({ ...form, gender: "OTHER" } as any)}
-            style={[
-              styles.roleBtn,
-              (form as any).gender === "OTHER" && styles.roleBtnActive,
-            ]}
-          >
-            <Text
-              style={[
-                styles.roleBtnText,
-                (form as any).gender === "OTHER" && styles.roleBtnTextActive,
-              ]}
-            >
-              Autre
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <InputField
-          label="Email"
-          placeholder="votre.email@domaine.cm"
-          icon={icons.email}
-          textContentType="emailAddress"
-          autoCapitalize="none"
-          value={form.email}
-          onChangeText={(v: string) => setForm({ ...form, email: v })}
-        />
-        <InputField
-          label="Mot de passe"
-          placeholder="Minimum 8 caractères"
-          icon={icons.lock}
-          secureTextEntry
-          textContentType="password"
-          value={form.password}
-          onChangeText={(v: string) => setForm({ ...form, password: v })}
-        />
-
-        <View style={{ marginTop: 20 }}>
-          <CustomButton
-            title={isLoaded ? "S'inscrire" : "Continuer en démo"}
-            onPress={onSignUpPress}
-          />
-        </View>
-
-        <OAuth />
-
-        <Link href="/sign-in" style={styles.linkRow}>
-          <Text style={styles.linkGray}>Déjà un compte ? </Text>
-          <Text style={styles.linkBlue}>Se connecter</Text>
-        </Link>
-      </View>
-
-      {/* Verification modal */}
+      {/* Verification Modal */}
       <ReactNativeModal
         isVisible={verification.state === "pending"}
         onModalHide={() => {
@@ -217,55 +235,54 @@ const SignUp = () => {
         }}
       >
         <View style={styles.modal}>
-          <Text style={styles.modalTitle}>Vérification Email</Text>
+          <Text style={styles.modalTitle}>Vérification de l'email</Text>
           <Text style={styles.modalSub}>
-            Code envoyé à {form.email}
+            Nous avons envoyé un code de vérification à {form.email}.
           </Text>
           <InputField
-            label="Code"
+            label="Code de vérification"
             icon={icons.lock}
             placeholder="123456"
-            value={verification.code}
             keyboardType="numeric"
-            onChangeText={(code: string) =>
-              setVerification({ ...verification, code })
-            }
+            value={verification.code}
+            onChangeText={(code: string) => setVerification({ ...verification, code })}
           />
           {verification.error ? (
             <Text style={styles.errorText}>{verification.error}</Text>
           ) : null}
           <View style={{ marginTop: 16 }}>
-            <CustomButton
-              title="Valider l'Email"
-              onPress={onPressVerify}
-              bgVariant="success"
-            />
+            <CustomButton title="Vérifier l'adresse" onPress={onPressVerify} />
           </View>
         </View>
       </ReactNativeModal>
 
-      {/* Success modal */}
+      {/* Success Modal */}
       <ReactNativeModal isVisible={showSuccessModal}>
         <View style={styles.modal}>
-          <Text style={styles.modalTitle}>✅ Compte Vérifié</Text>
-          <Text style={styles.modalSub}>
-            Votre compte VORA a été créé avec succès.
+          <Image
+            source={images.check}
+            style={{ width: 80, height: 80, alignSelf: "center", marginBottom: 16 }}
+          />
+          <Text style={[styles.modalTitle, { textAlign: "center" }]}>
+            Compte créé !
           </Text>
-          <View style={{ marginTop: 20 }}>
-            <CustomButton
-              title={role === "DRIVER" ? "Configurer mon Véhicule" : "Découvrir VORA"}
-              onPress={() => {
-                if (role === "DRIVER") {
-                  router.push("/(auth)/driver-register" as any);
-                } else {
-                  router.push("/(root)/(tabs)/home");
-                }
-              }}
-            />
-          </View>
+          <Text style={[styles.modalSub, { textAlign: "center" }]}>
+            Bienvenue sur VORA. Votre profil est prêt.
+          </Text>
+          <CustomButton
+            title="Accéder à l'application"
+            onPress={() => {
+              setShowSuccessModal(false);
+              if (role === "DRIVER") {
+                router.replace("/(driver)/dashboard" as any);
+              } else {
+                router.replace("/(root)/(tabs)/home");
+              }
+            }}
+          />
         </View>
       </ReactNativeModal>
-    </ScrollView>
+    </View>
   );
 };
 
@@ -275,54 +292,83 @@ export default SignUp;
 const PRIMARY = "#0EA5E9";
 
 const styles = StyleSheet.create({
-  root: {
+  rootMobile: {
     flex: 1,
     backgroundColor: "#ffffff",
+    width: "100%",
+  },
+  rootWide: {
+    flex: 1,
+    backgroundColor: "#F1F5F9",
+    width: "100%",
   },
   scroll: {
+    flex: 1,
+    width: "100%",
+  },
+  scrollContentMobile: {
     flexGrow: 1,
     paddingBottom: 40,
   },
+  scrollContentWide: {
+    flexGrow: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+  },
+  cardMobile: {
+    width: "100%",
+    backgroundColor: "#ffffff",
+  },
+  cardWide: {
+    width: "100%",
+    maxWidth: 580,
+    backgroundColor: "#ffffff",
+    borderRadius: 24,
+    overflow: "hidden",
+    boxShadow: "0px 10px 30px rgba(0, 0, 0, 0.08)",
+    elevation: 6,
+  },
   // Header
   header: {
-    backgroundColor: PRIMARY,
+    backgroundColor: "#0f172a",
     paddingHorizontal: 24,
-    paddingTop: 48,
-    paddingBottom: 28,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    paddingTop: 32,
+    paddingBottom: 24,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "800",
     color: "#ffffff",
-    marginBottom: 6,
     letterSpacing: -0.3,
   },
   headerSub: {
     fontSize: 14,
-    color: "rgba(255,255,255,0.8)",
+    color: "rgba(255,255,255,0.75)",
     fontWeight: "500",
+    marginTop: 4,
   },
+  // Body
   body: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
   },
   sectionLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "700",
     color: "#475569",
-    marginBottom: 10,
+    marginBottom: 8,
+    marginTop: 8,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  // Role selector
   roleRow: {
     flexDirection: "row",
     backgroundColor: "#f0f9ff",
     borderRadius: 14,
     padding: 4,
-    marginBottom: 20,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: "#bae6fd",
   },
@@ -351,14 +397,13 @@ const styles = StyleSheet.create({
   // Links
   linkRow: {
     marginTop: 24,
-    textAlign: "center",
     flexDirection: "row",
     justifyContent: "center",
-  } as any,
+    alignItems: "center",
+  },
   linkGray: {
     fontSize: 15,
     color: "#64748b",
-    textAlign: "center",
   },
   linkBlue: {
     fontSize: 15,

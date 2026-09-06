@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,6 +27,8 @@ const AVATAR_PRESETS = [
 ];
 
 const Profile = () => {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
   const { user } = useClerkUser();
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
   const [gender, setGender] = useState<"MALE" | "FEMALE" | "OTHER">("MALE");
@@ -46,7 +49,10 @@ const Profile = () => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isWide && { width: "100%", maxWidth: 840, alignSelf: "center" },
+        ]}
         keyboardShouldPersistTaps="handled"
       >
         {/* Top title & mode badge */}
