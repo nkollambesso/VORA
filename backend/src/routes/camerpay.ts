@@ -41,20 +41,20 @@ router.post('/pay', async (req, res) => {
       });
     }
 
-    // 💳 MODE RÉEL (API CamerPay Directe)
+    // 💳 MODE RÉEL (API CamerPay Directe: https://camerpay.biz/api)
     console.log(`💳 [RÉEL CAMERPAY] Envoi requête API CamerPay pour ${phone} - ${amount} FCFA`);
 
-    const camerPayApiKey = process.env.CAMERPAY_SECRET_KEY || process.env.EXPO_PUBLIC_CAMERPAY_KEY;
+    const camerPayApiKey = process.env.CAMERPAY_API_KEY || process.env.CAMERPAY_SECRET_KEY;
+    const camerPayApiUrl = process.env.CAMERPAY_API_URL || 'https://camerpay.biz/api';
 
     if (!camerPayApiKey) {
-      // Fallback si pas de clé configurée
       return res.status(500).json({
         success: false,
-        error: 'Clé API CamerPay non configurée sur le serveur. Activez le mode simulation.',
+        error: 'Clé API CamerPay non configurée sur le serveur.',
       });
     }
 
-    const camerPayResponse = await fetch('https://api.camerpay.com/v1/payment', {
+    const camerPayResponse = await fetch(`${camerPayApiUrl}/v1/payment`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${camerPayApiKey}`,
