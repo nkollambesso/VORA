@@ -1,19 +1,11 @@
 const { getDefaultConfig } = require("expo/metro-config");
+const path = require("path");
 
 const config = getDefaultConfig(__dirname);
 
-config.resolver.sourceExts = [
-  "web.tsx",
-  "web.ts",
-  "web.jsx",
-  "web.js",
-  "tsx",
-  "ts",
-  "jsx",
-  "js",
-  "json",
-  "cjs",
-  "mjs",
-];
+config.resolver.extraNodeModules = {
+  ...config.resolver.extraNodeModules,
+  "react-native": path.resolve(__dirname, "node_modules/react-native-web"),
+};
 
 module.exports = config;
