@@ -130,10 +130,11 @@ const BookRide = () => {
 
         {/* Sélecteur de Mode de Paiement (Mobile Money / Cash) */}
         <CamerPaySelector
-          selectedMethod={paymentMethod}
-          onSelectMethod={setPaymentMethod}
-          phoneNumber={phoneNumber}
-          onPhoneNumberChange={setPhoneNumber}
+          amountFcfa={selectedPricing?.finalFare || 1500}
+          rideId={`VORA-${Date.now()}`}
+          onPaymentSuccess={(txId, method) => {
+            setPaymentMethod(method === "cash" ? "CASH" : method === "mtn" ? "MTN_MOMO" : "ORANGE_MONEY");
+          }}
         />
 
         {/* Bouton de Confirmation Finale */}

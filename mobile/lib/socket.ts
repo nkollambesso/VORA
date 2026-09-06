@@ -52,6 +52,12 @@ class VoraSocketService {
     }
   }
 
+  public declineRide(rideId: string, driverId: number) {
+    if (this.socket?.connected) {
+      this.socket.emit("decline-ride", { rideId, driverId });
+    }
+  }
+
   public startRideWithOTP(rideId: string, otpInput: string) {
     if (this.socket?.connected) {
       this.socket.emit("start-ride-otp", { rideId, otpInput });

@@ -1,4 +1,4 @@
-import { Server as SocketIOServer, Socket } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import { query } from './db';
 import { formatDisplayName, generatePublicId } from './utils/anonymize';
 
@@ -37,7 +37,7 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 }
 
-export function setupSocketIO(io: SocketIOServer) {
+export function setupSocketIO(io: Server) {
   // Envoie la demande de course au chauffeur suivant dans la file
   const sendToNextDriver = async (rideId: string) => {
     const dispatch = activeDispatches.get(rideId);
@@ -142,7 +142,7 @@ export function setupSocketIO(io: SocketIOServer) {
         }
 
         // Trier les chauffeurs par proximité croissante à la position de départ (Haversine)
-        onlineDrivers.sort((a, b) => {
+        onlineDrivers.sort((a: any, b: any) => {
           const distA = haversineDistance(
             rawRide.origin_lat,
             rawRide.origin_lng,
