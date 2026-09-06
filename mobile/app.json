@@ -16,10 +16,15 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.vora.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       }
+    },
+    "ios": {
+      "bundleIdentifier": "com.vora.app",
+      "supportsTablet": true
     },
     "web": {
       "bundler": "metro",
