@@ -78,15 +78,12 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   webContainer: {
     flex: 1,
-    backgroundColor: "#0f172a",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: "#ffffff",
+    width: "100%",
   },
   webAppFrame: {
     flex: 1,
     width: "100%",
-    maxWidth: 480,
-    backgroundColor: "#f8fafc",
-    overflow: "hidden",
+    backgroundColor: "#ffffff",
   },
 });
