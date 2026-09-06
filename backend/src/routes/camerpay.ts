@@ -1,10 +1,10 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { query } from '../db';
 
 const router = Router();
 
 // Endpoint d'initiation et de traitement de paiement CamerPay
-router.post('/pay', async (req, res) => {
+router.post('/pay', async (req: Request, res: Response) => {
   try {
     const { amount, phone, operator, rideId, description } = req.body;
 
@@ -97,7 +97,7 @@ router.post('/pay', async (req, res) => {
 });
 
 // Récupérer le statut actuel du mode simulation CamerPay
-router.get('/mode', async (req, res) => {
+router.get('/mode', async (req: Request, res: Response) => {
   try {
     const settingRes = await query(
       `SELECT value, updated_by, updated_at FROM platform_settings WHERE key = 'payment_simulation_mode'`
