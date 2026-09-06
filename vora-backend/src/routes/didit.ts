@@ -4,7 +4,7 @@ import { query } from '../db';
 
 const router = Router();
 
-const WORKFLOW_ID = 'ddf4ffa1-72aa-47a5-851a-28658555e4d7';
+const WORKFLOW_ID = process.env.DIDIT_WORKFLOW_ID || '';
 
 // ─── HMAC Helpers for X-Signature-V2 ──────────────────────────────────────────
 function shortenFloats(v: unknown): unknown {
@@ -36,7 +36,7 @@ router.post('/session', async (req: Request, res: Response) => {
   try {
     const { userId, callbackUrl } = req.body;
     const vendorData = userId || 'user_demo';
-    const apiKey = process.env.DIDIT_API_KEY || 'BGRxYOC3QqPO3xCJuiEFzFSyhX8T117QytS0VvTix8M';
+    const apiKey = process.env.DIDIT_API_KEY || '';
 
     console.log(`[DIDIT] Création de session KYC pour ${vendorData}...`);
 

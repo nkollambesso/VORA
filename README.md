@@ -105,8 +105,8 @@ Créer un fichier `.env` dans le dossier `vora-backend` et dans la racine :
 # Backend Config (.env dans /vora-backend)
 PORT=5000
 DATABASE_URL=postgresql://user:password@ep-cool-service.neon.tech/vora_db?sslmode=require
-DIDIT_API_KEY=BGRxYOC3QqPO3xCJuiEFzFSyhX8T117QytS0VvTix8M
-DIDIT_WORKFLOW_ID=ddf4ffa1-72aa-47a5-851a-28658555e4d7
+DIDIT_API_KEY=your_didit_api_key_here
+DIDIT_WORKFLOW_ID=your_didit_workflow_id_here
 
 # Frontend Config (.env dans la racine / uber)
 EXPO_PUBLIC_BACKEND_URL=http://localhost:5000
