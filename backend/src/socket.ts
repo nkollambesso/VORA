@@ -1,4 +1,4 @@
-import type { Server, Socket } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import { query } from './db';
 import { formatDisplayName, generatePublicId } from './utils/anonymize';
 
@@ -37,7 +37,7 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 }
 
-export function setupSocketIO(io: Server) {
+export function setupSocketIO(io: any) {
   // Envoie la demande de course au chauffeur suivant dans la file
   const sendToNextDriver = async (rideId: string) => {
     const dispatch = activeDispatches.get(rideId);
@@ -76,7 +76,7 @@ export function setupSocketIO(io: Server) {
     }, 20000);
   };
 
-  io.on('connection', (socket: Socket) => {
+  io.on('connection', (socket: any) => {
     console.log(`⚡ Client connecté: ${socket.id}`);
 
     // Join room (rider, driver, admin)
