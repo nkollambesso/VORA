@@ -1,5 +1,5 @@
 import { useClerkAuth } from "@/lib/useClerkSafe";
-import { useStripe } from "@stripe/stripe-react-native";
+import { useStripe } from "@/lib/stripeSafe";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import { Alert, Image, Text, View } from "react-native";

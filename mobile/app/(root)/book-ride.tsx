@@ -1,5 +1,5 @@
 import { useClerkUser } from "@/lib/useClerkSafe";
-import { StripeProvider } from "@stripe/stripe-react-native";
+import { StripeProvider } from "@/lib/stripeSafe";
 import { Image, Text, View } from "react-native";
 
 import Payment from "@/components/Payment";

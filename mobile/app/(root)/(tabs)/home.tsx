@@ -499,6 +499,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#0F172A",
     textAlignVertical: "top",
+    verticalAlign: "top",
     marginBottom: 16,
     height: 100,
   },
