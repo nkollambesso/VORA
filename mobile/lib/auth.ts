@@ -38,12 +38,12 @@ export const googleOAuth = async (startOAuthFlow: any) => {
       if (setActive) {
         await setActive({ session: createdSessionId });
 
-        if (signUp.createdUserId) {
+        if (signUp?.createdUserId) {
           await fetchAPI("/(api)/user", {
             method: "POST",
             body: JSON.stringify({
-              name: `${signUp.firstName} ${signUp.lastName}`,
-              email: signUp.emailAddress,
+              name: `${signUp.firstName || ""} ${signUp.lastName || ""}`.trim() || "Utilisateur Google",
+              email: signUp.emailAddress || "",
               clerkId: signUp.createdUserId,
             }),
           });
