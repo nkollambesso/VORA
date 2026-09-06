@@ -12,6 +12,7 @@ import adminRouter from './routes/admin';
 import sosRouter from './routes/sos';
 import disputesRouter from './routes/disputes';
 import diditRouter from './routes/didit';
+import locationPhotosRouter from './routes/locationPhotos';
 import { setupSocketIO } from './socket';
 import { initDatabase } from './db/init';
 
@@ -38,6 +39,7 @@ app.use('/api/admin', adminRouter);
 app.use('/api/sos', sosRouter);
 app.use('/api/disputes', disputesRouter);
 app.use('/api/didit', diditRouter);
+app.use('/api/location-photos', locationPhotosRouter);
 
 // Endpoint de santé & Root
 app.get('/', (req: Request, res: Response) => {

@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
@@ -21,33 +24,106 @@ export default function DriverDashboard() {
   const [todayEarnings, setTodayEarnings] = useState(0);
   const [todayRidesCount, setTodayRidesCount] = useState(0);
 
-  // Charger le profil chauffeur
-  useEffect(() => {
-    const fetchDriver = async () => {
-      try {
-        const backendUrl =
-          process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
-        const res = await fetch(
-          `${backendUrl}/api/drivers/profile/${user?.id || "driver_demo"}`
-        );
-        const data = await res.json();
-        if (data.success && data.driver) {
-          setDriverProfile(data.driver);
-          setIsOnline(!!data.driver.is_online);
-          if (data.driver.today_earnings !== undefined) {
-            setTodayEarnings(data.driver.today_earnings);
-          }
-          if (data.driver.today_rides_count !== undefined) {
-            setTodayRidesCount(data.driver.today_rides_count);
-          }
-        }
-      } catch (err) {
-        console.error("Erreur profil chauffeur:", err);
-      }
-    };
+  // Modals et formulaires
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [isContractModalOpen, setIsContractModalOpen] = useState(false);
 
+  // Form states pour l'enregistrement du véhicule
+  const [vehicleType, setVehicleType] = useState<"taxi" | "confort" | "moto">("taxi");
+  const [vehicleModel, setVehicleModel] = useState("");
+  const [licensePlate, setLicensePlate] = useState("");
+  const [vehicleColor, setVehicleColor] = useState("");
+  const [contractAccepted, setContractAccepted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Charger le profil chauffeur
+  const fetchDriver = async () => {
+    try {
+      const backendUrl =
+        process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+      const res = await fetch(
+        `${backendUrl}/api/drivers/profile/${user?.id || "driver_demo"}`
+      );
+      const data = await res.json();
+      if (data.success && data.driver) {
+        setDriverProfile(data.driver);
+        setIsOnline(!!data.driver.is_online);
+        setVehicleType(data.driver.vehicle_type || "taxi");
+        setVehicleModel(data.driver.vehicle_model || "");
+        setLicensePlate(data.driver.license_plate || "");
+        setVehicleColor(data.driver.color || "");
+
+        if (data.driver.today_earnings !== undefined) {
+          setTodayEarnings(data.driver.today_earnings);
+        }
+        if (data.driver.today_rides_count !== undefined) {
+          setTodayRidesCount(data.driver.today_rides_count);
+        }
+      } else {
+        // Pas encore inscrit comme chauffeur
+        setIsRegisterModalOpen(true);
+      }
+    } catch (err) {
+      console.error("Erreur profil chauffeur:", err);
+    }
+  };
+
+  useEffect(() => {
     fetchDriver();
   }, [user]);
+
+  // Submit enregistrement véhicule & contrat
+  const handleRegisterDriver = async () => {
+    if (!vehicleModel.trim() || !licensePlate.trim() || !vehicleColor.trim()) {
+      Alert.alert("Champs incomplets", "Veuillez remplir le modèle du véhicule, la plaque et la couleur.");
+      return;
+    }
+
+    if (!contractAccepted) {
+      Alert.alert(
+        "Acceptation du contrat requise",
+        "Vous devez cocher et accepter les termes du Contrat de Partenariat Chauffeur VORA pour finaliser votre inscription."
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const backendUrl =
+        process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+      const userId = user?.id || "driver_demo";
+
+      const res = await fetch(`${backendUrl}/api/drivers/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: userId,
+          vehicle_type: vehicleType,
+          vehicle_model: vehicleModel.trim(),
+          license_plate: licensePlate.trim().toUpperCase(),
+          color: vehicleColor.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setDriverProfile(data.driver);
+        setIsRegisterModalOpen(false);
+        Alert.alert(
+          "Inscription Chauffeur Reussie",
+          `Votre véhicule ${data.driver.vehicle_model} (${data.driver.license_plate}) et votre contrat VORA ont ete enregistres avec succes!`
+        );
+        fetchDriver();
+      } else {
+        Alert.alert("Erreur", data.error || "Impossible d'enregistrer le véhicule.");
+      }
+    } catch (err) {
+      console.error("Erreur enregistrement chauffeur:", err);
+      Alert.alert("Erreur", "Problème de connexion au serveur backend VORA.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   // Initialiser Socket.io et écouter les demandes de course
   useEffect(() => {
@@ -102,6 +178,15 @@ export default function DriverDashboard() {
   }, [isOnline, driverProfile]);
 
   const handleToggleOnline = async (value: boolean) => {
+    if (!driverProfile) {
+      Alert.alert(
+        "Enregistrement requis",
+        "Veuillez enregistrer votre véhicule et valider votre contrat chauffeur avant de passer en ligne.",
+        [{ text: "Enregistrer", onPress: () => setIsRegisterModalOpen(true) }]
+      );
+      return;
+    }
+
     if (value && driverProfile?.verification_status !== "verified") {
       Alert.alert(
         "Vérification Didit Requise",
@@ -156,7 +241,7 @@ export default function DriverDashboard() {
             style={styles.backModeBtn}
             activeOpacity={0.8}
           >
-            <Text style={styles.backModeBtnText}>← Passager</Text>
+            <Text style={styles.backModeBtnText}>← Mode Passager</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -169,25 +254,73 @@ export default function DriverDashboard() {
         </View>
 
         <View style={styles.headerTextGroup}>
-          <Text style={styles.headerTag}>ESPACE CHAUFFEUR VORA</Text>
+          <Text style={styles.headerTag}>ESPACE CHAUFFEUR PARTENAIRE VORA</Text>
           <Text style={styles.headerName}>
             {user?.fullName || user?.firstName || "Chauffeur VORA"}
           </Text>
           <Text style={styles.headerVehicle}>
             {driverProfile?.vehicle_model
-              ? `${driverProfile.vehicle_model} (${driverProfile.license_plate})`
-              : "Toyota Yaris (CE 482 AA)"}
+              ? `${driverProfile.vehicle_model} (${driverProfile.license_plate}) • ${driverProfile.color}`
+              : "Véhicule non enregistré — Cliquez pour configurer"}
           </Text>
         </View>
       </View>
 
       <View style={styles.body}>
+        {/* Card Enregistrement & Contrat Véhicule */}
+        <View style={styles.vehicleCard}>
+          <View style={styles.vehicleCardHeader}>
+            <View>
+              <Text style={styles.vehicleCardTitle}>VÉHICULE ENREGISTRÉ</Text>
+              <Text style={styles.vehicleCardSub}>
+                {driverProfile?.vehicle_model
+                  ? `${driverProfile.vehicle_model} [${driverProfile.vehicle_type?.toUpperCase()}]`
+                  : "Aucun véhicule configuré"}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.editVehicleBtn}
+              onPress={() => setIsRegisterModalOpen(true)}
+            >
+              <Text style={styles.editVehicleBtnText}>
+                {driverProfile ? "Modifier le Véhicule" : "Enregistrer Véhicule"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {driverProfile && (
+            <View style={styles.vehicleDetailsGrid}>
+              <View style={styles.vehicleDetailItem}>
+                <Text style={styles.vehicleDetailLabel}>IMMATRICULATION</Text>
+                <Text style={styles.vehicleDetailValue}>{driverProfile.license_plate}</Text>
+              </View>
+              <View style={styles.vehicleDetailItem}>
+                <Text style={styles.vehicleDetailLabel}>COULEUR</Text>
+                <Text style={styles.vehicleDetailValue}>{driverProfile.color}</Text>
+              </View>
+              <View style={styles.vehicleDetailItem}>
+                <Text style={styles.vehicleDetailLabel}>CONTRAT VORA</Text>
+                <Text style={styles.vehicleDetailValueSuccess}>Signé & Valide (15%)</Text>
+              </View>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={styles.contractLinkBtn}
+            onPress={() => setIsContractModalOpen(true)}
+          >
+            <Text style={styles.contractLinkText}>
+              Consulter le Contrat de Partenariat Chauffeur VORA →
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Banner Avertissement Didit KYC si non vérifié */}
         {!isKycVerified && (
           <View style={styles.kycWarnCard}>
-            <Text style={styles.kycWarnTitle}>⚠️ Identité non vérifiée (Didit KYC)</Text>
+            <Text style={styles.kycWarnTitle}>Identité non vérifiée (Didit KYC)</Text>
             <Text style={styles.kycWarnText}>
-              Votre compte n'a pas encore validé la vérification biométrique Didit. Vous devez compléter votre KYC pour passer en ligne.
+              Votre compte n'a pas encore valide la vérification biométrique Didit. Vous devez compléter votre KYC pour passer en ligne.
             </Text>
             <TouchableOpacity
               style={styles.kycWarnBtn}
@@ -255,7 +388,7 @@ export default function DriverDashboard() {
             <Text style={styles.metricValuePrimary}>
               {todayEarnings.toLocaleString()} FCFA
             </Text>
-            <Text style={styles.metricSub}>Paiements encaissés</Text>
+            <Text style={styles.metricSub}>Paiements encaissés (Commission VORA 15% deduite)</Text>
           </View>
 
           <View style={styles.metricCard}>
@@ -292,6 +425,181 @@ export default function DriverDashboard() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Modal 1: Registration Form & Contract Acceptance */}
+      <Modal visible={isRegisterModalOpen} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Enregistrement Véhicule & Chauffeur</Text>
+            <Text style={styles.modalSub}>
+              Veuillez saisir les informations de votre véhicule et accepter le contrat de partenariat VORA.
+            </Text>
+
+            <ScrollView style={styles.formScroll}>
+              <Text style={styles.formLabel}>TYPE DE VÉHICULE</Text>
+              <View style={styles.typeSelectorRow}>
+                {(["taxi", "confort", "moto"] as const).map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.typeSelectorItem,
+                      vehicleType === type && styles.typeSelectorItemSelected,
+                    ]}
+                    onPress={() => setVehicleType(type)}
+                  >
+                    <Text
+                      style={[
+                        styles.typeSelectorText,
+                        vehicleType === type && styles.typeSelectorTextSelected,
+                      ]}
+                    >
+                      {type.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.formLabel}>MARQUE ET MODÈLE DU VÉHICULE</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Ex: Toyota Yaris, Hyundai Accent..."
+                placeholderTextColor="#94A3B8"
+                value={vehicleModel}
+                onChangeText={setVehicleModel}
+              />
+
+              <Text style={styles.formLabel}>PLAQUE D'IMMATRICULATION</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Ex: CE 482 AA, LT 891 AK..."
+                placeholderTextColor="#94A3B8"
+                value={licensePlate}
+                onChangeText={setLicensePlate}
+                autoCapitalize="characters"
+              />
+
+              <Text style={styles.formLabel}>COULEUR DU VÉHICULE</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Ex: Jaune Taxi, Gris Métallisé..."
+                placeholderTextColor="#94A3B8"
+                value={vehicleColor}
+                onChangeText={setVehicleColor}
+              />
+
+              <TouchableOpacity
+                style={styles.readContractBtn}
+                onPress={() => setIsContractModalOpen(true)}
+              >
+                <Text style={styles.readContractBtnText}>
+                  Lire le Contrat de Partenariat Chauffeur VORA →
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.checkboxRow}
+                onPress={() => setContractAccepted(!contractAccepted)}
+                activeOpacity={0.8}
+              >
+                <View
+                  style={[
+                    styles.checkboxBox,
+                    contractAccepted && styles.checkboxBoxChecked,
+                  ]}
+                >
+                  {contractAccepted && <Text style={styles.checkboxCheckmark}>✓</Text>}
+                </View>
+                <Text style={styles.checkboxLabel}>
+                  J'accepte l'intégralité des termes et conditions du Contrat de Partenariat Chauffeur VORA (15% de commission, exigences de sécurité et protection des données passagers).
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+
+            <View style={styles.modalActionRow}>
+              {driverProfile && (
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setIsRegisterModalOpen(false)}
+                >
+                  <Text style={styles.modalCancelText}>Annuler</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[
+                  styles.modalSubmitBtn,
+                  isSubmitting && { opacity: 0.6 },
+                ]}
+                onPress={handleRegisterDriver}
+                disabled={isSubmitting}
+              >
+                <Text style={styles.modalSubmitText}>
+                  {isSubmitting ? "Enregistrement..." : "Valider mon Inscription"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal 2: Contrat de Partenariat VORA (Full Text) */}
+      <Modal visible={isContractModalOpen} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxHeight: "88%" }]}>
+            <Text style={styles.modalTitle}>Contrat de Partenariat Chauffeur VORA</Text>
+            <Text style={styles.modalSub}>
+              Convention cadre de mise en relation et de prestations de transport VORA Cameroun.
+            </Text>
+
+            <ScrollView style={styles.contractTextScroll}>
+              <Text style={styles.contractSectionHeader}>ARTICLE 1 : OBJET DU PARTENARIAT</Text>
+              <Text style={styles.contractParagraph}>
+                Le présent contrat régit la relation de partenariat entre la plateforme VORA ("VORA Cameroun") et le Chauffeur Partenaire Indépendant. VORA fournit un service technologique de mise en relation en temps réel entre des passagers urbains et des chauffeurs professionnels enregistrés.
+              </Text>
+
+              <Text style={styles.contractSectionHeader}>ARTICLE 2 : COMMISSION DE LA PLATEFORME (15%)</Text>
+              <Text style={styles.contractParagraph}>
+                En contrepartie de l'utilisation de la plateforme technologique VORA, de la géolocalisation, de l'accès aux clients et du traitement sécurisé des paiements Mobile Money, VORA prélève une commission fixe de 15% sur le montant hors taxe de chaque course validée et effectuée.
+                Le solde de 85% revient intégralement au Chauffeur Partenaire et est versé sur son portefeuille in-app ou son compte Mobile Money.
+              </Text>
+
+              <Text style={styles.contractSectionHeader}>ARTICLE 3 : OBLIGATIONS DU VÉHICULE ET SÉCURITÉ</Text>
+              <Text style={styles.contractParagraph}>
+                Le chauffeur s'engage à utiliser un véhicule en parfait état mécanique et d'hygiène, doté d'une immatriculation valide en République du Cameroun, d'une carte grise conforme, d'une assurance transport de personnes valide et d'un contrôle technique à jour.
+              </Text>
+
+              <Text style={styles.contractSectionHeader}>ARTICLE 4 : VÉRIFICATION BIOMÉTRIQUE OBLIGATOIRE (Didit KYC)</Text>
+              <Text style={styles.contractParagraph}>
+                Conformément à la réglementation de sécurité VORA, tout chauffeur partenaire doit faire valider son identité et son permis de conduire via la technologie Didit KYC. Aucun chauffeur ne pourra basculer son statut "En Ligne" sans validation biométrique préalable.
+              </Text>
+
+              <Text style={styles.contractSectionHeader}>ARTICLE 5 : PROTECTION ET CONFIDENTIALITÉ DES DONNÉES PASSAGERS</Text>
+              <Text style={styles.contractParagraph}>
+                Le chauffeur s'engage strictement à respecter la vie privée des passagers. Les identités des passagers sont anonymisées sous forme de code unique (ex: VORA-A8F29C). Il est formellement interdit de réutiliser ou divulguer les numéros de téléphone ou adresses des clients en dehors du strict cadre de la course.
+              </Text>
+
+              <Text style={styles.contractSectionHeader}>ARTICLE 6 : QUALITÉ DE SERVICE ET ANNULATIONS</Text>
+              <Text style={styles.contractParagraph}>
+                Le chauffeur s'interdit d'annuler des courses acceptées sans motif légitime (panne mécanique avérée, cas de force majeure). Des annulations réitérées ou injustifiées entraîneront la suspension temporaire ou définitive du compte chauffeur.
+              </Text>
+
+              <Text style={styles.contractSectionHeader}>ARTICLE 7 : LITIGES ET RÈGLEMENTS</Text>
+              <Text style={styles.contractParagraph}>
+                En cas de désaccord sur le tarif ou l'itinéraire à la fin d'une course, les deux parties peuvent soumettre un litige via le bouton "Signaler un litige" dans l'application. L'équipe support VORA arbitrera le litige sous 24h.
+              </Text>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.contractAcceptBtn}
+              onPress={() => {
+                setContractAccepted(true);
+                setIsContractModalOpen(false);
+              }}
+            >
+              <Text style={styles.contractAcceptText}>Fermer et Accepter le Contrat</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -349,7 +657,7 @@ const styles = StyleSheet.create({
   headerVehicle: {
     color: "#BAE6FD",
     fontSize: 13,
-    fontWeight: "500",
+    fontWeight: "600",
     marginTop: 4,
   },
   earningsBtn: {
@@ -368,6 +676,86 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: 20,
     paddingTop: 20,
+  },
+  vehicleCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    padding: 18,
+    marginBottom: 20,
+    shadowColor: "#0EA5E9",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  vehicleCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  vehicleCardTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0EA5E9",
+    letterSpacing: 0.8,
+  },
+  vehicleCardSub: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginTop: 2,
+  },
+  editVehicleBtn: {
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#0EA5E9",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  editVehicleBtnText: {
+    color: "#0284C7",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  vehicleDetailsGrid: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    backgroundColor: "#F8FAFC",
+    padding: 12,
+    borderRadius: 14,
+    marginBottom: 12,
+  },
+  vehicleDetailItem: {
+    flex: 1,
+  },
+  vehicleDetailLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#94A3B8",
+  },
+  vehicleDetailValue: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginTop: 2,
+  },
+  vehicleDetailValueSuccess: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#10B981",
+    marginTop: 2,
+  },
+  contractLinkBtn: {
+    alignSelf: "flex-start",
+  },
+  contractLinkText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0284C7",
   },
   statusCard: {
     backgroundColor: "#FFFFFF",
@@ -513,4 +901,182 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
   },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 520,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 24,
+    maxHeight: "90%",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  modalSub: {
+    fontSize: 13,
+    color: "#64748B",
+    marginTop: 4,
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  formScroll: {
+    maxHeight: 380,
+  },
+  formLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#475569",
+    letterSpacing: 0.6,
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  formInput: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: "#0F172A",
+  },
+  typeSelectorRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  typeSelectorItem: {
+    flex: 1,
+    backgroundColor: "#F1F5F9",
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "transparent",
+  },
+  typeSelectorItemSelected: {
+    backgroundColor: "#E0F2FE",
+    borderColor: "#0EA5E9",
+  },
+  typeSelectorText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  typeSelectorTextSelected: {
+    color: "#0284C7",
+  },
+  readContractBtn: {
+    marginTop: 16,
+    marginBottom: 12,
+  },
+  readContractBtnText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0EA5E9",
+  },
+  checkboxRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 16,
+    gap: 10,
+  },
+  checkboxBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#CBD5E1",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  checkboxBoxChecked: {
+    backgroundColor: "#0EA5E9",
+    borderColor: "#0EA5E9",
+  },
+  checkboxCheckmark: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  checkboxLabel: {
+    flex: 1,
+    fontSize: 12,
+    color: "#475569",
+    lineHeight: 18,
+  },
+  modalActionRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  modalCancelBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+  },
+  modalCancelText: {
+    color: "#64748B",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  modalSubmitBtn: {
+    backgroundColor: "#0EA5E9",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+  },
+  modalSubmitText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  contractTextScroll: {
+    maxHeight: 400,
+    backgroundColor: "#F8FAFC",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 16,
+  },
+  contractSectionHeader: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#0EA5E9",
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  contractParagraph: {
+    fontSize: 12,
+    color: "#334155",
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  contractAcceptBtn: {
+    backgroundColor: "#0EA5E9",
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  contractAcceptText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+  },
 });
+

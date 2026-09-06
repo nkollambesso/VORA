@@ -11,7 +11,71 @@ interface DriverLocation {
 // Map pour gérer les timers d'auto-confirmation des courses (key: rideId)
 const autoConfirmTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+interface SequentialDispatchState {
+  rideId: string;
+  sanitizedRide: any;
+  driversQueue: any[];
+  currentIndex: number;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+// Map pour gérer les files de dispatch séquentiel (key: rideId)
+const activeDispatches = new Map<string, SequentialDispatchState>();
+
+// Helper distance Haversine en km
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 export function setupSocketIO(io: SocketIOServer) {
+  // Envoie la demande de course au chauffeur suivant dans la file
+  const sendToNextDriver = async (rideId: string) => {
+    const dispatch = activeDispatches.get(rideId);
+    if (!dispatch) return;
+
+    if (dispatch.timer) {
+      clearTimeout(dispatch.timer);
+      dispatch.timer = null;
+    }
+
+    if (dispatch.currentIndex >= dispatch.driversQueue.length) {
+      // Tous les chauffeurs ont décliné ou n'ont pas répondu sous 20s
+      console.log(`❌ Tous les chauffeurs ont décliné pour la course ${rideId}`);
+      io.to(dispatch.sanitizedRide.rider_id).emit('all-drivers-declined', {
+        rideId,
+        message: 'Tous les chauffeurs à proximité sont indisponibles. Vous pouvez réajuster votre offre tarifaire ou retenter la réservation.',
+      });
+      activeDispatches.delete(rideId);
+      return;
+    }
+
+    const currentDriver = dispatch.driversQueue[dispatch.currentIndex];
+    console.log(`➡️ Dispatch de la course ${rideId} au chauffeur ${currentDriver.user_id} (${dispatch.currentIndex + 1}/${dispatch.driversQueue.length})`);
+
+    // Notifier uniquement ce chauffeur
+    io.to(currentDriver.user_id).emit('new-ride-available', {
+      ...dispatch.sanitizedRide,
+      dispatchTimerSeconds: 20,
+    });
+
+    // Compte à rebours de 20 secondes
+    dispatch.timer = setTimeout(() => {
+      console.log(`⏱️ Timeout 20s dépassé pour le chauffeur ${currentDriver.user_id} sur la course ${rideId}`);
+      dispatch.currentIndex += 1;
+      sendToNextDriver(rideId);
+    }, 20000);
+  };
+
   io.on('connection', (socket: Socket) => {
     console.log(`⚡ Client connecté: ${socket.id}`);
 
@@ -38,7 +102,7 @@ export function setupSocketIO(io: SocketIOServer) {
       }
     });
 
-    // Passager demande une nouvelle course (Données de sécurité anonymisées)
+    // Passager demande une nouvelle course (DISPATCH SÉQUENTIEL EN CASCADE AU PLUS PROCHE)
     socket.on('request-ride', async (rideData: { rideId: string }) => {
       try {
         const res = await query(
@@ -57,16 +121,79 @@ export function setupSocketIO(io: SocketIOServer) {
           rider_public_id: rawRide.rider_public_id || generatePublicId(),
         };
 
-        // Alerter les chauffeurs en ligne correspondant au type de véhicule
-        io.to('role:DRIVER').emit('new-ride-available', sanitizedRide);
+        // Récupérer les chauffeurs en ligne correspondant à la catégorie
+        const driversRes = await query(
+          `SELECT d.*, u.name, u.id as user_id 
+           FROM drivers d 
+           JOIN users u ON d.user_id = u.id 
+           WHERE d.is_online = TRUE AND (d.vehicle_type = $1 OR $1 = 'taxi')`,
+          [rawRide.vehicle_type || 'taxi']
+        );
+
+        let onlineDrivers = driversRes.rows;
+
+        if (onlineDrivers.length === 0) {
+          // Aucun chauffeur en ligne
+          io.to(sanitizedRide.rider_id).emit('no-drivers-available', {
+            rideId: rawRide.id,
+            message: 'Aucun chauffeur n\'est disponible pour le moment. Veuillez réessayer dans quelques instants.',
+          });
+          return;
+        }
+
+        // Trier les chauffeurs par proximité croissante à la position de départ (Haversine)
+        onlineDrivers.sort((a, b) => {
+          const distA = haversineDistance(
+            rawRide.origin_lat,
+            rawRide.origin_lng,
+            a.current_lat || 3.8667,
+            a.current_lng || 11.5167
+          );
+          const distB = haversineDistance(
+            rawRide.origin_lat,
+            rawRide.origin_lng,
+            b.current_lat || 3.8667,
+            b.current_lng || 11.5167
+          );
+          return distA - distB;
+        });
+
+        // Enregistrer la file de dispatch
+        activeDispatches.set(rawRide.id, {
+          rideId: rawRide.id,
+          sanitizedRide,
+          driversQueue: onlineDrivers,
+          currentIndex: 0,
+          timer: null,
+        });
+
+        // Déclencher l'envoi au 1er chauffeur le plus proche
+        sendToNextDriver(rawRide.id);
       } catch (err) {
         console.error('Erreur diffusion request-ride:', err);
       }
     });
 
-    // Chauffeur accepte une course (AVEC VÉRIFICATION SÉCURITÉ CHAUFFEUR OCCUPÉ + DONNÉES ANONYMISÉES)
+    // Chauffeur refuse une course -> passage immédiat au chauffeur suivant
+    socket.on('decline-ride', (data: { rideId: string; driverId: number }) => {
+      const dispatch = activeDispatches.get(data.rideId);
+      if (dispatch) {
+        console.log(`🚫 Chauffeur ${data.driverId} a décliné la course ${data.rideId}`);
+        dispatch.currentIndex += 1;
+        sendToNextDriver(data.rideId);
+      }
+    });
+
+    // Chauffeur accepte une course
     socket.on('accept-ride', async (data: { rideId: string; driverId: number }) => {
       try {
+        // Stopper le timer de dispatch séquentiel s'il est actif
+        const dispatch = activeDispatches.get(data.rideId);
+        if (dispatch?.timer) {
+          clearTimeout(dispatch.timer);
+        }
+        activeDispatches.delete(data.rideId);
+
         // VÉRIFICATION : Le chauffeur a-t-il une course en cours non clôturée ?
         const busyCheck = await query(
           `SELECT id FROM rides WHERE driver_id = $1 AND status IN ('ACCEPTED', 'IN_TRANSIT', 'ARRIVEE_SIGNALEE')`,
@@ -125,6 +252,33 @@ export function setupSocketIO(io: SocketIOServer) {
       }
     });
 
+    // =========================================================================
+    // SIGNALISATION APPEL VOCAL IN-APP (WebRTC)
+    // =========================================================================
+    socket.on('webrtc-call-user', (data: { targetUserId: string; callerId: string; callerName: string; offer: any }) => {
+      io.to(data.targetUserId).emit('webrtc-incoming-call', {
+        callerId: data.callerId,
+        callerName: data.callerName,
+        offer: data.offer,
+      });
+    });
+
+    socket.on('webrtc-answer-call', (data: { targetUserId: string; answer: any }) => {
+      io.to(data.targetUserId).emit('webrtc-call-answered', {
+        answer: data.answer,
+      });
+    });
+
+    socket.on('webrtc-ice-candidate', (data: { targetUserId: string; candidate: any }) => {
+      io.to(data.targetUserId).emit('webrtc-ice-candidate', {
+        candidate: data.candidate,
+      });
+    });
+
+    socket.on('webrtc-hangup', (data: { targetUserId: string }) => {
+      io.to(data.targetUserId).emit('webrtc-call-ended', {});
+    });
+
     // Chauffeur valide l'OTP pour démarrer la course
     socket.on('start-ride-otp', async (data: { rideId: string; otpInput: string }) => {
       try {
@@ -150,9 +304,7 @@ export function setupSocketIO(io: SocketIOServer) {
       }
     });
 
-    // =========================================================================
-    // 1. CHAUFFEUR DÉCLARE L'ARRIVÉE À DESTINATION ("arrivee_signalee")
-    // =========================================================================
+    // CHAUFFEUR DÉCLARE L'ARRIVÉE À DESTINATION ("arrivee_signalee")
     socket.on('declare-arrival', async (data: { rideId: string }) => {
       try {
         const updateRes = await query(
@@ -163,32 +315,26 @@ export function setupSocketIO(io: SocketIOServer) {
         if (updateRes.rows.length > 0) {
           const ride = updateRes.rows[0];
 
-          // 1. Confirmer au chauffeur
           socket.emit('arrival-declared-confirmed', {
             ride,
             message: 'Déclaration transmise au passager. En attente de sa confirmation...',
           });
 
-          // 2. Notifier le passager
           io.to(ride.rider_id).emit('arrival-declared', {
             ride,
             message: 'Votre chauffeur indique être arrivé à destination. Veuillez confirmer la fin de la course.',
           });
 
-          // 3. Démarrer le Timer d'Auto-Confirmation (5 min en prod / 60s pour tests)
           const TIMEOUT_MS = process.env.AUTO_CONFIRM_TIMEOUT_MS ? parseInt(process.env.AUTO_CONFIRM_TIMEOUT_MS) : 60000;
 
-          // Annuler un timer existant s'il y en a un
           if (autoConfirmTimers.has(data.rideId)) {
             clearTimeout(autoConfirmTimers.get(data.rideId));
           }
 
           const timer = setTimeout(async () => {
             try {
-              // Vérifier si la course est toujours en ARRIVEE_SIGNALEE
               const currentRideRes = await query(`SELECT * FROM rides WHERE id = $1`, [data.rideId]);
               if (currentRideRes.rows.length > 0 && currentRideRes.rows[0].status === 'ARRIVEE_SIGNALEE') {
-                // Auto-confirmation implicite !
                 const autoRes = await query(
                   `UPDATE rides SET status = 'COMPLETED', payment_status = 'PAID', updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
                   [data.rideId]
@@ -197,7 +343,6 @@ export function setupSocketIO(io: SocketIOServer) {
                 if (autoRes.rows.length > 0) {
                   const completedRide = autoRes.rows[0];
 
-                  // Mettre à jour total_rides dans drivers
                   if (completedRide.driver_id) {
                     await query(`UPDATE drivers SET total_rides = total_rides + 1 WHERE id = $1`, [completedRide.driver_id]);
                   }
@@ -210,7 +355,6 @@ export function setupSocketIO(io: SocketIOServer) {
 
                   io.to(completedRide.rider_id).emit('ride-completed-mutual', payload);
                   io.to('role:DRIVER').emit('ride-completed-mutual', payload);
-                  console.log(`⏰ Auto-confirmation de la course ${data.rideId}`);
                 }
               }
             } catch (tErr) {
@@ -227,12 +371,9 @@ export function setupSocketIO(io: SocketIOServer) {
       }
     });
 
-    // =========================================================================
-    // 2. PASSAGER CONFIRME LA FIN DE COURSE ("terminee")
-    // =========================================================================
+    // PASSAGER CONFIRME LA FIN DE COURSE ("terminee")
     socket.on('confirm-ride-end', async (data: { rideId: string; rating?: number }) => {
       try {
-        // Annuler le timer d'auto-confirmation s'il est en cours
         if (autoConfirmTimers.has(data.rideId)) {
           clearTimeout(autoConfirmTimers.get(data.rideId));
           autoConfirmTimers.delete(data.rideId);
@@ -248,7 +389,6 @@ export function setupSocketIO(io: SocketIOServer) {
         if (updateRes.rows.length > 0) {
           const completedRide = updateRes.rows[0];
 
-          // Mettre à jour total_rides dans la table drivers
           if (completedRide.driver_id) {
             await query(`UPDATE drivers SET total_rides = total_rides + 1 WHERE id = $1`, [completedRide.driver_id]);
           }
@@ -259,7 +399,6 @@ export function setupSocketIO(io: SocketIOServer) {
             message: 'Course clôturée avec succès. Merci d\'avoir voyagé avec VORA !',
           };
 
-          // Notifier le passager et le chauffeur
           io.to(completedRide.rider_id).emit('ride-completed-mutual', payload);
           io.to('role:DRIVER').emit('ride-completed-mutual', payload);
           socket.emit('ride-completed-mutual', payload);
@@ -269,18 +408,14 @@ export function setupSocketIO(io: SocketIOServer) {
       }
     });
 
-    // =========================================================================
-    // 3. PASSAGER SIGNALE UN PROBLÈME ("en_litige")
-    // =========================================================================
+    // PASSAGER SIGNALE UN PROBLÈME ("en_litige")
     socket.on('dispute-ride', async (data: { rideId: string; riderId: string; driverId: number; reason: string }) => {
       try {
-        // Annuler le timer d'auto-confirmation s'il est en cours
         if (autoConfirmTimers.has(data.rideId)) {
           clearTimeout(autoConfirmTimers.get(data.rideId));
           autoConfirmTimers.delete(data.rideId);
         }
 
-        // 1. Mettre à jour le statut de la course à 'EN_LITIGE' (PAIEMENT BLOQUÉ)
         const updateRes = await query(
           `UPDATE rides SET status = 'EN_LITIGE', updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
           [data.rideId]
@@ -289,7 +424,6 @@ export function setupSocketIO(io: SocketIOServer) {
         if (updateRes.rows.length > 0) {
           const disputedRide = updateRes.rows[0];
 
-          // 2. Insérer le litige dans la table ride_disputes
           const disputeRes = await query(
             `INSERT INTO ride_disputes (ride_id, rider_id, driver_id, reason, status)
              VALUES ($1, $2, $3, $4, 'A_TRAITER')
@@ -303,32 +437,12 @@ export function setupSocketIO(io: SocketIOServer) {
             message: 'Un problème a été signalé sur cette course. Le paiement est mis en attente d\'arbitrage.',
           };
 
-          // Notifier le passager, le chauffeur et les administrateurs
           io.to(disputedRide.rider_id).emit('ride-disputed', payload);
           io.to('role:DRIVER').emit('ride-disputed', payload);
           io.to('role:ADMIN').emit('new-dispute-alert', payload);
         }
       } catch (err) {
         console.error('Erreur litige course:', err);
-      }
-    });
-
-    // Legacy handler pour compatibilité
-    socket.on('end-ride', async (data: { rideId: string }) => {
-      const updateRes = await query(
-        `UPDATE rides SET status = 'ARRIVEE_SIGNALEE', updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
-        [data.rideId]
-      );
-      if (updateRes.rows.length > 0) {
-        const ride = updateRes.rows[0];
-        io.to(ride.rider_id).emit('arrival-declared', {
-          ride,
-          message: 'Votre chauffeur indique être arrivé à destination. Veuillez confirmer la fin de la course.',
-        });
-        socket.emit('arrival-declared-confirmed', {
-          ride,
-          message: 'Déclaration transmise au passager. En attente de sa confirmation...',
-        });
       }
     });
 
@@ -351,3 +465,4 @@ export function setupSocketIO(io: SocketIOServer) {
     });
   });
 }
+

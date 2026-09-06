@@ -4,6 +4,7 @@ export interface PricingDetail {
   baseFare: number; // en FCFA
   distanceKm: number;
   durationMin: number;
+  luggageFare: number;
   fareBeforeMultiplier: number;
   multiplier: number;
   multiplierReason: string;
@@ -67,15 +68,15 @@ export function getVoraPricingMultiplier(date = new Date()): PeakPricingStatus {
 export const VORA_VEHICLE_RATES = {
   moto: {
     label: "VORA Moto (Bendskin)",
-    baseFare: 250,
-    perKm: 125,
+    baseFare: 500,
+    perKm: 150,
     perMin: 10,
     capacity: 1,
     icon: "bike",
   },
   taxi: {
     label: "VORA Taxi Classique",
-    baseFare: 500,
+    baseFare: 1000,
     perKm: 250,
     perMin: 20,
     capacity: 4,
@@ -83,8 +84,8 @@ export const VORA_VEHICLE_RATES = {
   },
   confort: {
     label: "VORA Berline Confort (Climatisé)",
-    baseFare: 1000,
-    perKm: 450,
+    baseFare: 2000,
+    perKm: 400,
     perMin: 35,
     capacity: 4,
     icon: "shield-checkmark",
@@ -99,20 +100,23 @@ function roundToNearest50(amount: number): number {
 }
 
 /**
- * Calcule le prix estimé d'une course pour tous les types de véhicules
+ * Calcule le prix estimé d'une course pour tous les types de véhicules avec frais de bagages
  */
 export function calculateVoraRidesFare(
   distanceKm: number,
   durationMin: number,
+  luggageCount: number = 0,
+  passengerCount: number = 1,
   customDate?: Date
 ): Record<"moto" | "taxi" | "confort", PricingDetail> {
   const peak = getVoraPricingMultiplier(customDate);
+  const luggageFare = luggageCount * 300;
 
   const calculateForType = (
     type: "moto" | "taxi" | "confort"
   ): PricingDetail => {
     const rate = VORA_VEHICLE_RATES[type];
-    const rawFare = rate.baseFare + distanceKm * rate.perKm + durationMin * rate.perMin;
+    const rawFare = rate.baseFare + distanceKm * rate.perKm + durationMin * rate.perMin + luggageFare;
     const multipliedFare = rawFare * peak.multiplier;
     const finalFare = Math.max(rate.baseFare, roundToNearest50(multipliedFare));
 
@@ -122,6 +126,7 @@ export function calculateVoraRidesFare(
       baseFare: rate.baseFare,
       distanceKm,
       durationMin,
+      luggageFare,
       fareBeforeMultiplier: Math.round(rawFare),
       multiplier: peak.multiplier,
       multiplierReason: peak.label,
@@ -137,3 +142,4 @@ export function calculateVoraRidesFare(
     confort: calculateForType("confort"),
   };
 }
+

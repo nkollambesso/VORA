@@ -1,147 +1,210 @@
+import React, { useState } from "react";
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { router } from "expo-router";
 import { useClerkUser } from "@/lib/useClerkSafe";
-import { StripeProvider } from "@/lib/stripeSafe";
-import { Image, Text, View, StyleSheet } from "react-native";
 
-import Payment from "@/components/Payment";
 import RideLayout from "@/components/RideLayout";
+import VehicleTypeSelector from "@/components/VehicleTypeSelector";
+import LocationPhotoPicker from "@/components/LocationPhotoPicker";
+import CamerPaySelector from "@/components/CamerPaySelector";
 import { icons } from "@/constants";
-import { formatTime } from "@/lib/utils";
-import { useDriverStore, useLocationStore } from "@/store";
-
-const STRIPE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
-const isStripeConfigured = STRIPE_KEY.startsWith("pk_");
+import { useLocationStore } from "@/store";
+import { PricingDetail } from "@/lib/vora-pricing";
+import { voraSocket } from "@/lib/socket";
 
 const BookRide = () => {
   const { user } = useClerkUser();
-  const { userAddress, destinationAddress } = useLocationStore();
-  const { drivers, selectedDriver } = useDriverStore();
+  const { userAddress, userLatitude, userLongitude, destinationAddress, destinationLatitude, destinationLongitude } =
+    useLocationStore();
 
-  const driverDetails = drivers?.filter(
-    (driver) => +driver.id === selectedDriver,
-  )[0];
+  const [selectedVehicleType, setSelectedVehicleType] = useState<"moto" | "taxi" | "confort">("taxi");
+  const [passengerCount, setPassengerCount] = useState(1);
+  const [luggageCount, setLuggageCount] = useState(0);
+  const [selectedPricing, setSelectedPricing] = useState<PricingDetail | null>(null);
 
-  if (!isStripeConfigured) {
-    return (
-      <RideLayout title="Book Ride">
-        <View style={styles.noStripeContainer}>
-          <Text style={styles.noStripeTitle}>Paiement non configuré</Text>
-          <Text style={styles.noStripeDesc}>
-            La clé Stripe n'est pas encore configurée.{"\n"}
-            Ajoutez EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY dans votre fichier .env
-          </Text>
-        </View>
-      </RideLayout>
-    );
-  }
+  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "MTN_MOMO" | "ORANGE_MONEY" | "WALLET">("MTN_MOMO");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [isBooking, setIsBooking] = useState(false);
+
+  const handleBookRide = async () => {
+    if (!selectedPricing) {
+      Alert.alert("Sélection requise", "Veuillez sélectionner un type de véhicule.");
+      return;
+    }
+
+    setIsBooking(true);
+    try {
+      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+      const res = await fetch(`${backendUrl}/api/rides`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rider_id: user?.id || "rider_demo",
+          origin_address: userAddress || "Carrefour Mokolo, Yaoundé",
+          destination_address: destinationAddress || "Quartier Bastos, Yaoundé",
+          origin_lat: userLatitude || 3.8667,
+          origin_lng: userLongitude || 11.5167,
+          dest_lat: destinationLatitude || 3.875,
+          dest_lng: destinationLongitude || 11.52,
+          vehicle_type: selectedPricing.vehicleType,
+          passenger_count: passengerCount,
+          luggage_count: luggageCount,
+          fare_fcfa: selectedPricing.finalFare,
+          multiplier: selectedPricing.multiplier,
+          surge_reason: selectedPricing.multiplierReason,
+          payment_method: paymentMethod,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.ride) {
+        // Déclencher la recherche séquentielle de chauffeurs par Socket.io
+        voraSocket.requestRide(data.ride.id);
+
+        Alert.alert(
+          "Recherche de Chauffeur",
+          `Votre demande de course ${selectedPricing.label} (${selectedPricing.finalFare} FCFA) a été transmise au chauffeur le plus proche.`
+        );
+
+        router.replace({
+          pathname: "/(root)/find-ride" as any,
+          params: { rideId: data.ride.id, rideData: JSON.stringify(data.ride) },
+        });
+      } else {
+        Alert.alert("Erreur", data.error || "Impossible de réserver la course.");
+      }
+    } catch (err) {
+      console.error("Erreur réservation course:", err);
+      Alert.alert("Erreur", "Problème de connexion au serveur backend VORA.");
+    } finally {
+      setIsBooking(false);
+    }
+  };
 
   return (
-    <StripeProvider
-      publishableKey={STRIPE_KEY}
-      merchantIdentifier="merchant.com.uber"
-      urlScheme="myapp"
-    >
-      <RideLayout title="Book Ride">
-        <>
-          <Text className="text-xl font-JakartaSemiBold mb-3">
-            Ride Information
+    <RideLayout title="Réservation de Course">
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+        <Text style={styles.sectionTitle}>Détails de l'itinéraire</Text>
+
+        <View style={styles.locationBox}>
+          <View style={styles.locationRow}>
+            <Image source={icons.to} style={{ width: 20, height: 20, marginRight: 10 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.locationLabel}>DÉPART</Text>
+              <Text style={styles.locationText}>{userAddress || "Prise en charge géolocalisée"}</Text>
+            </View>
+          </View>
+
+          <View style={styles.locationDivider} />
+
+          <View style={styles.locationRow}>
+            <Image source={icons.point} style={{ width: 20, height: 20, marginRight: 10 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.locationLabel}>DESTINATION</Text>
+              <Text style={styles.locationText}>{destinationAddress || "Point de destination"}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Composant de Photo Géolocalisée pour le Lieu de Prise en Charge */}
+        <LocationPhotoPicker
+          currentLat={userLatitude || 3.8667}
+          currentLng={userLongitude || 11.5167}
+          placeName={userAddress}
+        />
+
+        {/* Sélecteur des 3 Catégories + Passagers & Bagages */}
+        <VehicleTypeSelector
+          distanceKm={4.5}
+          durationMin={12}
+          selectedType={selectedVehicleType}
+          passengerCount={passengerCount}
+          luggageCount={luggageCount}
+          onPassengerChange={setPassengerCount}
+          onLuggageChange={setLuggageCount}
+          onSelect={(detail) => {
+            setSelectedVehicleType(detail.vehicleType);
+            setSelectedPricing(detail);
+          }}
+        />
+
+        {/* Sélecteur de Mode de Paiement (Mobile Money / Cash) */}
+        <CamerPaySelector
+          selectedMethod={paymentMethod}
+          onSelectMethod={setPaymentMethod}
+          phoneNumber={phoneNumber}
+          onPhoneNumberChange={setPhoneNumber}
+        />
+
+        {/* Bouton de Confirmation Finale */}
+        <TouchableOpacity
+          style={[styles.confirmBtn, isBooking && { opacity: 0.6 }]}
+          onPress={handleBookRide}
+          disabled={isBooking}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.confirmBtnText}>
+            {isBooking
+              ? "Recherche en cours..."
+              : `Confirmer la Course (${selectedPricing?.finalFare || 1000} FCFA)`}
           </Text>
-
-          <View className="flex flex-col w-full items-center justify-center mt-10">
-            <Image
-              source={{ uri: driverDetails?.profile_image_url }}
-              className="w-28 h-28 rounded-full"
-            />
-
-            <View className="flex flex-row items-center justify-center mt-5 space-x-2">
-              <Text className="text-lg font-JakartaSemiBold">
-                {driverDetails?.title}
-              </Text>
-
-              <View className="flex flex-row items-center space-x-0.5">
-                <Image
-                  source={icons.star}
-                  className="w-5 h-5"
-                  resizeMode="contain"
-                />
-                <Text className="text-lg font-JakartaRegular">
-                  {driverDetails?.rating}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View className="flex flex-col w-full items-start justify-center py-3 px-5 rounded-3xl bg-general-600 mt-5">
-            <View className="flex flex-row items-center justify-between w-full border-b border-white py-3">
-              <Text className="text-lg font-JakartaRegular">Ride Price</Text>
-              <Text className="text-lg font-JakartaRegular text-[#0CC25F]">
-                ${driverDetails?.price}
-              </Text>
-            </View>
-
-            <View className="flex flex-row items-center justify-between w-full border-b border-white py-3">
-              <Text className="text-lg font-JakartaRegular">Pickup Time</Text>
-              <Text className="text-lg font-JakartaRegular">
-                {formatTime(driverDetails?.time!)}
-              </Text>
-            </View>
-
-            <View className="flex flex-row items-center justify-between w-full py-3">
-              <Text className="text-lg font-JakartaRegular">Car Seats</Text>
-              <Text className="text-lg font-JakartaRegular">
-                {driverDetails?.car_seats}
-              </Text>
-            </View>
-          </View>
-
-          <View className="flex flex-col w-full items-start justify-center mt-5">
-            <View className="flex flex-row items-center justify-start mt-3 border-t border-b border-general-700 w-full py-3">
-              <Image source={icons.to} className="w-6 h-6" />
-              <Text className="text-lg font-JakartaRegular ml-2">
-                {userAddress}
-              </Text>
-            </View>
-
-            <View className="flex flex-row items-center justify-start border-b border-general-700 w-full py-3">
-              <Image source={icons.point} className="w-6 h-6" />
-              <Text className="text-lg font-JakartaRegular ml-2">
-                {destinationAddress}
-              </Text>
-            </View>
-          </View>
-
-          <Payment
-            fullName={user?.fullName!}
-            email={user?.emailAddresses[0].emailAddress!}
-            amount={driverDetails?.price!}
-            driverId={driverDetails?.id}
-            rideTime={driverDetails?.time!}
-          />
-        </>
-      </RideLayout>
-    </StripeProvider>
+        </TouchableOpacity>
+      </ScrollView>
+    </RideLayout>
   );
 };
 
 export default BookRide;
 
 const styles = StyleSheet.create({
-  noStripeContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 32,
-    gap: 12,
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 10,
   },
-  noStripeTitle: {
-    fontSize: 20,
+  locationBox: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 12,
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  locationLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#94A3B8",
+    letterSpacing: 0.5,
+  },
+  locationText: {
+    fontSize: 14,
     fontWeight: "700",
     color: "#0F172A",
-    textAlign: "center",
+    marginTop: 2,
   },
-  noStripeDesc: {
-    fontSize: 14,
-    color: "#64748B",
-    textAlign: "center",
-    lineHeight: 22,
+  locationDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginVertical: 10,
+  },
+  confirmBtn: {
+    backgroundColor: "#0EA5E9",
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: "center",
+    marginTop: 16,
+    boxShadow: "0px 4px 12px rgba(14, 165, 233, 0.35)",
+    elevation: 4,
+  },
+  confirmBtnText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "800",
   },
 });
+

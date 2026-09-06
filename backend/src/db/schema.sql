@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS users (
   role VARCHAR(50) DEFAULT 'PASSENGER', -- PASSENGER | DRIVER | ADMIN | SUPER_ADMIN
   verification_status VARCHAR(50) DEFAULT 'unverified', -- unverified | pending | verified | rejected
   avatar_url TEXT,
+  wallet_balance INT DEFAULT 0,
+  cancellation_debt INT DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -42,14 +44,29 @@ CREATE TABLE IF NOT EXISTS rides (
   dest_lng DOUBLE PRECISION NOT NULL,
   status VARCHAR(50) DEFAULT 'SEARCHING', -- SEARCHING, ACCEPTED, PICKED_UP, IN_TRANSIT, COMPLETED, CANCELLED
   vehicle_type VARCHAR(50) NOT NULL,
+  passenger_count INT DEFAULT 1,
+  luggage_count INT DEFAULT 0,
   fare_fcfa INT NOT NULL,
   multiplier NUMERIC(3,2) DEFAULT 1.00,
-  payment_method VARCHAR(50) DEFAULT 'CASH', -- CASH | MTN_MOMO | ORANGE_MONEY
+  surge_multiplier NUMERIC(3,2) DEFAULT 1.00,
+  surge_reason VARCHAR(255),
+  payment_method VARCHAR(50) DEFAULT 'CASH', -- CASH | MTN_MOMO | ORANGE_MONEY | WALLET
   payment_status VARCHAR(50) DEFAULT 'PENDING', -- PENDING | PAID | FAILED
   otp_code VARCHAR(6),
   rating INT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4. Table Repères Visuels Géolocalisés (Photos de Lieux)
+CREATE TABLE IF NOT EXISTS location_photos (
+  id SERIAL PRIMARY KEY,
+  user_id VARCHAR(255) REFERENCES users(id),
+  place_name VARCHAR(255) NOT NULL,
+  lat DOUBLE PRECISION NOT NULL,
+  lng DOUBLE PRECISION NOT NULL,
+  image_url TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 4. Paramètres de la Plateforme (Super Admin Toggle Simulation)

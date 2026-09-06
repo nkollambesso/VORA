@@ -1,7 +1,35 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../db';
+import { calculateAllCategories, calculateVoraFare } from '../utils/pricing';
 
 const router = Router();
+
+// Estimer les tarifs pour les 3 catégories (Moto, Taxi, Confort)
+router.post('/estimate', (req: Request, res: Response) => {
+  try {
+    const {
+      distance_km,
+      luggage_count = 0,
+      passenger_count = 1,
+      pickup_address = '',
+      destination_address = '',
+    } = req.body;
+
+    const dist = parseFloat(distance_km) || 3.5;
+    const estimates = calculateAllCategories(
+      dist,
+      parseInt(luggage_count, 10),
+      parseInt(passenger_count, 10),
+      pickup_address,
+      destination_address
+    );
+
+    return res.json({ success: true, estimates });
+  } catch (error) {
+    console.error('Erreur estimation tarifs:', error);
+    return res.status(500).json({ success: false, error: 'Erreur lors du calcul des tarifs' });
+  }
+});
 
 // Créer une nouvelle demande de course
 router.post('/', async (req: Request, res: Response) => {
@@ -15,8 +43,12 @@ router.post('/', async (req: Request, res: Response) => {
       dest_lat,
       dest_lng,
       vehicle_type,
+      passenger_count = 1,
+      luggage_count = 0,
       fare_fcfa,
       multiplier,
+      surge_multiplier = 1.0,
+      surge_reason,
       payment_method,
     } = req.body;
 
@@ -39,8 +71,9 @@ router.post('/', async (req: Request, res: Response) => {
       INSERT INTO rides (
         id, rider_id, origin_address, destination_address,
         origin_lat, origin_lng, dest_lat, dest_lng,
-        vehicle_type, fare_fcfa, multiplier, payment_method, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'SEARCHING')
+        vehicle_type, passenger_count, luggage_count,
+        fare_fcfa, multiplier, surge_multiplier, surge_reason, payment_method, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'SEARCHING')
       RETURNING *;
     `;
 
@@ -53,9 +86,13 @@ router.post('/', async (req: Request, res: Response) => {
       origin_lng,
       dest_lat,
       dest_lng,
-      vehicle_type,
+      vehicle_type || 'taxi',
+      passenger_count,
+      luggage_count,
       fare_fcfa,
       multiplier || 1.0,
+      surge_multiplier,
+      surge_reason || null,
       payment_method || 'CASH',
     ]);
 
@@ -63,6 +100,54 @@ router.post('/', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Erreur création course:', error);
     return res.status(500).json({ success: false, error: 'Erreur lors de la création de la course' });
+  }
+});
+
+// Annulation de course avec pénalité de 500 FCFA si > 2 min après acceptation
+router.post('/cancel', async (req: Request, res: Response) => {
+  try {
+    const { ride_id, rider_id, reason } = req.body;
+
+    const rideRes = await query(`SELECT * FROM rides WHERE id = $1`, [ride_id]);
+    if (rideRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Course introuvable' });
+    }
+
+    const ride = rideRes.rows[0];
+    let cancellationFee = 0;
+
+    // Si la course était ACCEPTED et plus de 2 min se sont écoulées
+    if (ride.status === 'ACCEPTED' && ride.updated_at) {
+      const timeDiffMinutes = (Date.now() - new Date(ride.updated_at).getTime()) / (1000 * 60);
+      if (timeDiffMinutes > 2) {
+        cancellationFee = 500;
+      }
+    }
+
+    // Mettre à jour le statut de la course
+    await query(`UPDATE rides SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`, [ride_id]);
+
+    // Appliquer la pénalité sur le portefeuille de l'utilisateur (solde pouvant devenir négatif)
+    if (cancellationFee > 0 && rider_id) {
+      await query(
+        `UPDATE users 
+         SET wallet_balance = wallet_balance - $1,
+             cancellation_debt = cancellation_debt + $1
+         WHERE id = $2`,
+        [cancellationFee, rider_id]
+      );
+    }
+
+    return res.json({
+      success: true,
+      message: cancellationFee > 0
+        ? `Course annulée. Une pénalité de ${cancellationFee} FCFA a été appliquée à votre portefeuille.`
+        : 'Course annulée sans frais.',
+      cancellationFee,
+    });
+  } catch (error) {
+    console.error('Erreur annulation course:', error);
+    return res.status(500).json({ success: false, error: 'Erreur lors de l\'annulation' });
   }
 });
 
@@ -121,3 +206,4 @@ router.get('/driver/:driverId', async (req: Request, res: Response) => {
 });
 
 export default router;
+

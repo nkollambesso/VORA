@@ -17,7 +17,7 @@ export default function DriverRideRequest() {
   const { rideData } = useLocalSearchParams();
 
   const [ride, setRide] = useState<any>(null);
-  const [timeLeft, setTimeLeft] = useState(30);
+  const [timeLeft, setTimeLeft] = useState(20);
 
   // Parse payload parameter safely
   useEffect(() => {
@@ -40,14 +40,19 @@ export default function DriverRideRequest() {
         destination_address: "Quartier Bastos, Yaoundé",
         fare_fcfa: 1750,
         vehicle_type: "taxi",
+        passenger_count: 2,
+        luggage_count: 1,
         multiplier: 1.2,
       });
     }
   }, [rideData]);
 
-  // 30s countdown timer
+  // 20s countdown timer matching backend waterfall dispatch
   useEffect(() => {
     if (timeLeft <= 0) {
+      if (ride?.id) {
+        voraSocket.declineRide(ride.id, 1);
+      }
       router.back();
       return;
     }
@@ -57,7 +62,7 @@ export default function DriverRideRequest() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeLeft]);
+  }, [timeLeft, ride]);
 
   const handleAccept = () => {
     if (!ride) return;
@@ -69,6 +74,9 @@ export default function DriverRideRequest() {
   };
 
   const handleDecline = () => {
+    if (ride?.id) {
+      voraSocket.declineRide(ride.id, 1);
+    }
     router.back();
   };
 
@@ -105,9 +113,33 @@ export default function DriverRideRequest() {
           </Text>
           {ride.multiplier > 1.0 && (
             <Text style={styles.multiplierText}>
-              Tarif Heure de Pointe (x{ride.multiplier})
+              Tarif Dynamique / Heure de Pointe (x{ride.multiplier})
             </Text>
           )}
+        </View>
+
+        {/* Détails Véhicule, Passagers & Bagages */}
+        <View style={styles.detailsRow}>
+          <View style={styles.detailBadge}>
+            <Text style={styles.detailBadgeLabel}>CATÉGORIE</Text>
+            <Text style={styles.detailBadgeValue}>
+              {(ride.vehicle_type || "taxi").toUpperCase()}
+            </Text>
+          </View>
+          <View style={styles.detailBadge}>
+            <Text style={styles.detailBadgeLabel}>PASSAGERS</Text>
+            <Text style={styles.detailBadgeValue}>
+              {ride.passenger_count || 1} pers.
+            </Text>
+          </View>
+          <View style={styles.detailBadge}>
+            <Text style={styles.detailBadgeLabel}>BAGAGES</Text>
+            <Text style={styles.detailBadgeValue}>
+              {ride.luggage_count && ride.luggage_count > 0
+                ? `${ride.luggage_count} sac(s)`
+                : "Aucun"}
+            </Text>
+          </View>
         </View>
 
         {/* Addresses */}
@@ -244,6 +276,32 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#B45309",
     marginTop: 4,
+  },
+  detailsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 16,
+  },
+  detailBadge: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    alignItems: "center",
+  },
+  detailBadgeLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#94A3B8",
+    letterSpacing: 0.5,
+  },
+  detailBadgeValue: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginTop: 2,
   },
   addressSection: {
     backgroundColor: "#F8FAFC",
