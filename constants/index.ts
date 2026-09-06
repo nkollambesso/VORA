@@ -74,26 +74,50 @@ export const icons = {
 export const onboarding = [
   {
     id: 1,
-    title: "The perfect ride is just a tap away!",
+    title: "Vos déplacements au Cameroun en toute sérénité!",
     description:
-      "Your journey begins with Ryde. Find your ideal ride effortlessly.",
+      "Trouvez un trajet sûr et rapide avec VORA à Yaoundé, Douala et partout ailleurs.",
     image: images.onboarding1,
   },
   {
     id: 2,
-    title: "Best car in your hands with Ryde",
+    title: "Retrouvez vos repères locaux connus",
     description:
-      "Discover the convenience of finding your perfect ride with Ryde",
+      "Naviguez facilement vers les marchés, carrefours et lieux emblématiques.",
     image: images.onboarding2,
   },
   {
     id: 3,
-    title: "Your ride, your way. Let's go!",
+    title: "Payez en Mobile Money ou Espèces",
     description:
-      "Enter your destination, sit back, and let us take care of the rest.",
+      "Réglez vos courses via MTN Mobile Money, Orange Money (CamerPay) ou en espèces.",
     image: images.onboarding3,
   },
 ];
+
+export const VORA_THEME = {
+  colors: {
+    primary: "#0EA5E9", // Bleu Ciel VORA
+    primaryDark: "#0284C7", // Bleu Ciel Profond
+    secondary: "#38BDF8", // Bleu Ciel Lumineux
+    background: "#F8FAFC", // Blanc Pur / Ice White
+    white: "#FFFFFF",
+    glassBg: "rgba(255, 255, 255, 0.85)",
+    glassBorder: "rgba(224, 242, 254, 0.6)",
+    accent: "#F59E0B", // Doré / Amber
+    dark: "#0F172A",
+  },
+  glassStyle: {
+    backgroundColor: "rgba(255, 255, 255, 0.85)",
+    borderWidth: 1,
+    borderColor: "rgba(224, 242, 254, 0.8)",
+    shadowColor: "#0EA5E9",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+};
 
 export const data = {
   onboarding,

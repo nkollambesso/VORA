@@ -14,15 +14,21 @@ module.exports = {
       },
       colors: {
         primary: {
-          100: "#F5F8FF",
-          200: "#EBF4FF",
-          300: "#C3D9FF",
-          400: "#9BBFFF",
-          500: "#0286FF",
-          600: "#6A85E6",
-          700: "#475A99",
-          800: "#364573",
-          900: "#242B4D",
+          100: "#F0F9FF",
+          200: "#E0F2FE",
+          300: "#BAE6FD",
+          400: "#7DD3FC",
+          500: "#0EA5E9", // Bleu ciel principal VORA
+          600: "#0284C7", // Bleu ciel foncé
+          700: "#0369A1",
+          800: "#075985",
+          900: "#0C4A6E",
+        },
+        glass: {
+          light: "rgba(255, 255, 255, 0.82)",
+          card: "rgba(240, 249, 255, 0.75)",
+          border: "rgba(255, 255, 255, 0.4)",
+          dark: "rgba(15, 23, 42, 0.65)",
         },
         secondary: {
           100: "#F8F8F8",

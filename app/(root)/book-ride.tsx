@@ -1,4 +1,4 @@
-import { useUser } from "@clerk/clerk-expo";
+import { useClerkUser } from "@/lib/useClerkSafe";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import { Image, Text, View } from "react-native";
 
@@ -9,7 +9,7 @@ import { formatTime } from "@/lib/utils";
 import { useDriverStore, useLocationStore } from "@/store";
 
 const BookRide = () => {
-  const { user } = useUser();
+  const { user } = useClerkUser();
   const { userAddress, destinationAddress } = useLocationStore();
   const { drivers, selectedDriver } = useDriverStore();
 

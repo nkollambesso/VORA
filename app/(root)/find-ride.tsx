@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import CustomButton from "@/components/CustomButton";
 import GoogleTextInput from "@/components/GoogleTextInput";
@@ -16,38 +16,45 @@ const FindRide = () => {
   } = useLocationStore();
 
   return (
-    <RideLayout title="Ride">
-      <View className="my-3">
-        <Text className="text-lg font-JakartaSemiBold mb-3">From</Text>
-
+    <RideLayout title="Trajet">
+      <View style={styles.inputSection}>
+        <Text style={styles.label}>Départ</Text>
         <GoogleTextInput
           icon={icons.target}
           initialLocation={userAddress!}
-          containerStyle="bg-neutral-100"
-          textInputBackgroundColor="#f5f5f5"
           handlePress={(location) => setUserLocation(location)}
         />
       </View>
 
-      <View className="my-3">
-        <Text className="text-lg font-JakartaSemiBold mb-3">To</Text>
-
+      <View style={styles.inputSection}>
+        <Text style={styles.label}>Destination</Text>
         <GoogleTextInput
           icon={icons.map}
           initialLocation={destinationAddress!}
-          containerStyle="bg-neutral-100"
-          textInputBackgroundColor="transparent"
           handlePress={(location) => setDestinationLocation(location)}
         />
       </View>
 
-      <CustomButton
-        title="Find Now"
-        onPress={() => router.push(`/(root)/confirm-ride`)}
-        className="mt-5"
-      />
+      <View style={{ marginTop: 24 }}>
+        <CustomButton
+          title="Rechercher des chauffeurs"
+          onPress={() => router.push(`/(root)/confirm-ride`)}
+        />
+      </View>
     </RideLayout>
   );
 };
 
 export default FindRide;
+
+const styles = StyleSheet.create({
+  inputSection: {
+    marginVertical: 8,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0f172a",
+    marginBottom: 6,
+  },
+});

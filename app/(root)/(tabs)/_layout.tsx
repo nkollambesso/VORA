@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Image, ImageSourcePropType, View } from "react-native";
+import { Image, ImageSourcePropType, StyleSheet, View } from "react-native";
 
 import { icons } from "@/constants";
 
@@ -10,17 +10,13 @@ const TabIcon = ({
   source: ImageSourcePropType;
   focused: boolean;
 }) => (
-  <View
-    className={`flex flex-row justify-center items-center rounded-full ${focused ? "bg-general-300" : ""}`}
-  >
-    <View
-      className={`rounded-full w-12 h-12 items-center justify-center ${focused ? "bg-general-400" : ""}`}
-    >
+  <View style={[styles.iconContainer, focused && styles.focusedOuter]}>
+    <View style={[styles.iconInner, focused && styles.focusedInner]}>
       <Image
         source={source}
         tintColor="white"
         resizeMode="contain"
-        className="w-7 h-7"
+        style={styles.icon}
       />
     </View>
   </View>
@@ -29,31 +25,37 @@ const TabIcon = ({
 export default function Layout() {
   return (
     <Tabs
-      initialRouteName="index"
+      initialRouteName="home"
       screenOptions={{
         tabBarActiveTintColor: "white",
         tabBarInactiveTintColor: "white",
         tabBarShowLabel: false,
         tabBarStyle: {
-          backgroundColor: "#333333",
-          borderRadius: 50,
-          paddingBottom: 0, // ios only
+          backgroundColor: "#1e293b",
+          borderRadius: 40,
+          paddingBottom: 0,
           overflow: "hidden",
-          marginHorizontal: 20,
-          marginBottom: 20,
-          height: 78,
+          marginHorizontal: 16,
+          marginBottom: 16,
+          height: 64,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           flexDirection: "row",
           position: "absolute",
+          borderTopWidth: 0,
+          elevation: 10,
+          shadowColor: "#0f172a",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.25,
+          shadowRadius: 8,
         },
       }}
     >
       <Tabs.Screen
         name="home"
         options={{
-          title: "Home",
+          title: "Accueil",
           headerShown: false,
           tabBarIcon: ({ focused }) => (
             <TabIcon source={icons.home} focused={focused} />
@@ -63,7 +65,7 @@ export default function Layout() {
       <Tabs.Screen
         name="rides"
         options={{
-          title: "Rides",
+          title: "Trajets",
           headerShown: false,
           tabBarIcon: ({ focused }) => (
             <TabIcon source={icons.list} focused={focused} />
@@ -73,7 +75,7 @@ export default function Layout() {
       <Tabs.Screen
         name="chat"
         options={{
-          title: "Chat",
+          title: "Discussion",
           headerShown: false,
           tabBarIcon: ({ focused }) => (
             <TabIcon source={icons.chat} focused={focused} />
@@ -83,7 +85,7 @@ export default function Layout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profile",
+          title: "Profil",
           headerShown: false,
           tabBarIcon: ({ focused }) => (
             <TabIcon source={icons.profile} focused={focused} />
@@ -93,3 +95,29 @@ export default function Layout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  iconContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 9999,
+  },
+  focusedOuter: {
+    backgroundColor: "#0284c7",
+  },
+  iconInner: {
+    borderRadius: 9999,
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  focusedInner: {
+    backgroundColor: "#0ea5e9",
+  },
+  icon: {
+    width: 24,
+    height: 24,
+  },
+});

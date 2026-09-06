@@ -1,25 +1,25 @@
-import { Image, ScrollView, Text, View } from "react-native";
+import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { images } from "@/constants";
 
 const Chat = () => {
   return (
-    <SafeAreaView className="flex-1 bg-white p-5">
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-        <Text className="text-2xl font-JakartaBold">Chat</Text>
-        <View className="flex-1 h-fit flex justify-center items-center">
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.title}>Discussion</Text>
+        <View style={styles.emptyCenter}>
           <Image
             source={images.message}
             alt="message"
-            className="w-full h-40"
+            style={styles.messageImage}
             resizeMode="contain"
           />
-          <Text className="text-3xl font-JakartaBold mt-3">
-            No Messages Yet
+          <Text style={styles.emptyTitle}>
+            Aucun message pour l'instant
           </Text>
-          <Text className="text-base mt-2 text-center px-7">
-            Start a conversation with your friends and family
+          <Text style={styles.emptySub}>
+            Commencez une conversation avec vos chauffeurs et amis.
           </Text>
         </View>
       </ScrollView>
@@ -28,3 +28,44 @@ const Chat = () => {
 };
 
 export default Chat;
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 110,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#0f172a",
+    marginVertical: 16,
+  },
+  emptyCenter: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  messageImage: {
+    width: "100%",
+    height: 160,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#0f172a",
+    marginTop: 16,
+  },
+  emptySub: {
+    fontSize: 14,
+    color: "#64748b",
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 20,
+  },
+});

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <meta name="theme-color" content="#0EA5E9" />
+    <meta name="description" content="VORA — Votre application de transport premium au Cameroun" />
+    <title>VORA</title>
+
+    <!-- Plus Jakarta Sans via Google Fonts (fallback web pour les polices custom Expo) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200;0,300;0,400;0,500;0,600;0,700;0,800&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      /* ── Reset ────────────────────────────────────────────────── */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        background-color: #e2e8f0;
+        overflow: hidden;
+        /* Smooth font rendering */
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* ── Map local font names → Google Fonts ──────────────────── */
+      /* NativeWind génère font-family: "Jakarta-Bold" etc.
+         On remplace par Plus Jakarta Sans avec le bon weight */
+
+      /* Jakarta-ExtraLight → 200 */
+      @font-face {
+        font-family: "Jakarta-ExtraLight";
+        src: local("Plus Jakarta Sans ExtraLight");
+        font-weight: 200;
+      }
+      /* Jakarta-Light → 300 */
+      @font-face {
+        font-family: "Jakarta-Light";
+        src: local("Plus Jakarta Sans Light");
+        font-weight: 300;
+      }
+      /* Jakarta (Regular) → 400 */
+      @font-face {
+        font-family: "Jakarta";
+        src: local("Plus Jakarta Sans");
+        font-weight: 400;
+      }
+      /* Jakarta-Medium → 500 */
+      @font-face {
+        font-family: "Jakarta-Medium";
+        src: local("Plus Jakarta Sans Medium");
+        font-weight: 500;
+      }
+      /* Jakarta-SemiBold → 600 */
+      @font-face {
+        font-family: "Jakarta-SemiBold";
+        src: local("Plus Jakarta Sans SemiBold");
+        font-weight: 600;
+      }
+      /* Jakarta-Bold → 700 */
+      @font-face {
+        font-family: "Jakarta-Bold";
+        src: local("Plus Jakarta Sans Bold");
+        font-weight: 700;
+      }
+      /* Jakarta-ExtraBold → 800 */
+      @font-face {
+        font-family: "Jakarta-ExtraBold";
+        src: local("Plus Jakarta Sans ExtraBold");
+        font-weight: 800;
+      }
+
+      /* ── App container ────────────────────────────────────────── */
+      #root {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        width: 100%;
+        /* Phone frame sur desktop */
+        max-width: 430px;
+        margin: 0 auto;
+        box-shadow: 0 0 60px rgba(0, 0, 0, 0.25);
+        overflow: hidden;
+        position: relative;
+        background: #ffffff;
+        font-family: "Plus Jakarta Sans", "Jakarta", system-ui, sans-serif;
+      }
+
+      @media (max-width: 480px) {
+        html,
+        body {
+          background-color: #ffffff;
+        }
+        #root {
+          max-width: 100%;
+          box-shadow: none;
+        }
+      }
+
+      /* ── Ensure all text uses Jakarta on web ─────────────────── */
+      #root * {
+        font-family: inherit;
+      }
+
+      /* Classes NativeWind → font weights correct */
+      .font-Jakarta,
+      [class*="font-Jakarta"] {
+        font-family: "Plus Jakarta Sans", system-ui, sans-serif !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

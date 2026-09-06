@@ -1,5 +1,13 @@
 import { TextInputProps, TouchableOpacityProps } from "react-native";
 
+declare global {
+  namespace NodeJS {
+    interface ProcessEnv {
+      [key: string]: string | undefined;
+    }
+  }
+}
+
 declare interface Driver {
   id: number;
   first_name: string;
@@ -55,11 +63,13 @@ declare interface Ride {
 
 declare interface ButtonProps extends TouchableOpacityProps {
   title: string;
+  onPress?: any;
   bgVariant?: "primary" | "secondary" | "danger" | "outline" | "success";
   textVariant?: "primary" | "default" | "secondary" | "danger" | "success";
-  IconLeft?: React.ComponentType<any>;
-  IconRight?: React.ComponentType<any>;
+  IconLeft?: any;
+  IconRight?: any;
   className?: string;
+  [key: string]: any;
 }
 
 declare interface GoogleInputProps {
@@ -80,13 +90,19 @@ declare interface GoogleInputProps {
 
 declare interface InputFieldProps extends TextInputProps {
   label: string;
+  placeholder?: string;
+  value?: string;
+  onChangeText?: (value: any) => void;
   icon?: any;
   secureTextEntry?: boolean;
+  textContentType?: any;
+  keyboardType?: any;
   labelStyle?: string;
   containerStyle?: string;
   inputStyle?: string;
   iconStyle?: string;
   className?: string;
+  [key: string]: any;
 }
 
 declare interface PaymentProps {

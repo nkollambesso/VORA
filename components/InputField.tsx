@@ -4,9 +4,8 @@ import {
   Text,
   Image,
   KeyboardAvoidingView,
-  TouchableWithoutFeedback,
-  Keyboard,
   Platform,
+  StyleSheet,
 } from "react-native";
 
 import { InputFieldProps } from "@/types/type";
@@ -26,27 +25,65 @@ const InputField = ({
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View className="my-2 w-full">
-          <Text className={`text-lg font-JakartaSemiBold mb-3 ${labelStyle}`}>
-            {label}
-          </Text>
-          <View
-            className={`flex flex-row justify-start items-center relative bg-neutral-100 rounded-full border border-neutral-100 focus:border-primary-500  ${containerStyle}`}
-          >
-            {icon && (
-              <Image source={icon} className={`w-6 h-6 ml-4 ${iconStyle}`} />
-            )}
-            <TextInput
-              className={`rounded-full p-4 font-JakartaSemiBold text-[15px] flex-1 ${inputStyle} text-left`}
-              secureTextEntry={secureTextEntry}
-              {...props}
+      <View style={styles.wrapper}>
+        <Text style={styles.label}>{label}</Text>
+        <View style={styles.inputRow}>
+          {icon && (
+            <Image
+              source={icon}
+              style={styles.icon}
+              resizeMode="contain"
             />
-          </View>
+          )}
+          <TextInput
+            style={styles.input}
+            secureTextEntry={secureTextEntry}
+            placeholderTextColor="#9ca3af"
+            {...props}
+          />
         </View>
-      </TouchableWithoutFeedback>
+      </View>
     </KeyboardAvoidingView>
   );
 };
 
 export default InputField;
+
+const styles = StyleSheet.create({
+  wrapper: {
+    marginVertical: 8,
+    width: "100%",
+  },
+  label: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1e293b",
+    marginBottom: 8,
+    fontFamily: "Jakarta-SemiBold",
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f1f5f9",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+    paddingHorizontal: 4,
+    minHeight: 52,
+  },
+  icon: {
+    width: 20,
+    height: 20,
+    marginHorizontal: 12,
+    tintColor: "#64748b",
+  },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    color: "#0f172a",
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    fontFamily: "Jakarta-Medium",
+    outlineStyle: "none", // web only
+  } as any,
+});

@@ -1,5 +1,4 @@
-import { useUser } from "@clerk/clerk-expo";
-import { useAuth } from "@clerk/clerk-expo";
+import { useClerkUser, useClerkAuth } from "@/lib/useClerkSafe";
 import * as Location from "expo-location";
 import { router } from "expo-router";
 import { useState, useEffect } from "react";
@@ -10,6 +9,8 @@ import {
   Image,
   FlatList,
   ActivityIndicator,
+  StyleSheet,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -21,9 +22,11 @@ import { useFetch } from "@/lib/fetch";
 import { useLocationStore } from "@/store";
 import { Ride } from "@/types/type";
 
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+
 const Home = () => {
-  const { user } = useUser();
-  const { signOut } = useAuth();
+  const { user } = useClerkUser();
+  const { signOut } = useClerkAuth();
 
   const { setUserLocation, setDestinationLocation } = useLocationStore();
 
@@ -58,7 +61,7 @@ const Home = () => {
       setUserLocation({
         latitude: location.coords?.latitude,
         longitude: location.coords?.longitude,
-        address: `${address[0].name}, ${address[0].region}`,
+        address: `${address[0]?.name ?? "Position"}, ${address[0]?.region ?? "Cameroun"}`,
       });
     })();
   }, []);
@@ -74,66 +77,68 @@ const Home = () => {
   };
 
   return (
-    <SafeAreaView className="bg-general-500">
+    <SafeAreaView style={styles.container}>
       <FlatList
         data={recentRides?.slice(0, 5)}
         renderItem={({ item }) => <RideCard ride={item} />}
         keyExtractor={(item, index) => index.toString()}
-        className="px-5"
+        contentContainerStyle={styles.flatListContent}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{
-          paddingBottom: 100,
-        }}
         ListEmptyComponent={() => (
-          <View className="flex flex-col items-center justify-center">
+          <View style={styles.emptyContainer}>
             {!loading ? (
               <>
                 <Image
                   source={images.noResult}
-                  className="w-40 h-40"
-                  alt="No recent rides found"
+                  style={styles.emptyImage}
+                  alt="Aucun trajet récent"
                   resizeMode="contain"
                 />
-                <Text className="text-sm">No recent rides found</Text>
+                <Text style={styles.emptyText}>Aucun trajet récent trouvé</Text>
               </>
             ) : (
-              <ActivityIndicator size="small" color="#000" />
+              <ActivityIndicator size="small" color="#0284c7" />
             )}
           </View>
         )}
         ListHeaderComponent={
-          <>
-            <View className="flex flex-row items-center justify-between my-5">
-              <Text className="text-2xl font-JakartaExtraBold">
-                Welcome {user?.firstName}👋
-              </Text>
+          <View style={styles.headerContainer}>
+            {/* User Greeting & Logout */}
+            <View style={styles.greetingRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.subGreeting}>Ravi de vous revoir</Text>
+                <Text style={styles.greetingTitle} numberOfLines={1}>
+                  {user?.firstName ?? user?.emailAddresses?.[0]?.emailAddress?.split("@")[0] ?? "Passager"}
+                </Text>
+              </View>
               <TouchableOpacity
                 onPress={handleSignOut}
-                className="justify-center items-center w-10 h-10 rounded-full bg-white"
+                style={styles.logoutButton}
               >
-                <Image source={icons.out} className="w-4 h-4" />
+                <Image source={icons.out} style={styles.logoutIcon} />
               </TouchableOpacity>
             </View>
 
+            {/* Destination Search */}
             <GoogleTextInput
               icon={icons.search}
-              containerStyle="bg-white shadow-md shadow-neutral-300"
               handlePress={handleDestinationPress}
             />
 
-            <>
-              <Text className="text-xl font-JakartaBold mt-5 mb-3">
-                Your current location
-              </Text>
-              <View className="flex flex-row items-center bg-transparent h-[300px]">
-                <Map />
-              </View>
-            </>
-
-            <Text className="text-xl font-JakartaBold mt-5 mb-3">
-              Recent Rides
+            {/* Current Location Map Header */}
+            <Text style={styles.sectionTitle}>
+              Votre position actuelle
             </Text>
-          </>
+
+            {/* Map Box */}
+            <View style={styles.mapCardContainer}>
+              <Map />
+            </View>
+
+            <Text style={styles.sectionTitle}>
+              Trajets Récents
+            </Text>
+          </View>
         }
       />
     </SafeAreaView>
@@ -141,3 +146,88 @@ const Home = () => {
 };
 
 export default Home;
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
+  },
+  flatListContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 110,
+  },
+  headerContainer: {
+    marginBottom: 8,
+  },
+  greetingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginVertical: 16,
+  },
+  subGreeting: {
+    fontSize: 13,
+    color: "#64748b",
+    fontWeight: "500",
+  },
+  greetingTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#0f172a",
+  },
+  logoutButton: {
+    justifyContent: "center",
+    alignItems: "center",
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  logoutIcon: {
+    width: 18,
+    height: 18,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#0f172a",
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  mapCardContainer: {
+    height: Math.max(280, SCREEN_HEIGHT * 0.32),
+    borderRadius: 20,
+    overflow: "hidden",
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  emptyContainer: {
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 32,
+  },
+  emptyImage: {
+    width: 140,
+    height: 140,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#64748b",
+    fontWeight: "500",
+    marginTop: 12,
+  },
+});

@@ -1,138 +1,158 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
-import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
-import MapViewDirections from "react-native-maps-directions";
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 
-import { icons } from "@/constants";
-import { useFetch } from "@/lib/fetch";
-import {
-  calculateDriverTimes,
-  calculateRegion,
-  generateMarkersFromData,
-} from "@/lib/map";
 import { useDriverStore, useLocationStore } from "@/store";
-import { Driver, MarkerData } from "@/types/type";
 
-const directionsAPI = process.env.EXPO_PUBLIC_DIRECTIONS_API_KEY;
+// On web, react-native-maps doesn't work — use an iframe with OpenStreetMap embed
+const MapWeb = ({ userLatitude, userLongitude }: { userLatitude?: number; userLongitude?: number }) => {
+  // Default to Cameroon (Douala / Yaoundé) coordinates if location is pending
+  const lat = userLatitude ?? 3.848;
+  const lng = userLongitude ?? 11.502;
 
-const Map = () => {
-  const {
-    userLongitude,
-    userLatitude,
-    destinationLatitude,
-    destinationLongitude,
-  } = useLocationStore();
-  const { selectedDriver, setDrivers } = useDriverStore();
+  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.03}%2C${lat - 0.03}%2C${lng + 0.03}%2C${lat + 0.03}&layer=mapnik&marker=${lat}%2C${lng}`;
 
-  const { data: drivers, loading, error } = useFetch<Driver[]>("/(api)/driver");
-  const [markers, setMarkers] = useState<MarkerData[]>([]);
-
-  useEffect(() => {
-    if (Array.isArray(drivers)) {
-      if (!userLatitude || !userLongitude) return;
-
-      const newMarkers = generateMarkersFromData({
-        data: drivers,
-        userLatitude,
-        userLongitude,
-      });
-
-      setMarkers(newMarkers);
-    }
-  }, [drivers, userLatitude, userLongitude]);
-
-  useEffect(() => {
-    if (
-      markers.length > 0 &&
-      destinationLatitude !== undefined &&
-      destinationLongitude !== undefined
-    ) {
-      calculateDriverTimes({
-        markers,
-        userLatitude,
-        userLongitude,
-        destinationLatitude,
-        destinationLongitude,
-      }).then((drivers) => {
-        setDrivers(drivers as MarkerData[]);
-      });
-    }
-  }, [markers, destinationLatitude, destinationLongitude]);
-
-  const region = calculateRegion({
-    userLatitude,
-    userLongitude,
-    destinationLatitude,
-    destinationLongitude,
-  });
-
-  if (loading || (!userLatitude && !userLongitude))
+  if (typeof document !== "undefined") {
     return (
-      <View className="flex justify-between items-center w-full">
-        <ActivityIndicator size="small" color="#000" />
+      <View style={styles.iframeWrapper}>
+        {/* @ts-ignore */}
+        <iframe
+          src={src}
+          style={{ width: "100%", height: "100%", border: "none", borderRadius: 16 }}
+          title="Votre position"
+          loading="lazy"
+        />
       </View>
     );
-
-  if (error)
-    return (
-      <View className="flex justify-between items-center w-full">
-        <Text>Error: {error}</Text>
-      </View>
-    );
+  }
 
   return (
-    <MapView
-      provider={PROVIDER_DEFAULT}
-      className="w-full h-full rounded-2xl"
-      tintColor="black"
-      mapType="mutedStandard"
-      showsPointsOfInterest={false}
-      initialRegion={region}
-      showsUserLocation={true}
-      userInterfaceStyle="light"
-    >
-      {markers.map((marker, index) => (
-        <Marker
-          key={marker.id}
-          coordinate={{
-            latitude: marker.latitude,
-            longitude: marker.longitude,
-          }}
-          title={marker.title}
-          image={
-            selectedDriver === +marker.id ? icons.selectedMarker : icons.marker
-          }
-        />
-      ))}
+    <View style={styles.placeholder}>
+      <Text style={styles.placeholderText}>Carte non disponible</Text>
+    </View>
+  );
+};
 
-      {destinationLatitude && destinationLongitude && (
-        <>
-          <Marker
-            key="destination"
-            coordinate={{
-              latitude: destinationLatitude,
-              longitude: destinationLongitude,
-            }}
-            title="Destination"
-            image={icons.pin}
-          />
-          <MapViewDirections
-            origin={{
-              latitude: userLatitude!,
-              longitude: userLongitude!,
-            }}
-            destination={{
-              latitude: destinationLatitude,
-              longitude: destinationLongitude,
-            }}
-            apikey={directionsAPI!}
-            strokeColor="#0286FF"
-            strokeWidth={2}
-          />
-        </>
-      )}
-    </MapView>
+// ─── Native Map (mobile only) ─────────────────────────────────────────────────
+let NativeMap: React.ComponentType<any> | null = null;
+if (Platform.OS !== "web") {
+  try {
+    const { default: MapView, Marker, PROVIDER_DEFAULT } = require("react-native-maps");
+    const MapViewDirectionsRaw = require("react-native-maps-directions").default;
+    const MapViewDirections = MapViewDirectionsRaw as any;
+
+    const { icons } = require("@/constants");
+    const { useFetch } = require("@/lib/fetch");
+    const { calculateDriverTimes, calculateRegion, generateMarkersFromData } = require("@/lib/map");
+
+    NativeMap = () => {
+      const { userLongitude, userLatitude, destinationLatitude, destinationLongitude } = useLocationStore();
+      const { selectedDriver, setDrivers } = useDriverStore();
+      const { data: drivers, loading } = useFetch("/(api)/driver");
+      const [markers, setMarkers] = useState<any[]>([]);
+
+      useEffect(() => {
+        if (Array.isArray(drivers) && userLatitude && userLongitude) {
+          setMarkers(generateMarkersFromData({ data: drivers, userLatitude, userLongitude }));
+        }
+      }, [drivers, userLatitude, userLongitude]);
+
+      useEffect(() => {
+        if (markers.length > 0 && destinationLatitude && destinationLongitude) {
+          calculateDriverTimes({ markers, userLatitude, userLongitude, destinationLatitude, destinationLongitude })
+            .then((d: any) => setDrivers(d));
+        }
+      }, [markers, destinationLatitude, destinationLongitude]);
+
+      const region = calculateRegion({ userLatitude, userLongitude, destinationLatitude, destinationLongitude });
+
+      if (loading || (!userLatitude && !userLongitude)) {
+        return (
+          <View style={styles.placeholder}>
+            <ActivityIndicator size="small" color="#0EA5E9" />
+          </View>
+        );
+      }
+
+      return (
+        <MapView
+          provider={PROVIDER_DEFAULT}
+          style={{ flex: 1 }}
+          mapType="mutedStandard"
+          showsPointsOfInterest={false}
+          initialRegion={region}
+          showsUserLocation={true}
+          userInterfaceStyle="light"
+        >
+          {markers.map((marker: any) => (
+            <Marker
+              key={marker.id}
+              coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
+              title={marker.title}
+              image={selectedDriver === +marker.id ? icons.selectedMarker : icons.marker}
+            />
+          ))}
+          {destinationLatitude && destinationLongitude && (
+            <>
+              <Marker
+                key="destination"
+                coordinate={{ latitude: destinationLatitude, longitude: destinationLongitude }}
+                title="Destination"
+                image={icons.pin}
+              />
+              <MapViewDirections
+                origin={{ latitude: userLatitude!, longitude: userLongitude! }}
+                destination={{ latitude: destinationLatitude, longitude: destinationLongitude }}
+                apikey={process.env.EXPO_PUBLIC_DIRECTIONS_API_KEY}
+                strokeColor="#0286FF"
+                strokeWidth={2}
+              />
+            </>
+          )}
+        </MapView>
+      );
+    };
+  } catch (e) {
+    console.warn("react-native-maps not available", e);
+  }
+}
+
+// ─── Exported Map ─────────────────────────────────────────────────────────────
+const Map = () => {
+  const { userLatitude, userLongitude } = useLocationStore();
+
+  if (Platform.OS === "web") {
+    return <MapWeb userLatitude={userLatitude} userLongitude={userLongitude} />;
+  }
+
+  if (NativeMap) return <NativeMap />;
+
+  return (
+    <View style={styles.placeholder}>
+      <Text style={styles.placeholderText}>Carte non disponible</Text>
+    </View>
   );
 };
 
 export default Map;
+
+const styles = StyleSheet.create({
+  placeholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f0f9ff",
+    borderRadius: 16,
+    gap: 8,
+  },
+  placeholderText: {
+    fontSize: 13,
+    color: "#64748b",
+    fontWeight: "500",
+  },
+  iframeWrapper: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#f0f9ff",
+  },
+});

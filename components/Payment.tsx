@@ -1,4 +1,4 @@
-import { useAuth } from "@clerk/clerk-expo";
+import { useClerkAuth } from "@/lib/useClerkSafe";
 import { useStripe } from "@stripe/stripe-react-native";
 import { router } from "expo-router";
 import React, { useState } from "react";
@@ -28,7 +28,7 @@ const Payment = ({
     destinationLongitude,
   } = useLocationStore();
 
-  const { userId } = useAuth();
+  const { userId } = useClerkAuth();
   const [success, setSuccess] = useState<boolean>(false);
 
   const openPaymentSheet = async () => {
