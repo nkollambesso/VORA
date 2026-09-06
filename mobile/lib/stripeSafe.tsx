@@ -1,7 +1,10 @@
 import React from "react";
-import { Platform } from "react-native";
+import { Platform, View } from "react-native";
 
-let StripeProviderComponent: React.ComponentType<any> = ({ children }: any) => <>{children}</>;
+let StripeProviderComponent: React.ComponentType<any> = ({ children }: any) => (
+  <View style={{ flex: 1 }}>{children}</View>
+);
+
 let useStripeHook: any = () => ({
   initPaymentSheet: async () => ({ error: null }),
   presentPaymentSheet: async () => ({ error: null }),
