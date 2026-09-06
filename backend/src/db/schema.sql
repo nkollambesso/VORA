@@ -86,3 +86,17 @@ CREATE TABLE IF NOT EXISTS ride_disputes (
   status VARCHAR(50) DEFAULT 'A_TRAITER', -- A_TRAITER | RESOLU | REJETE
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Seed Chauffeurs VORA (Grégoire Legrand & Amassoka Michelle)
+INSERT INTO users (id, public_id, name, email, role, verification_status)
+VALUES 
+  ('driver-user-1', 'VORA-DRV01', 'Grégoire Legrand', 'gregoire.legrand@vora.cm', 'DRIVER', 'verified'),
+  ('driver-user-2', 'VORA-DRV02', 'Amassoka Michelle', 'amassoka.michelle@vora.cm', 'DRIVER', 'verified')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO drivers (id, user_id, vehicle_type, vehicle_model, license_plate, color, is_online, current_lat, current_lng, rating)
+VALUES 
+  (1, 'driver-user-1', 'confort', 'Toyota Corolla HSD', 'LT-849-AK', 'Gris Métal', TRUE, 3.848, 11.502, 4.90),
+  (2, 'driver-user-2', 'moto', 'Yamaha YBR 125', 'CE-102-XY', 'Bleu Ciel VORA', TRUE, 3.854, 11.516, 4.85)
+ON CONFLICT (id) DO NOTHING;
+

@@ -12,9 +12,15 @@
     "noEmit": true,
     "allowJs": true,
     "resolveJsonModule": true,
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ]
     }
   },
   "include": [
@@ -37,5 +43,6 @@
     "dist",
     "**/*.web.js",
     "web/**"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }
