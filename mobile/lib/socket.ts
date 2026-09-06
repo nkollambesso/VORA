@@ -60,7 +60,25 @@ class VoraSocketService {
 
   public endRide(rideId: string) {
     if (this.socket?.connected) {
-      this.socket.emit("end-ride", { rideId });
+      this.socket.emit("declare-arrival", { rideId });
+    }
+  }
+
+  public declareArrival(rideId: string) {
+    if (this.socket?.connected) {
+      this.socket.emit("declare-arrival", { rideId });
+    }
+  }
+
+  public confirmRideEnd(rideId: string, rating?: number) {
+    if (this.socket?.connected) {
+      this.socket.emit("confirm-ride-end", { rideId, rating });
+    }
+  }
+
+  public disputeRide(rideId: string, riderId: string, driverId: number, reason: string) {
+    if (this.socket?.connected) {
+      this.socket.emit("dispute-ride", { rideId, riderId, driverId, reason });
     }
   }
 

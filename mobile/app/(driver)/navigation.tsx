@@ -15,8 +15,11 @@ import { voraSocket } from "@/lib/socket";
 export default function DriverNavigation() {
   const { rideId, rideData } = useLocalSearchParams();
   const [ride, setRide] = useState<any>(null);
-  const [status, setStatus] = useState<"ACCEPTED" | "IN_TRANSIT" | "COMPLETED">("ACCEPTED");
+  const [status, setStatus] = useState<
+    "ACCEPTED" | "IN_TRANSIT" | "ARRIVEE_SIGNALEE" | "COMPLETED" | "EN_LITIGE"
+  >("ACCEPTED");
   const [otpInput, setOtpInput] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
 
   useEffect(() => {
     if (rideData) {
@@ -32,61 +35,126 @@ export default function DriverNavigation() {
     }
   }, [rideData]);
 
-  // Écouter les retours Socket.io OTP et status
+  // Écouter les retours Socket.io OTP et confirmation mutuelle
   useEffect(() => {
     const socket = voraSocket.getSocket();
 
     socket?.on("ride-started-confirmed", () => {
       setStatus("IN_TRANSIT");
-      Alert.alert("Code OTP Validé", "Le passager a été pris en charge. La course commence !");
+      Alert.alert(
+        "Code OTP Validé",
+        "Le passager a été pris en charge. La course commence !"
+      );
     });
 
     socket?.on("otp-error", (data: any) => {
-      Alert.alert("Code Erroné", data.message || "Le code OTP saisi est incorrect.");
+      Alert.alert(
+        "Code Erroné",
+        data.message || "Le code OTP saisi est incorrect."
+      );
     });
 
-    socket?.on("ride-ended-confirmed", () => {
+    socket?.on("arrival-declared-confirmed", (data: any) => {
+      setStatus("ARRIVEE_SIGNALEE");
+      setStatusMessage(data.message || "En attente de la confirmation du passager...");
+    });
+
+    socket?.on("ride-completed-mutual", (data: any) => {
       setStatus("COMPLETED");
-      Alert.alert("Course Terminée", "La course est clôturée et le paiement est enregistré.", [
-        { text: "Retour au Tableau de Bord", onPress: () => router.replace("/(driver)/dashboard" as any) },
-      ]);
+      const autoMsg = data.autoConfirmed
+        ? " (Confirmation automatique après délai)"
+        : "";
+      Alert.alert(
+        "Course Clôturée !",
+        `La course a été confirmée et le paiement est validé !${autoMsg}`,
+        [
+          {
+            text: "Retour au Tableau de Bord",
+            onPress: () => router.replace("/(driver)/dashboard" as any),
+          },
+        ]
+      );
+    });
+
+    socket?.on("ride-disputed", (data: any) => {
+      setStatus("EN_LITIGE");
+      Alert.alert(
+        "Litige Signalé",
+        data.message ||
+          "Le passager a signalé un problème. Le paiement est mis en attente d'arbitrage par l'administration.",
+        [
+          {
+            text: "Retour au Tableau de Bord",
+            onPress: () => router.replace("/(driver)/dashboard" as any),
+          },
+        ]
+      );
     });
 
     return () => {
       socket?.off("ride-started-confirmed");
       socket?.off("otp-error");
-      socket?.off("ride-ended-confirmed");
+      socket?.off("arrival-declared-confirmed");
+      socket?.off("ride-completed-mutual");
+      socket?.off("ride-disputed");
     };
   }, []);
 
   const handleVerifyOTP = () => {
     if (otpInput.length < 4) {
-      Alert.alert("Code incomplet", "Veuillez entrer le code OTP fourni par le passager.");
+      Alert.alert(
+        "Code incomplet",
+        "Veuillez entrer le code OTP fourni par le passager."
+      );
       return;
     }
     voraSocket.startRideWithOTP((rideId as string) || ride?.id, otpInput);
   };
 
-  const handleEndRide = () => {
-    voraSocket.endRide((rideId as string) || ride?.id);
+  const handleDeclareArrival = () => {
+    const targetRideId = (rideId as string) || ride?.id;
+    voraSocket.declareArrival(targetRideId);
   };
 
   return (
     <View style={styles.container}>
-      {/* Carte GPS */}
+      {/* Carte GPS + Bouton Retour */}
       <View style={styles.mapContainer}>
+        <TouchableOpacity
+          onPress={() => router.replace("/(driver)/dashboard" as any)}
+          style={styles.floatingBackBtn}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.floatingBackBtnText}>← Dashboard</Text>
+        </TouchableOpacity>
         <Map />
       </View>
 
       {/* Panneau de contrôle */}
       <View style={styles.panel}>
         <View style={styles.headerRow}>
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusBadgeText}>
+          <View
+            style={[
+              styles.statusBadge,
+              status === "ARRIVEE_SIGNALEE" && { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" },
+              status === "EN_LITIGE" && { backgroundColor: "#FEE2E2", borderColor: "#FCA5A5" },
+            ]}
+          >
+            <Text
+              style={[
+                styles.statusBadgeText,
+                status === "ARRIVEE_SIGNALEE" && { color: "#D97706" },
+                status === "EN_LITIGE" && { color: "#DC2626" },
+              ]}
+            >
               {status === "ACCEPTED"
                 ? "En route vers le passager"
                 : status === "IN_TRANSIT"
                 ? "Course en cours"
+                : status === "ARRIVEE_SIGNALEE"
+                ? "Arrivée signalée — Attente client"
+                : status === "EN_LITIGE"
+                ? "Course en litige"
                 : "Course terminée"}
             </Text>
           </View>
@@ -97,11 +165,9 @@ export default function DriverNavigation() {
 
         {/* Détails trajet */}
         <View style={styles.addressBox}>
-          <Text style={styles.addressLabel}>Adresse actuelle</Text>
+          <Text style={styles.addressLabel}>Destination finale</Text>
           <Text style={styles.addressValue}>
-            {status === "ACCEPTED"
-              ? ride?.origin_address || "Point de prise en charge"
-              : ride?.destination_address || "Destination finale"}
+            {ride?.destination_address || "Quartier Bastos, Yaoundé"}
           </Text>
         </View>
 
@@ -131,17 +197,39 @@ export default function DriverNavigation() {
           </View>
         )}
 
-        {/* Bouton Terminer */}
+        {/* Bouton Déclarer L'Arrivée */}
         {status === "IN_TRANSIT" && (
           <TouchableOpacity
-            onPress={handleEndRide}
+            onPress={handleDeclareArrival}
             style={styles.endBtn}
             activeOpacity={0.8}
           >
             <Text style={styles.endBtnText}>
-              Terminer la Course & Encaisser
+              Déclarer l'arrivée à destination →
             </Text>
           </TouchableOpacity>
+        )}
+
+        {/* Attente de confirmation passager */}
+        {status === "ARRIVEE_SIGNALEE" && (
+          <View style={styles.waitingBox}>
+            <Text style={styles.waitingTitle}>
+              Arrivée signalée au passager
+            </Text>
+            <Text style={styles.waitingSub}>
+              Le passager a reçu une notification sur son écran pour valider la fin de la course. Le paiement sera encaissé automatiquement dès sa confirmation ou après expiration du délai.
+            </Text>
+          </View>
+        )}
+
+        {/* Écran Litige */}
+        {status === "EN_LITIGE" && (
+          <View style={styles.disputeBox}>
+            <Text style={styles.disputeTitle}>Litige en cours d'examen</Text>
+            <Text style={styles.disputeSub}>
+              Le passager a formulé une réclamation. L'équipe d'administration VORA traite le dossier sous peu.
+            </Text>
+          </View>
         )}
       </View>
     </View>
@@ -155,6 +243,24 @@ const styles = StyleSheet.create({
   },
   mapContainer: {
     flex: 1,
+    position: "relative",
+  },
+  floatingBackBtn: {
+    position: "absolute",
+    top: 40,
+    left: 20,
+    zIndex: 99,
+    backgroundColor: "rgba(15, 23, 42, 0.75)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+  },
+  floatingBackBtnText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
   },
   panel: {
     backgroundColor: "#FFFFFF",
@@ -261,5 +367,41 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "800",
+  },
+  waitingBox: {
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1.5,
+    borderColor: "#FDE68A",
+    borderRadius: 16,
+    padding: 16,
+  },
+  waitingTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#D97706",
+    marginBottom: 4,
+  },
+  waitingSub: {
+    fontSize: 12,
+    color: "#B45309",
+    lineHeight: 18,
+  },
+  disputeBox: {
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1.5,
+    borderColor: "#FCA5A5",
+    borderRadius: 16,
+    padding: 16,
+  },
+  disputeTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#DC2626",
+    marginBottom: 4,
+  },
+  disputeSub: {
+    fontSize: 12,
+    color: "#991B1B",
+    lineHeight: 18,
   },
 });

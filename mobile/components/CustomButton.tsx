@@ -67,9 +67,10 @@ export default CustomButton;
 const styles = StyleSheet.create({
   btn: {
     width: "100%",
+    maxWidth: "100%",
     borderRadius: 100,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    paddingVertical: 15,
+    paddingHorizontal: 18,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
@@ -79,8 +80,10 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   btnText: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.2,
+    textAlign: "center",
+    flexShrink: 1,
   },
 });

@@ -19,35 +19,7 @@
 
 **VORA** est une application moderne de mise en relation de transport urbain (VTC / Moto-taxi / Voiture) repensée pour offrir une sécurité maximale, une protection rigoureuse des données personnelles et une transparence totale entre chauffeurs et passagers.
 
-Elle combine un **Frontend Web & Mobile ultra-réactif sous React Native & Expo Router** (`/mobile`) avec un **Backend Node.js/Express résilient connecté à une base PostgreSQL / Neon Serverless** (`/backend`).
-
----
-
-## 📁 Structure du Projet
-
-```text
-VORA/
-├── backend/                  # API Rest Express Node.js & Base PostgreSQL / Neon
-│   ├── src/
-│   │   ├── db/               # Schéma SQL et connecteur Neon
-│   │   ├── routes/           # Endpoints API (Users, Rides, Drivers, Disputes, Didit KYC, Admin)
-│   │   ├── socket.ts         # Service Realtime Socket.io
-│   │   └── server.ts         # Point d'entrée serveur Express
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── mobile/                   # Application Mobile & Web Expo Router
-│   ├── app/                  # Routes Expo Router ((auth), (driver), (root), (api))
-│   ├── components/           # Composants UI (RideCard, Map, CustomButton, etc.)
-│   ├── constants/            # Constantes et visuels
-│   ├── lib/                  # Utilities (auth, fetch, map, anonymize)
-│   ├── store/                # Zustand State Management
-│   ├── types/                # Types TypeScript
-│   └── package.json
-│
-├── .gitignore
-└── README.md
-```
+Elle combine un **Frontend Web & Mobile ultra-réactif sous React Native & Expo Router** avec un **Backend Node.js/Express résilient connecté à une base PostgreSQL / Neon Serverless**.
 
 ---
 
@@ -86,12 +58,19 @@ VORA/
 
 ```mermaid
 graph TD
-    Client[📱 Application Mobile / Web React Native] -->|HTTP / REST API| Backend[⚙️ Server API Express Node.js]
+    Client[📱 Application Expo / React Native Web] -->|HTTP / REST API| Backend[⚙️ Server API Express Node.js]
     Client -->|WebSockets| Socket[⚡ Socket.io Realtime Service]
     Backend -->|PostgreSQL Query| DB[(🐘 Neon Serverless Postgres DB)]
     Backend -->|KYC Verification| Didit[🔐 Didit Protocol API v3]
     Client -->|Authentication| Clerk[🔑 Clerk Auth Provider]
 ```
+
+### Stack Technique Complete :
+- **Frontend** : Expo Router, React Native Web, TypeScript, NativeWind, TailwindCSS, Lucide Icons
+- **Backend** : Node.js, Express, TypeScript, CORS, Dotenv
+- **Base de Données** : PostgreSQL via Client Neon Serverless
+- **KYC & Identité** : Didit SDK Web / Protocol API v3
+- **Authentification** : Clerk Auth
 
 ---
 
@@ -109,29 +88,27 @@ graph TD
 git clone https://github.com/Nuxcine-Hackathon/TEAM-VANGUARD.git
 cd TEAM-VANGUARD
 
-# Installer les dépendances du backend
-cd backend
+# Installer les dépendances du projet principal
 npm install
-cd ..
 
-# Installer les dépendances du mobile
-cd mobile
+# Installer les dépendances du backend
+cd vora-backend
 npm install
 cd ..
 ```
 
 ### 3️⃣ Configuration des Variables d'Environnement (`.env`)
 
-Créer un fichier `.env` dans le dossier `backend` et dans `mobile` :
+Créer un fichier `.env` dans le dossier `vora-backend` et dans la racine :
 
 ```env
-# Backend Config (.env dans /backend)
+# Backend Config (.env dans /vora-backend)
 PORT=5000
 DATABASE_URL=postgresql://user:password@ep-cool-service.neon.tech/vora_db?sslmode=require
 DIDIT_API_KEY=your_didit_api_key_here
 DIDIT_WORKFLOW_ID=your_didit_workflow_id_here
 
-# Frontend Config (.env dans /mobile)
+# Frontend Config (.env dans la racine / uber)
 EXPO_PUBLIC_BACKEND_URL=http://localhost:5000
 EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_pub_key
 ```
@@ -140,13 +117,14 @@ EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_pub_key
 
 ```bash
 # Terminal 1: Lancer le Backend API VORA
-cd backend
+cd vora-backend
 npm run dev
 
-# Terminal 2: Lancer l'application Mobile Expo (Web / Mobile)
-cd mobile
+# Terminal 2: Lancer l'application Expo (Web / Mobile)
 npx expo start --web --port 8082
 ```
+
+L'application sera accessible sur **`http://localhost:8082`** et l'API sur **`http://localhost:5000`**.
 
 ---
 

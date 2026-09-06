@@ -99,6 +99,13 @@ const SignUp = () => {
         <View style={isWide ? styles.cardWide : styles.cardMobile}>
           {/* Header */}
           <View style={styles.header}>
+            <TouchableOpacity
+              onPress={() => router.replace("/(auth)/welcome")}
+              style={styles.backBtn}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.backBtnText}>← Accueil</Text>
+            </TouchableOpacity>
             <Text style={styles.headerTitle}>Créer un compte VORA</Text>
             <Text style={styles.headerSub}>
               Vos déplacements et courses en toute simplicité
@@ -336,6 +343,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 32,
     paddingBottom: 24,
+  },
+  backBtn: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+  },
+  backBtnText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "700",
   },
   headerTitle: {
     fontSize: 26,

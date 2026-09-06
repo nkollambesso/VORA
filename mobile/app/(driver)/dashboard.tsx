@@ -18,8 +18,8 @@ export default function DriverDashboard() {
   const [isOnline, setIsOnline] = useState(false);
   const [driverProfile, setDriverProfile] = useState<any>(null);
   const [currentLocation, setCurrentLocation] = useState<any>(null);
-  const [todayEarnings, setTodayEarnings] = useState(14500); // FCFA exemple
-  const [todayRidesCount, setTodayRidesCount] = useState(6);
+  const [todayEarnings, setTodayEarnings] = useState(0);
+  const [todayRidesCount, setTodayRidesCount] = useState(0);
 
   // Charger le profil chauffeur
   useEffect(() => {
@@ -31,9 +31,15 @@ export default function DriverDashboard() {
           `${backendUrl}/api/drivers/profile/${user?.id || "driver_demo"}`
         );
         const data = await res.json();
-        if (data.success) {
+        if (data.success && data.driver) {
           setDriverProfile(data.driver);
-          setIsOnline(data.driver.is_online);
+          setIsOnline(!!data.driver.is_online);
+          if (data.driver.today_earnings !== undefined) {
+            setTodayEarnings(data.driver.today_earnings);
+          }
+          if (data.driver.today_rides_count !== undefined) {
+            setTodayRidesCount(data.driver.today_rides_count);
+          }
         }
       } catch (err) {
         console.error("Erreur profil chauffeur:", err);
@@ -64,7 +70,7 @@ export default function DriverDashboard() {
 
   // Loop d'envoi GPS si EN LIGNE
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
 
     if (isOnline) {
       const sendGPS = async () => {
@@ -96,6 +102,20 @@ export default function DriverDashboard() {
   }, [isOnline, driverProfile]);
 
   const handleToggleOnline = async (value: boolean) => {
+    if (value && driverProfile?.verification_status !== "verified") {
+      Alert.alert(
+        "Vérification Didit Requise",
+        "Vous devez faire vérifier votre identité biométrique avec Didit KYC dans votre profil pour pouvoir passer En Ligne et recevoir des courses.",
+        [
+          { text: "Annuler", style: "cancel" },
+          {
+            text: "Vérifier avec Didit",
+            onPress: () => router.push("/(root)/(tabs)/profile" as any),
+          },
+        ]
+      );
+      return;
+    }
     setIsOnline(value);
     try {
       const backendUrl =
@@ -118,6 +138,8 @@ export default function DriverDashboard() {
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
 
+  const isKycVerified = driverProfile?.verification_status === "verified";
+
   return (
     <ScrollView
       style={styles.container}
@@ -128,18 +150,15 @@ export default function DriverDashboard() {
     >
       {/* Header Sky Blue Glass */}
       <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerTextGroup}>
-            <Text style={styles.headerTag}>CHAUFFEUR VORA</Text>
-            <Text style={styles.headerName}>
-              {user?.fullName || "Gregoire Legrand"}
-            </Text>
-            <Text style={styles.headerVehicle}>
-              {driverProfile
-                ? `${driverProfile.vehicle_model} (${driverProfile.license_plate})`
-                : "Toyota Yaris (LT 482-CE)"}
-            </Text>
-          </View>
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity
+            onPress={() => router.replace("/(root)/(tabs)/profile")}
+            style={styles.backModeBtn}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.backModeBtnText}>← Passager</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             onPress={() => router.push("/(driver)/earnings" as any)}
             style={styles.earningsBtn}
@@ -148,9 +167,37 @@ export default function DriverDashboard() {
             <Text style={styles.earningsBtnText}>Revenus</Text>
           </TouchableOpacity>
         </View>
+
+        <View style={styles.headerTextGroup}>
+          <Text style={styles.headerTag}>ESPACE CHAUFFEUR VORA</Text>
+          <Text style={styles.headerName}>
+            {user?.fullName || user?.firstName || "Chauffeur VORA"}
+          </Text>
+          <Text style={styles.headerVehicle}>
+            {driverProfile?.vehicle_model
+              ? `${driverProfile.vehicle_model} (${driverProfile.license_plate})`
+              : "Toyota Yaris (CE 482 AA)"}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.body}>
+        {/* Banner Avertissement Didit KYC si non vérifié */}
+        {!isKycVerified && (
+          <View style={styles.kycWarnCard}>
+            <Text style={styles.kycWarnTitle}>⚠️ Identité non vérifiée (Didit KYC)</Text>
+            <Text style={styles.kycWarnText}>
+              Votre compte n'a pas encore validé la vérification biométrique Didit. Vous devez compléter votre KYC pour passer en ligne.
+            </Text>
+            <TouchableOpacity
+              style={styles.kycWarnBtn}
+              onPress={() => router.push("/(root)/(tabs)/profile" as any)}
+            >
+              <Text style={styles.kycWarnBtnText}>Faire la Vérification Didit →</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Toggle statut Online / Offline */}
         <View
           style={[
@@ -220,12 +267,12 @@ export default function DriverDashboard() {
           </View>
         </View>
 
-        {/* Demo Simulation Button */}
+        {/* Simulation Button */}
         <TouchableOpacity
           onPress={() => {
             const mockRide = {
-              id: `VORA-TEST-${Date.now()}`,
-              rider_name: "Passager Test",
+              id: `VORA-REQ-${Date.now()}`,
+              rider_name: "Emmanuel Nkoumou",
               origin_address: "Carrefour Mokolo, Yaoundé",
               destination_address: "Quartier Bastos, Yaoundé",
               fare_fcfa: 1750,
@@ -241,7 +288,7 @@ export default function DriverDashboard() {
           activeOpacity={0.8}
         >
           <Text style={styles.demoBtnText}>
-            Simuler une Demande de Course (Démo)
+            Simuler une Demande de Course
           </Text>
         </TouchableOpacity>
       </View>
@@ -265,13 +312,27 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
   },
-  headerRow: {
+  headerTopRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  backModeBtn: {
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+  },
+  backModeBtnText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
   },
   headerTextGroup: {
-    flex: 1,
+    marginTop: 4,
   },
   headerTag: {
     color: "#E0F2FE",
@@ -294,8 +355,8 @@ const styles = StyleSheet.create({
   earningsBtn: {
     backgroundColor: "rgba(255, 255, 255, 0.22)",
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.4)",
   },
@@ -418,6 +479,38 @@ const styles = StyleSheet.create({
   demoBtnText: {
     color: "#0284C7",
     fontSize: 14,
+    fontWeight: "800",
+  },
+  kycWarnCard: {
+    backgroundColor: "#FEF2F2",
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: "#FCA5A5",
+    padding: 16,
+    marginBottom: 20,
+  },
+  kycWarnTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#991B1B",
+    marginBottom: 4,
+  },
+  kycWarnText: {
+    fontSize: 13,
+    color: "#B91C1C",
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  kycWarnBtn: {
+    backgroundColor: "#DC2626",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+  },
+  kycWarnBtnText: {
+    color: "#FFFFFF",
+    fontSize: 12,
     fontWeight: "800",
   },
 });

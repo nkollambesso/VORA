@@ -77,6 +77,13 @@ const SignIn = () => {
               style={styles.heroImg}
               resizeMode="cover"
             />
+            <TouchableOpacity
+              onPress={() => router.replace("/(auth)/welcome")}
+              style={styles.backBtnFloating}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.backBtnFloatingText}>← Accueil</Text>
+            </TouchableOpacity>
             <View style={styles.heroOverlay}>
               <Text style={styles.heroTitle}>Bienvenue sur VORA</Text>
               <Text style={styles.heroSub}>Connectez-vous à votre compte</Text>
@@ -220,6 +227,23 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     opacity: 0.75,
+  },
+  backBtnFloating: {
+    position: "absolute",
+    top: 16,
+    left: 16,
+    zIndex: 10,
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+  },
+  backBtnFloatingText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "700",
   },
   heroOverlay: {
     position: "absolute",

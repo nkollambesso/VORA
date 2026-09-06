@@ -1,9 +1,10 @@
 import { useClerkUser } from "@/lib/useClerkSafe";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Image,
+  Linking,
   Modal,
   ScrollView,
   StyleSheet,
@@ -33,6 +34,64 @@ const Profile = () => {
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
   const [gender, setGender] = useState<"MALE" | "FEMALE" | "OTHER">("MALE");
   const [showAvatarModal, setShowAvatarModal] = useState(false);
+  const [kycStatus, setKycStatus] = useState<string>("unverified");
+
+  useEffect(() => {
+    const fetchUserKyc = async () => {
+      try {
+        const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+        const res = await fetch(`${backendUrl}/api/users/${user?.id || "user_demo"}`);
+        const data = await res.json();
+        if (data.success && data.user?.verification_status) {
+          setKycStatus(data.user.verification_status);
+        }
+      } catch (err) {
+        console.error("Erreur fetch user KYC:", err);
+      }
+    };
+    fetchUserKyc();
+  }, [user]);
+
+  const handleStartDiditKyc = async () => {
+    try {
+      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+      const res = await fetch(`${backendUrl}/api/didit/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user?.id || "user_demo",
+          callbackUrl: "http://localhost:8082/(root)/(tabs)/profile",
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.url) {
+        setKycStatus("pending");
+        Linking.openURL(data.url);
+      } else {
+        Alert.alert("Erreur", "Impossible de démarrer la session Didit.");
+      }
+    } catch (err) {
+      Alert.alert("Erreur réseau", "Vérifiez votre connexion au serveur backend.");
+    }
+  };
+
+  const handleSimulateKyc = async (status: string) => {
+    try {
+      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+      await fetch(`${backendUrl}/api/didit/simulate-status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user?.id || "user_demo",
+          status,
+        }),
+      });
+      setKycStatus(status);
+      Alert.alert("Statut KYC Mis à jour", `Le statut Didit a été passé à '${status}' pour le test.`);
+    } catch (err) {
+      Alert.alert("Erreur", "Échec de mise à jour du statut.");
+    }
+  };
 
   const currentAvatar =
     selectedAvatar ||
@@ -46,6 +105,17 @@ const Profile = () => {
     Alert.alert("Photo mise à jour", "Votre photo de profil VORA a été modifiée avec succès.");
   };
 
+  const [adminTapCount, setAdminTapCount] = useState(0);
+
+  const handleAdminTap = () => {
+    const next = adminTapCount + 1;
+    setAdminTapCount(next);
+    if (next >= 5) {
+      setAdminTapCount(0);
+      router.push("/(admin)/login" as any);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -57,7 +127,9 @@ const Profile = () => {
       >
         {/* Top title & mode badge */}
         <View style={styles.headerRow}>
-          <Text style={styles.title}>Mon Profil VORA</Text>
+          <TouchableOpacity onPress={handleAdminTap} activeOpacity={1}>
+            <Text style={styles.title}>Mon Profil VORA</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.driverBadge}
             onPress={() => router.push("/(driver)/dashboard" as any)}
@@ -85,6 +157,82 @@ const Profile = () => {
           <TouchableOpacity onPress={() => setShowAvatarModal(true)}>
             <Text style={styles.changePhotoText}>Changer ma photo de profil</Text>
           </TouchableOpacity>
+
+          {/* Badge ID Public Anonymisé */}
+          <View style={styles.publicIdBadge}>
+            <Text style={styles.publicIdBadgeText}>
+              ID PUBLIC SÉCURISÉ : {user?.id ? `VORA-${user.id.substring(user.id.length - 6).toUpperCase()}` : "VORA-8K3P9A"}
+            </Text>
+          </View>
+        </View>
+
+        {/* Didit KYC Verification Status Card */}
+        <View style={styles.kycCard}>
+          <View style={styles.kycHeaderRow}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={styles.kycCardTitle}>Vérification d'Identité Didit (KYC)</Text>
+              <Text style={styles.kycCardSub}>
+                Conformité biométrique Document ID + Liveness + Face Match
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.kycBadge,
+                kycStatus === "verified" && { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" },
+                kycStatus === "pending" && { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" },
+                kycStatus === "rejected" && { backgroundColor: "#FEE2E2", borderColor: "#FCA5A5" },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.kycBadgeText,
+                  kycStatus === "verified" && { color: "#166534" },
+                  kycStatus === "pending" && { color: "#D97706" },
+                  kycStatus === "rejected" && { color: "#DC2626" },
+                ]}
+              >
+                {kycStatus === "verified"
+                  ? "VÉRIFIÉ ✓"
+                  : kycStatus === "pending"
+                  ? "EN COURS..."
+                  : kycStatus === "rejected"
+                  ? "REJETÉ"
+                  : "NON VÉRIFIÉ"}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.diditBtn}
+            onPress={handleStartDiditKyc}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.diditBtnText}>
+              {kycStatus === "verified"
+                ? "Refaire la Vérification Didit"
+                : "Vérifier mon identité avec Didit →"}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Boutons de simulation rapide pour démo */}
+          <View style={styles.simulKycRow}>
+            <TouchableOpacity
+              onPress={() => handleSimulateKyc("verified")}
+              style={[styles.simulKycBtn, { backgroundColor: "#DCFCE7" }]}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#15803D" }}>
+                Simuler Verified
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleSimulateKyc("unverified")}
+              style={[styles.simulKycBtn, { backgroundColor: "#FEE2E2" }]}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#B91C1C" }}>
+                Simuler Unverified
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Main profile card */}
@@ -246,6 +394,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 8,
     marginVertical: 16,
   },
   title: {
@@ -307,6 +457,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: PRIMARY,
+  },
+  publicIdBadge: {
+    marginTop: 10,
+    backgroundColor: "#F0F9FF",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+  },
+  publicIdBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0284C7",
+    letterSpacing: 0.5,
   },
   card: {
     backgroundColor: "#ffffff",
@@ -379,6 +544,72 @@ const styles = StyleSheet.create({
     color: "#0284c7",
     lineHeight: 18,
     marginBottom: 12,
+  },
+  // Didit KYC Styles
+  kycCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginTop: 12,
+    marginBottom: 4,
+    shadowColor: "#64748B",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  kycHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  kycCardTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  kycCardSub: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  kycBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: "#F1F5F9",
+    borderColor: "#CBD5E1",
+  },
+  kycBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#475569",
+  },
+  diditBtn: {
+    backgroundColor: "#0EA5E9",
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  diditBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  simulKycRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  simulKycBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: "center",
   },
   // Modal
   modalOverlay: {
