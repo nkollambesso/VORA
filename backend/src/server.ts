@@ -13,6 +13,7 @@ import sosRouter from './routes/sos';
 import disputesRouter from './routes/disputes';
 import diditRouter from './routes/didit';
 import { setupSocketIO } from './socket';
+import { initDatabase } from './db/init';
 
 dotenv.config();
 
@@ -68,7 +69,8 @@ setupSocketIO(io);
 
 const PORT = process.env.PORT || 5000;
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`🚀 Serveur VORA prêt sur le port ${PORT}`);
   console.log(`⚡ WebSocket Socket.io écoute active`);
+  await initDatabase();
 });

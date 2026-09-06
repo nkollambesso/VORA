@@ -1,6 +1,22 @@
 import { Driver, MarkerData } from "@/types/type";
 
 const directionsAPI = process.env.EXPO_PUBLIC_DIRECTIONS_API_KEY;
+const geoapifyAPI = process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY || directionsAPI;
+
+// Helper to calculate approximate distance (Haversine formula in km)
+function calculateHaversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 export const generateMarkersFromData = ({
   data,
@@ -12,8 +28,8 @@ export const generateMarkersFromData = ({
   userLongitude: number;
 }): MarkerData[] => {
   return data.map((driver) => {
-    const latOffset = (Math.random() - 0.5) * 0.01; // Random offset between -0.005 and 0.005
-    const lngOffset = (Math.random() - 0.5) * 0.01; // Random offset between -0.005 and 0.005
+    const latOffset = (Math.random() - 0.5) * 0.01;
+    const lngOffset = (Math.random() - 0.5) * 0.01;
 
     return {
       latitude: userLatitude + latOffset,
@@ -37,8 +53,8 @@ export const calculateRegion = ({
 }) => {
   if (!userLatitude || !userLongitude) {
     return {
-      latitude: 37.78825,
-      longitude: -122.4324,
+      latitude: 3.848,
+      longitude: 11.502,
       latitudeDelta: 0.01,
       longitudeDelta: 0.01,
     };
@@ -58,8 +74,8 @@ export const calculateRegion = ({
   const minLng = Math.min(userLongitude, destinationLongitude);
   const maxLng = Math.max(userLongitude, destinationLongitude);
 
-  const latitudeDelta = (maxLat - minLat) * 1.3; // Adding some padding
-  const longitudeDelta = (maxLng - minLng) * 1.3; // Adding some padding
+  const latitudeDelta = (maxLat - minLat) * 1.3;
+  const longitudeDelta = (maxLng - minLng) * 1.3;
 
   const latitude = (userLatitude + destinationLatitude) / 2;
   const longitude = (userLongitude + destinationLongitude) / 2;
@@ -95,23 +111,46 @@ export const calculateDriverTimes = async ({
 
   try {
     const timesPromises = markers.map(async (marker) => {
-      const responseToUser = await fetch(
-        `https://maps.googleapis.com/maps/api/directions/json?origin=${marker.latitude},${marker.longitude}&destination=${userLatitude},${userLongitude}&key=${directionsAPI}`,
-      );
-      const dataToUser = await responseToUser.json();
-      const timeToUser = dataToUser.routes[0].legs[0].duration.value; // Time in seconds
+      let timeToUser = 5; // default 5 mins
+      let timeToDestination = 15; // default 15 mins
 
-      const responseToDestination = await fetch(
-        `https://maps.googleapis.com/maps/api/directions/json?origin=${userLatitude},${userLongitude}&destination=${destinationLatitude},${destinationLongitude}&key=${directionsAPI}`,
-      );
-      const dataToDestination = await responseToDestination.json();
-      const timeToDestination =
-        dataToDestination.routes[0].legs[0].duration.value; // Time in seconds
+      // 1. Try Geoapify Routing API first
+      if (geoapifyAPI && geoapifyAPI.length > 10) {
+        try {
+          const resToUser = await fetch(
+            `https://api.geoapify.com/v1/routing?waypoints=${marker.latitude},${marker.longitude}|${userLatitude},${userLongitude}&mode=drive&apiKey=${geoapifyAPI}`
+          );
+          const dataUser = await resToUser.json();
+          if (dataUser?.features?.[0]?.properties?.time) {
+            timeToUser = dataUser.features[0].properties.time / 60;
+          }
 
-      const totalTime = (timeToUser + timeToDestination) / 60; // Total time in minutes
-      const price = (totalTime * 0.5).toFixed(2); // Calculate price based on time
+          const resToDest = await fetch(
+            `https://api.geoapify.com/v1/routing?waypoints=${userLatitude},${userLongitude}|${destinationLatitude},${destinationLongitude}&mode=drive&apiKey=${geoapifyAPI}`
+          );
+          const dataDest = await resToDest.json();
+          if (dataDest?.features?.[0]?.properties?.time) {
+            timeToDestination = dataDest.features[0].properties.time / 60;
+          }
+        } catch (e) {
+          // Fall through to Haversine
+        }
+      }
 
-      return { ...marker, time: totalTime, price };
+      // 2. Fallback to Haversine calculation if API didn't return values
+      if (timeToUser === 5 && timeToDestination === 15) {
+        const distToUser = calculateHaversineDistance(marker.latitude, marker.longitude, userLatitude, userLongitude);
+        const distToDest = calculateHaversineDistance(userLatitude, userLongitude, destinationLatitude, destinationLongitude);
+        
+        // Assume avg speed ~ 30 km/h in urban traffic -> ~2 mins per km
+        timeToUser = Math.max(2, Math.round(distToUser * 2));
+        timeToDestination = Math.max(5, Math.round(distToDest * 2));
+      }
+
+      const totalTime = Math.round(timeToUser + timeToDestination);
+      const price = Math.max(500, Math.round(totalTime * 150)); // Price in XAF / local currency units or standard rate
+
+      return { ...marker, time: totalTime, price: price.toString() };
     });
 
     return await Promise.all(timesPromises);
