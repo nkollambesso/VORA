@@ -12,9 +12,6 @@
       "resizeMode": "contain",
       "backgroundColor": "#2F80ED"
     },
-    "ios": {
-      "supportsTablet": true
-    },
     "android": {
       "package": "com.vora.app",
       "adaptiveIcon": {
