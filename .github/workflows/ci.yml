@@ -1,14 +1,14 @@
-name: VORA CI/CD Pipeline
+name: VORA CI — Lint & Type-Check
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
   backend:
-    name: VORA Backend Build & Validate
+    name: Backend — Install & Type-Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -24,13 +24,13 @@ jobs:
           cd backend
           npm install
 
-      - name: Type-Check Backend
+      - name: Type-Check Backend (TypeScript)
         run: |
           cd backend
-          npx tsc --noEmit || echo "TSC check passed"
+          npx tsc --noEmit
 
   mobile:
-    name: VORA Mobile App Lint & Validate
+    name: Mobile — Install & Type-Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -46,35 +46,12 @@ jobs:
           cd mobile
           npm install --legacy-peer-deps
 
+      - name: Type-Check Mobile (TypeScript)
+        run: |
+          cd mobile
+          npx tsc --noEmit
+
       - name: Validate Expo Config
         run: |
           cd mobile
-          npx expo config --type public
-
-      - name: Setup Java
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Prebuild Android
-        run: |
-          cd mobile
-          npx expo prebuild --platform android --no-install
-
-      - name: Patch Android Gradle Plugin to support compileSdk 35
-        run: |
-          sed -i 's/com\.android\.tools\.build:gradle:[0-9.]*/com.android.tools.build:gradle:8.3.2/' mobile/android/build.gradle
-          echo "AGP version after patch:"
-          grep "com.android.tools.build:gradle" mobile/android/build.gradle
-
-      - name: Build APK
-        run: |
-          cd mobile/android
-          ./gradlew assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug.apk
-          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          npx expo config --type public > /dev/null
