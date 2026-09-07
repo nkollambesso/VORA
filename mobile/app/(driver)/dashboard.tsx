@@ -19,6 +19,7 @@ import {
 import { router } from "expo-router";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
+import { getDocumentAsync } from "@/lib/docPicker";
 import { useClerkUser, useClerkAuth } from "@/lib/useClerkSafe";
 import { voraSocket } from "@/lib/socket";
 
@@ -157,12 +158,9 @@ export default function DriverDashboard() {
       return;
     }
 
-    // Sur mobile natif : utiliser expo-document-picker
+    // Sur mobile natif : utiliser expo-document-picker via alias platform-specific
     try {
-      // Import conditionnel pour éviter les erreurs sur web si module absent
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const DocumentPicker = require("expo-document-picker");
-      const docRes = await DocumentPicker.getDocumentAsync({
+      const docRes = await getDocumentAsync({
         type: ["image/*", "application/pdf", "application/msword",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
         copyToCacheDirectory: true,
