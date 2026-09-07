@@ -382,6 +382,91 @@ sudo ufw enable
 
 ---
 
+## Livraison & Déploiement pour les Organisateurs
+
+### Fichier de Configuration — `env-configs.zip`
+
+Pour permettre aux organisateurs d'exécuter le projet immédiatement sans configuration manuelle des clés API, un archive `env-configs.zip` est incluse à la racine du dépôt et attachée à chaque **GitHub Release**.
+
+```
+env-configs.zip
+├── backend.env        → à copier/renommer en backend/.env
+├── mobile.env         → à copier/renommer en mobile/.env
+└── README.txt         → instructions rapides de déploiement
+```
+
+**Étapes d'utilisation :**
+1. Télécharger et dézipper `env-configs.zip`
+2. Copier `backend.env` → `backend/.env`
+3. Copier `mobile.env` → `mobile/.env`
+4. Lancer le projet (voir sections démarrage ci-dessus)
+
+> ⚠️ Ces fichiers contiennent des clés API actives. Ne pas redistribuer publiquement.
+
+---
+
+### Releases Automatisées — GitHub Actions
+
+Un workflow CI/CD est configuré dans `.github/workflows/release-build.yml`. Il se déclenche :
+- **Manuellement** via GitHub → Actions → *VORA Automated Release & Build* → *Run workflow*
+- **Automatiquement** lors d'un push de tag `v*.*.*` (ex : `git tag v1.0.0 && git push --tags`)
+
+Le workflow produit et attache à la GitHub Release :
+
+| Fichier | Contenu |
+|---|---|
+| `vora-backend-dist.zip` | Backend Node.js compilé (`dist/server.js` + `package.json`) |
+| `vora-frontend-web-dist.zip` | Frontend web statique (PWA/SPA — HTML, JS, CSS) |
+| `vora-env-configs.zip` | Variables d'environnement prêtes à l'emploi |
+
+### Format du Build — Web (pas APK)
+
+> **Le build frontend est une application Web Progressive (PWA/SPA), PAS un APK Android.**
+
+VORA est construit avec **Expo Router** en mode **React Native Web**. La commande `npx expo export --platform web` génère un dossier `dist/` contenant des fichiers HTML/JS/CSS statiques qui s'ouvrent dans n'importe quel navigateur moderne.
+
+Pour exécuter le build web :
+```bash
+# Option 1 — npx serve (recommandé, aucune installation requise)
+cd mobile/dist
+npx serve .
+
+# Option 2 — Python (si installé)
+python -m http.server 8080
+
+# Option 3 — Nginx ou Apache (pour déploiement VPS)
+# Voir section déploiement VPS ci-dessus
+```
+
+### Compatibilité Backend Local — Comment ça fonctionne ?
+
+**Oui, le build fonctionne 100% avec un backend tournant sur le PC des organisateurs**, sans aucune reconfiguration.
+
+Le fichier `mobile/lib/config.ts` utilise une résolution dynamique de l'URL du backend :
+
+```typescript
+// Résolution automatique : détecte localhost, 127.0.0.1 ou n'importe quelle IP LAN (192.168.x.x, 10.x.x.x)
+export function getBackendUrl(): string {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1" || isLanIP(host)) {
+      return `http://${host}:5000`;
+    }
+  }
+  return PRODUCTION_API_URL; // Fallback vers le VPS en production
+}
+```
+
+**Flux d'exécution pour les organisateurs :**
+1. L'organisateur lance le backend → `cd backend && node dist/server.js` (port `5000`)
+2. L'organisateur sert le frontend → `npx serve mobile/dist` (port `3000` ou `8080`)
+3. Il ouvre `http://localhost:3000` dans son navigateur
+4. Le frontend détecte `localhost` et appelle automatiquement `http://localhost:5000` → **ça marche sans rien changer**
+
+Même chose sur réseau local (LAN) : si l'IP de la machine est `192.168.1.50`, le frontend appellera `http://192.168.1.50:5000` automatiquement.
+
+---
+
 ## Verification Technique & Conformite
 
 - **Compilation TypeScript Backend** : `npx tsc --noEmit` -> **0 erreur (Code 0)**

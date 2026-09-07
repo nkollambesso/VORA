@@ -1,0 +1,79 @@
+name: VORA Automated Release & Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (ex: v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build Frontend & Backend and Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # ─── 1. Build Backend ───────────────────────────────────────────────────
+      - name: Install & Build Backend
+        run: |
+          cd backend
+          npm install
+          npm run build
+          cd ..
+          zip -r vora-backend-dist.zip backend/dist backend/package.json backend/package-lock.json
+
+      # ─── 2. Build Frontend Web (PWA / Static SPA) ───────────────────────────
+      - name: Install & Export Mobile Web Build
+        run: |
+          cd mobile
+          npm install --legacy-peer-deps
+          npx expo export --platform web
+          cd ..
+          zip -r vora-frontend-web-dist.zip mobile/dist
+
+      # ─── 3. Package Env Configs ─────────────────────────────────────────────
+      - name: Package Environment Configs
+        run: |
+          if [ -f env-configs.zip ]; then
+            cp env-configs.zip vora-env-configs.zip
+          fi
+
+      # ─── 4. Create GitHub Release & Upload Assets ───────────────────────────
+      - name: Create Release and Upload Artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
+          name: VORA Hackathon Release ${{ github.event.inputs.version || github.ref_name }}
+          body: |
+            ## VORA Platform — Automated Build & Deliverables
+            Développé par **TEAM-VANGUARD** pour le Nuxcine Hackathon.
+
+            ### Livrables Inclus :
+            - **`vora-frontend-web-dist.zip`** : Build de production web complet (PWA / SPA statique). Dézippez et ouvrez avec n'importe quel serveur HTTP (`npx serve`, Nginx, Apache).
+            - **`vora-backend-dist.zip`** : Serveur backend compilé (`dist/server.js`) prêt à être exécuté avec `node dist/server.js` ou PM2.
+            - **`vora-env-configs.zip`** : Clés d'API et variables d'environnement fonctionnelles pour exécution immédiate.
+
+            ### Exécution Locale :
+            Le frontend résout dynamiquement `localhost:5000` ou l'adresse IP de votre machine pour communiquer instantanément avec votre backend local sans reconfiguration.
+          files: |
+            vora-backend-dist.zip
+            vora-frontend-web-dist.zip
+            vora-env-configs.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
