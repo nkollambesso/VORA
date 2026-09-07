@@ -50,7 +50,11 @@ const Profile = () => {
     } catch (e) {
       console.warn("Sign-out error:", e);
     } finally {
-      router.replace("/(auth)/sign-in");
+      if (typeof window !== "undefined") {
+        window.location.href = "/sign-in";
+      } else {
+        router.replace("/(auth)/sign-in");
+      }
     }
   };
 

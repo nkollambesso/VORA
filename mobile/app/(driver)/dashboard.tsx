@@ -36,7 +36,11 @@ export default function DriverDashboard() {
     } catch (e) {
       console.warn("Sign-out error:", e);
     } finally {
-      router.replace("/(auth)/sign-in" as any);
+      if (typeof window !== "undefined") {
+        window.location.href = "/sign-in";
+      } else {
+        router.replace("/(auth)/sign-in" as any);
+      }
     }
   };
   const [isOnline, setIsOnline] = useState(false);

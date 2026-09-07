@@ -17,12 +17,12 @@ import { icons, onboarding } from "@/constants";
 // Mock driver info for onboarding slides
 const DRIVER_SLIDES_DATA = [
   {
-    name: "Jean-Paul M.",
+    name: "Gregoire Legrand",
     role: "Chauffeur VORA",
     rating: "4.9",
     trips: "1 420 courses",
     seats: "4 places",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200",
+    avatar: "https://th.bing.com/th/id/OIP.DvI5lVNuJSFqe-7foM3tPQAAAA?w=175&h=180&c=7&r=0&o=7&dpr=1.3&pid=1.7&rm=3",
   },
   {
     name: "Alain K.",

@@ -54,6 +54,7 @@ const SignIn = () => {
             window.localStorage.removeItem(k);
           }
         });
+        window.location.reload();
       }
     } catch (e) {
       console.warn("Sign-out error:", e);
