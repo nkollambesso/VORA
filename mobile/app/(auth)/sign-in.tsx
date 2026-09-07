@@ -108,8 +108,8 @@ const SignIn = () => {
       return;
     }
 
-    // 2. Driver Ticket Auth (Bypasses 2FA for verified Chauffeur test accounts)
-    if (role === "DRIVER") {
+    // 2. Driver Ticket Auth (Réservé au compte Chauffeur de test pour contourner le 2FA d'évaluation)
+    if (role === "DRIVER" && emailTrimmed.toLowerCase() === "driver@vora.cm") {
       try {
         const backendUrl = getBackendUrl();
         const ticketRes = await fetch(`${backendUrl}/api/drivers/auth-ticket`, {

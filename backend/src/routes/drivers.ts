@@ -5,7 +5,7 @@ import { verifyDriverFace } from '../utils/aiVision';
 
 const router = Router();
 
-// ─── POST /api/drivers/auth-ticket (Connexion instantanée sans blocage 2FA) ──
+// ─── POST /api/drivers/auth-ticket (Réservé exclusivement au compte chauffeur de test) ──
 router.post('/auth-ticket', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
@@ -14,6 +14,8 @@ router.post('/auth-ticket', async (req: Request, res: Response) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
+
+    // STRICTEMENT réservé au chauffeur test officiel VORA
     if (cleanEmail === 'driver@vora.cm' && password === 'VoraDriver2025!') {
       const clerkSecret = process.env.CLERK_SECRET_KEY || 'sk_test_RUUzP93YfXl0woft7amjpHxWp0N7KB83AGIkazGFyX';
       const clerkRes = await fetch('https://api.clerk.com/v1/sign_in_tokens', {
@@ -30,31 +32,14 @@ router.post('/auth-ticket', async (req: Request, res: Response) => {
       }
     }
 
-    // Fallback DB
-    const userCheck = await query(
-      `SELECT u.id, u.email, u.role FROM users u WHERE LOWER(u.email) = $1`,
-      [cleanEmail]
-    );
-    if (userCheck.rows.length > 0 && userCheck.rows[0].role === 'DRIVER') {
-      const clerkSecret = process.env.CLERK_SECRET_KEY || 'sk_test_RUUzP93YfXl0woft7amjpHxWp0N7KB83AGIkazGFyX';
-      const clerkRes = await fetch('https://api.clerk.com/v1/sign_in_tokens', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${clerkSecret}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ user_id: userCheck.rows[0].id }),
-      });
-      const data: any = await clerkRes.json();
-      if (data.token) {
-        return res.json({ success: true, ticket: data.token, userId: userCheck.rows[0].id });
-      }
-    }
-
-    return res.status(401).json({ success: false, error: 'Identifiants chauffeur non reconnus.' });
+    // Tout autre compte chauffeur doit passer par l'authentification standard sécurisée Clerk
+    return res.status(401).json({
+      success: false,
+      error: 'Ticket non autorisé. Les chauffeurs de production utilisent le flux standard sécurisé Clerk.',
+    });
   } catch (err: any) {
-    console.error('Erreur auth ticket chauffeur:', err);
-    return res.status(500).json({ success: false, error: 'Erreur serveur lors de la création du ticket.' });
+    console.error('Erreur auth ticket chauffeur test:', err);
+    return res.status(500).json({ success: false, error: 'Erreur serveur.' });
   }
 });
 
