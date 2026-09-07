@@ -126,16 +126,9 @@ const Profile = () => {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Top title & mode badge */}
+        {/* Top title */}
         <View style={styles.headerRow}>
           <Text style={styles.title}>Mon Profil VORA</Text>
-          <TouchableOpacity
-            style={styles.driverBadge}
-            onPress={() => router.push("/(driver)/dashboard" as any)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.driverBadgeText}>Espace Chauffeur →</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Avatar with edit overlay button */}
@@ -301,18 +294,7 @@ const Profile = () => {
           />
         </View>
 
-        {/* Driver Space Toggle Card */}
-        <View style={styles.driverCard}>
-          <Text style={styles.driverCardTitle}>Vous êtes Chauffeur VORA ?</Text>
-          <Text style={styles.driverCardSub}>
-            Accédez à votre tableau de bord chauffeur pour passer En Ligne, recevoir des courses et consulter vos revenus.
-          </Text>
-          <CustomButton
-            title="Accéder à l'Espace Chauffeur"
-            onPress={() => router.push("/(driver)/dashboard" as any)}
-            className="mt-3 bg-sky-500 shadow-md"
-          />
-        </View>
+
       </ScrollView>
 
       {/* Avatar Picker Modal */}

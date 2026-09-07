@@ -78,25 +78,18 @@ const SignIn = () => {
         contentContainerStyle={isWide ? styles.scrollContentWide : styles.scrollContentMobile}
       >
         <View style={isWide ? styles.cardWide : styles.cardMobile}>
-          {/* Hero banner */}
-          <View style={styles.hero}>
-            <Image
-              source={images.signUpCar}
-              style={styles.heroImg}
-              resizeMode="cover"
-            />
-            <TouchableOpacity
-              onPress={() => router.replace("/(auth)/welcome")}
-              style={styles.backBtnFloating}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.backBtnFloatingText}>← Accueil</Text>
-            </TouchableOpacity>
-            <View style={styles.heroOverlay}>
-              <Text style={styles.heroTitle}>Bienvenue sur VORA</Text>
-              <Text style={styles.heroSub}>Connectez-vous à votre compte</Text>
+            {/* Hero banner */}
+            <View style={styles.hero}>
+              <Image
+                source={images.signUpCar}
+                style={styles.heroImg}
+                resizeMode="cover"
+              />
+              <View style={styles.heroOverlay}>
+                <Text style={styles.heroTitle}>Bienvenue sur VORA</Text>
+                <Text style={styles.heroSub}>Connectez-vous à votre compte</Text>
+              </View>
             </View>
-          </View>
 
           <View style={styles.body}>
             {/* Role Selector */}

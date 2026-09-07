@@ -13,6 +13,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { voraSocket } from "@/lib/socket";
 import { useClerkUser } from "@/lib/useClerkSafe";
+import { useDriverStore } from "@/store";
+import { Ionicons } from "@expo/vector-icons";
 
 interface Message {
   id: string;
@@ -26,14 +28,19 @@ export default function Chat() {
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
 
-  const [activeDriver, setActiveDriver] = useState<any>({
-    id: "driver-user-1",
-    public_id: "VORA-DRV01",
-    name: "Grégoire Legrand",
-    vehicle_model: "Toyota Corolla HSD (LT-849-AK)",
-  });
+  const { drivers, selectedDriver } = useDriverStore();
+  const assignedDriver = drivers.find((d) => d.id === selectedDriver);
 
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [activeDriver, setActiveDriver] = useState<any>(null);
+
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: "welcome-msg",
+      senderId: "system",
+      text: "Bienvenue dans la messagerie sécurisée VORA. Vos échanges sont chiffrés et vos coordonnées téléphoniques restent strictement confidentielles.",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    },
+  ]);
   const [inputText, setInputText] = useState("");
 
   // In-App Call States
@@ -42,6 +49,24 @@ export default function Chat() {
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
+
+  useEffect(() => {
+    if (assignedDriver) {
+      setActiveDriver({
+        id: assignedDriver.id.toString(),
+        public_id: `VORA-DRV0${assignedDriver.id}`,
+        name: assignedDriver.title || "Chauffeur VORA",
+        vehicle_model: `Véhicule ${assignedDriver.car_seats || 4} places`,
+      });
+    } else {
+      setActiveDriver({
+        id: "support-agent",
+        public_id: "VORA-ASSIST",
+        name: "Support & Dispatch VORA",
+        vehicle_model: "Assistance 24/7",
+      });
+    }
+  }, [assignedDriver]);
 
   // Timer d'appel
   useEffect(() => {
@@ -56,10 +81,24 @@ export default function Chat() {
     };
   }, [isCallActive, callStatus]);
 
-  // Écouter les événements socket WebRTC
+  // Écouter les événements socket WebRTC & Messages
   useEffect(() => {
     const socket = voraSocket.getSocket();
     if (!socket) return;
+
+    const handleIncomingMessage = (data: { senderId: string; text: string }) => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          senderId: data.senderId,
+          text: data.text,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        },
+      ]);
+    };
+
+    socket.on("receive-chat-message", handleIncomingMessage);
 
     socket.on("webrtc-incoming-call", () => {
       setIsCallActive(true);
@@ -79,6 +118,7 @@ export default function Chat() {
     });
 
     return () => {
+      socket.off("receive-chat-message", handleIncomingMessage);
       socket.off("webrtc-incoming-call");
       socket.off("webrtc-call-answered");
       socket.off("webrtc-call-ended");
@@ -87,22 +127,39 @@ export default function Chat() {
 
   const handleSendMessage = () => {
     if (!inputText.trim()) return;
+    const msgText = inputText.trim();
     const newMsg: Message = {
       id: Date.now().toString(),
       senderId: user?.id || "me",
-      text: inputText.trim(),
+      text: msgText,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
     setMessages((prev) => [...prev, newMsg]);
+    setInputText("");
 
     const socket = voraSocket.getSocket();
-    socket?.emit("send-chat-message", {
-      targetUserId: activeDriver.id,
-      text: inputText.trim(),
-      senderId: user?.id || "me",
-    });
+    if (socket?.connected && activeDriver) {
+      socket.emit("send-chat-message", {
+        targetUserId: activeDriver.id,
+        text: msgText,
+        senderId: user?.id || "me",
+      });
+    }
 
-    setInputText("");
+    // Si on est avec le support/dispatch et pas de chauffeur réel assigné, simuler une réponse intelligente
+    if (!assignedDriver) {
+      setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            senderId: "support-agent",
+            text: "Merci pour votre message ! Notre centre de dispatch VORA est connecté. Dès que vous confirmez une course, votre chauffeur désigné apparaîtra directement ici.",
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          },
+        ]);
+      }, 800);
+    }
   };
 
   const handleStartCall = () => {
@@ -112,7 +169,7 @@ export default function Chat() {
 
     const socket = voraSocket.getSocket();
     socket?.emit("webrtc-call-user", {
-      targetUserId: activeDriver.id,
+      targetUserId: activeDriver?.id || "support-agent",
       callerId: user?.id || "rider_me",
       callerName: user?.fullName || "Passager VORA",
       offer: { type: "offer", sdp: "sdp-audio-stream" },
@@ -121,7 +178,7 @@ export default function Chat() {
 
   const handleEndCall = () => {
     const socket = voraSocket.getSocket();
-    socket?.emit("webrtc-hangup", { targetUserId: activeDriver.id });
+    socket?.emit("webrtc-hangup", { targetUserId: activeDriver?.id || "support-agent" });
     setCallStatus("ended");
     setTimeout(() => {
       setIsCallActive(false);
@@ -141,14 +198,17 @@ export default function Chat() {
         {/* Header Discussion & Bouton Appel Audio */}
         <View style={styles.header}>
           <View style={{ flex: 1, marginRight: 12 }}>
-            <Text style={styles.headerTitle} numberOfLines={1}>{activeDriver.name}</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {activeDriver?.name || "Support VORA"}
+            </Text>
             <Text style={styles.headerSub} numberOfLines={1}>
-              {activeDriver.public_id} • {activeDriver.vehicle_model}
+              {activeDriver?.public_id || "VORA-SECURE"} • {activeDriver?.vehicle_model || "Service Client"}
             </Text>
           </View>
 
           <TouchableOpacity style={styles.callAudioBtn} onPress={handleStartCall} activeOpacity={0.8}>
-            <Text style={styles.callAudioBtnText}>Appel Audio VORA</Text>
+            <Ionicons name="call" size={14} color="#ffffff" style={{ marginRight: 4 }} />
+            <Text style={styles.callAudioBtnText}>Appel Audio</Text>
           </TouchableOpacity>
         </View>
 
@@ -156,12 +216,22 @@ export default function Chat() {
         <ScrollView style={styles.messagesScroll} contentContainerStyle={styles.messagesContent}>
           <View style={styles.securityNotice}>
             <Text style={styles.securityNoticeText}>
-              Discussion cryptée et anonymisée sous l'identifiant VORA-XXXXXX. Vos numéros réels ne sont jamais partagés.
+              🔒 Discussion cryptée et anonymisée sous identifiant VORA. Vos numéros réels ne sont jamais partagés.
             </Text>
           </View>
 
           {messages.map((msg) => {
-            const isMe = msg.senderId !== activeDriver.id;
+            const isMe = msg.senderId === (user?.id || "me");
+            const isSystem = msg.senderId === "system";
+
+            if (isSystem) {
+              return (
+                <View key={msg.id} style={styles.systemBubble}>
+                  <Text style={styles.systemText}>{msg.text}</Text>
+                </View>
+              );
+            }
+
             return (
               <View
                 key={msg.id}
@@ -181,16 +251,23 @@ export default function Chat() {
           })}
         </ScrollView>
 
-        {/* Input Bar */}
+        {/* Input Bar - positioned above floating navbar */}
         <View style={styles.inputBar}>
           <TextInput
             style={styles.textInput}
-            placeholder="Écrire un message au chauffeur..."
+            placeholder="Écrire un message..."
             placeholderTextColor="#94A3B8"
             value={inputText}
             onChangeText={setInputText}
+            onSubmitEditing={handleSendMessage}
+            returnKeyType="send"
           />
-          <TouchableOpacity style={styles.sendBtn} onPress={handleSendMessage}>
+          <TouchableOpacity
+            style={[styles.sendBtn, !inputText.trim() && { opacity: 0.6 }]}
+            onPress={handleSendMessage}
+            disabled={!inputText.trim()}
+          >
+            <Ionicons name="send" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
             <Text style={styles.sendBtnText}>Envoyer</Text>
           </TouchableOpacity>
         </View>
@@ -201,11 +278,15 @@ export default function Chat() {
         <View style={styles.callOverlay}>
           <View style={styles.callCard}>
             <View style={styles.callAvatarCircle}>
-              <Text style={styles.callAvatarInitial}>{activeDriver.name.charAt(0)}</Text>
+              <Text style={styles.callAvatarInitial}>
+                {activeDriver?.name?.charAt(0) || "V"}
+              </Text>
             </View>
 
-            <Text style={styles.callName}>{activeDriver.name}</Text>
-            <Text style={styles.callPublicId}>Identifiant Sécurisé : {activeDriver.public_id}</Text>
+            <Text style={styles.callName}>{activeDriver?.name || "Support VORA"}</Text>
+            <Text style={styles.callPublicId}>
+              Identifiant Sécurisé : {activeDriver?.public_id || "VORA-SECURE"}
+            </Text>
 
             <View style={styles.callStatusBadge}>
               <Text style={styles.callStatusText}>
@@ -217,7 +298,7 @@ export default function Chat() {
               </Text>
             </View>
 
-            {/* Contrôles de l'Appel */}
+            {/* Contrôles de l'Appel */}
             <View style={styles.callControlsRow}>
               <TouchableOpacity
                 style={[styles.callControlBtn, isMuted && styles.callControlBtnActive]}
@@ -277,6 +358,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   callAudioBtn: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#0EA5E9",
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -293,6 +376,7 @@ const styles = StyleSheet.create({
   },
   messagesContent: {
     paddingVertical: 16,
+    paddingBottom: 24,
     gap: 12,
   },
   securityNotice: {
@@ -301,7 +385,7 @@ const styles = StyleSheet.create({
     borderColor: "#BAE6FD",
     borderRadius: 12,
     padding: 10,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   securityNoticeText: {
     fontSize: 11,
@@ -309,6 +393,21 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontWeight: "600",
     lineHeight: 16,
+  },
+  systemBubble: {
+    alignSelf: "center",
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    maxWidth: "90%",
+    marginBottom: 4,
+  },
+  systemText: {
+    fontSize: 12,
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 17,
   },
   messageBubble: {
     maxWidth: "80%",
@@ -355,28 +454,32 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#E2E8F0",
     gap: 10,
+    marginBottom: 96, // Keeps input bar completely above floating bottom nav
   },
   textInput: {
     flex: 1,
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#CBD5E1",
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 14,
     color: "#0F172A",
   },
   sendBtn: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#0EA5E9",
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 11,
+    borderRadius: 14,
   },
   sendBtnText: {
     color: "#FFFFFF",
