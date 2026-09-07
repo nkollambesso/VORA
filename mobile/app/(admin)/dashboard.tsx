@@ -235,7 +235,7 @@ export default function AdminDashboard() {
               const res = await fetch(`${BACKEND_URL}/api/admin/users/${userId}/block`, {
                 method: "POST",
                 headers,
-                body: JSON.stringify({ isBlocked: shouldBlock }),
+                body: JSON.stringify({ block: shouldBlock }),
               });
               const data = await res.json();
               if (data.success) {
