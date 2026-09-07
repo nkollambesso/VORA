@@ -149,6 +149,45 @@ export default function ConfirmRide() {
     }
   };
 
+  // Action : Annuler la course (uniquement pendant ACCEPTED)
+  const [cancelling, setCancelling] = React.useState(false);
+  const handleCancelRide = () => {
+    Alert.alert(
+      "Annuler la course",
+      "Souhaitez-vous vraiment annuler cette course ? Le chauffeur sera notifié immédiatement.",
+      [
+        { text: "Non", style: "cancel" },
+        {
+          text: "Oui, annuler",
+          style: "destructive",
+          onPress: async () => {
+            setCancelling(true);
+            try {
+              const backendUrl = getBackendUrl();
+              await fetch(`${backendUrl}/api/rides/${rideId}/cancel`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ reason: "Annulé par le passager" }),
+              });
+              // Notify driver via socket
+              const socket = voraSocket.getSocket();
+              if (socket) {
+                socket.emit("ride-cancelled", { rideId, cancelledBy: "passenger" });
+              }
+              voraVoice.speak("Course annulée. Nous espérons vous retrouver très bientôt sur VORA.");
+              router.replace("/(root)/(tabs)/home" as any);
+            } catch (err) {
+              console.error("Erreur annulation course:", err);
+              Alert.alert("Erreur", "Impossible d'annuler la course. Veuillez contacter le support VORA.");
+            } finally {
+              setCancelling(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Action : Signaler un litige
   const handleReportDispute = () => {
     Alert.prompt
@@ -387,6 +426,21 @@ export default function ConfirmRide() {
               </Text>
             </TouchableOpacity>
           </View>
+        )}
+
+        {/* Bouton d'annulation — visible uniquement si le chauffeur n'a pas encore pris en charge */}
+        {status === "ACCEPTED" && (
+          <TouchableOpacity
+            onPress={handleCancelRide}
+            style={[styles.cancelRideBtn, cancelling && styles.cancelRideBtnDisabled]}
+            disabled={cancelling}
+            activeOpacity={0.8}
+          >
+            {cancelling
+              ? <ActivityIndicator size="small" color="#EF4444" />
+              : <Text style={styles.cancelRideBtnText}>Annuler la course</Text>
+            }
+          </TouchableOpacity>
         )}
 
         {status === "COMPLETED" && !hasRated && (
@@ -701,6 +755,26 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
+  },
+  cancelRideBtn: {
+    borderWidth: 1.5,
+    borderColor: "#EF4444",
+    backgroundColor: "#FEF2F2",
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    marginBottom: 16,
+    minHeight: 48,
+    justifyContent: "center",
+  },
+  cancelRideBtnDisabled: {
+    opacity: 0.6,
+  },
+  cancelRideBtnText: {
+    color: "#EF4444",
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 0.2,
   },
   rateDriverBtn: {
     backgroundColor: "#D97706",

@@ -11,10 +11,10 @@ import {
   View,
 } from "react-native";
 import { router } from "expo-router";
+import { getBackendUrl } from "@/lib/config";
+import { clearAdminToken, getAdminToken } from "@/lib/adminAuth";
 
-const BACKEND_URL =
-  (typeof process !== "undefined" && process.env.EXPO_PUBLIC_BACKEND_URL) ||
-  "http://localhost:5000";
+const BACKEND_URL = getBackendUrl();
 
 export default function AdminDashboard() {
   const { width } = useWindowDimensions();
@@ -26,10 +26,40 @@ export default function AdminDashboard() {
   const [isSimulation, setIsSimulation] = useState<boolean>(true);
   const [updating, setUpdating] = useState<boolean>(false);
   const [disputes, setDisputes] = useState<any[]>([]);
+  const [adminEmail, setAdminEmail] = useState<string>("");
+
+  const getAuthHeaders = async () => {
+    const token = await getAdminToken();
+    return {
+      "Content-Type": "application/json",
+      "x-admin-token": token || "",
+    };
+  };
+
+  const handleLogout = async () => {
+    try {
+      const token = await getAdminToken();
+      if (token) {
+        await fetch(`${BACKEND_URL}/api/admin/logout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+      }
+    } catch {}
+    await clearAdminToken();
+    router.replace("/(auth)/sign-in" as any);
+  };
 
   const fetchStats = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/admin/dashboard-stats`);
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${BACKEND_URL}/api/admin/dashboard-stats`, { headers });
+      if (res.status === 401) {
+        await clearAdminToken();
+        router.replace("/(auth)/sign-in" as any);
+        return;
+      }
       const data = await res.json();
       if (data.success) {
         setStats(data.stats);
@@ -37,7 +67,7 @@ export default function AdminDashboard() {
       }
 
       // Fetch disputes list
-      const dispRes = await fetch(`${BACKEND_URL}/api/disputes`);
+      const dispRes = await fetch(`${BACKEND_URL}/api/disputes`, { headers });
       const dispData = await dispRes.json();
       if (dispData.success && dispData.disputes) {
         setDisputes(dispData.disputes);
@@ -52,9 +82,10 @@ export default function AdminDashboard() {
 
   const handleUpdateDisputeStatus = async (disputeId: number, newStatus: string) => {
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(`${BACKEND_URL}/api/disputes/${disputeId}/status`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ status: newStatus }),
       });
       const data = await res.json();
@@ -68,18 +99,44 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    fetchStats();
+    // Verify admin token on mount before loading data
+    const init = async () => {
+      const token = await getAdminToken();
+      if (!token) {
+        router.replace("/(auth)/sign-in" as any);
+        return;
+      }
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/admin/verify-token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          await clearAdminToken();
+          router.replace("/(auth)/sign-in" as any);
+          return;
+        }
+        setAdminEmail(data.email || "");
+      } catch {
+        // If backend unreachable, allow access without reverification
+      }
+      fetchStats();
+    };
+    init();
   }, []);
 
   const handleToggleSimulation = async (value: boolean) => {
     setUpdating(true);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(`${BACKEND_URL}/api/admin/toggle-simulation`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           enable: value,
-          adminEmail: "superadmin@vora.cm",
+          adminEmail: adminEmail || "admin@vora.cm",
         }),
       });
       const data = await res.json();
@@ -87,11 +144,11 @@ export default function AdminDashboard() {
         setIsSimulation(data.isSimulation);
         Alert.alert(
           "Mode Simulation CamerPay",
-          `Mode simulation ${data.isSimulation ? "ACTIVÉ — paiements simulés sans débit réel." : "DÉSACTIVÉ — clés API CamerPay réelles actives."}`
+          `Mode simulation ${data.isSimulation ? "ACTIVE — paiements simules sans debit reel." : "DESACTIVE — cles API CamerPay reelles actives."}`
         );
       }
     } catch {
-      Alert.alert("Erreur", "Impossible de mettre à jour le mode simulation.");
+      Alert.alert("Erreur", "Impossible de mettre a jour le mode simulation.");
     } finally {
       setUpdating(false);
     }
@@ -157,15 +214,15 @@ export default function AdminDashboard() {
           </View>
           <Text style={styles.headerTitle}>Administration VORA</Text>
           <Text style={styles.headerSub}>
-            Gestion de la plateforme, paiements et sécurité
+            {adminEmail ? `Connecte en tant que ${adminEmail}` : "Gestion de la plateforme, paiements et securite"}
           </Text>
 
           <TouchableOpacity
             style={styles.logoutBtn}
-            onPress={() => router.replace("/(auth)/sign-in")}
+            onPress={handleLogout}
             activeOpacity={0.85}
           >
-            <Text style={styles.logoutBtnText}>Déconnexion Admin</Text>
+            <Text style={styles.logoutBtnText}>Deconnexion Admin</Text>
           </TouchableOpacity>
         </View>
 

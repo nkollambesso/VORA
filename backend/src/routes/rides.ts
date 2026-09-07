@@ -359,6 +359,61 @@ router.post('/:id/rate', async (req: Request, res: Response) => {
   }
 });
 
+
+// Annulation par ID de course — endpoint RESTful (POST /api/rides/:id/cancel)
+router.post('/:id/cancel', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const rideRes = await query(`SELECT * FROM rides WHERE id = $1`, [id]);
+    if (rideRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Course introuvable.' });
+    }
+
+    const ride = rideRes.rows[0];
+
+    if (!['SEARCHING', 'ACCEPTED'].includes(ride.status)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cette course ne peut plus être annulée (elle est en cours ou déjà terminée).',
+      });
+    }
+
+    let cancellationFee = 0;
+    // Pénalité de 500 FCFA si annulation plus de 2 min après acceptation
+    if (ride.status === 'ACCEPTED' && ride.updated_at) {
+      const timeDiffMinutes = (Date.now() - new Date(ride.updated_at).getTime()) / (1000 * 60);
+      if (timeDiffMinutes > 2) {
+        cancellationFee = 500;
+      }
+    }
+
+    await query(
+      `UPDATE rides SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`,
+      [id]
+    );
+
+    if (cancellationFee > 0 && ride.rider_id) {
+      await query(
+        `UPDATE users SET wallet_balance = wallet_balance - $1, cancellation_debt = cancellation_debt + $1 WHERE id = $2`,
+        [cancellationFee, ride.rider_id]
+      );
+    }
+
+    console.log(`[CANCEL] Course ${id} annulée. Raison: ${reason || 'non précisée'}. Frais: ${cancellationFee} FCFA`);
+
+    return res.json({
+      success: true,
+      message: cancellationFee > 0
+        ? `Course annulée. Une pénalité de ${cancellationFee} FCFA a été appliquée.`
+        : 'Course annulée sans frais.',
+      cancellationFee,
+    });
+  } catch (error) {
+    console.error('Erreur annulation course par ID:', error);
+    return res.status(500).json({ success: false, error: "Erreur lors de l'annulation de la course." });
+  }
+});
+
 export default router;
-
-

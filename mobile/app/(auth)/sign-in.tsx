@@ -1,6 +1,7 @@
 import { Link, router } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   ScrollView,
@@ -15,6 +16,8 @@ import CustomButton from "@/components/CustomButton";
 import InputField from "@/components/InputField";
 import OAuth from "@/components/OAuth";
 import { icons, images } from "@/constants";
+import { useClerkAuth, useClerkUser } from "@/lib/useClerkSafe";
+import { tryAdminLogin } from "@/lib/adminAuth";
 
 // Lazy-load Clerk hook only when context is available
 let _useSignIn: any = null;
@@ -35,26 +38,79 @@ const SignIn = () => {
   } catch {}
   const { signIn, setActive, isLoaded } = signInHook;
 
+  // Detect existing session to allow account switching
+  const { isSignedIn, signOut } = useClerkAuth();
+  const { user } = useClerkUser();
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = useCallback(async () => {
+    setSigningOut(true);
+    try {
+      await signOut();
+      // Clear any cached tokens from SecureStore / localStorage
+      if (typeof window !== "undefined" && window.localStorage) {
+        Object.keys(window.localStorage).forEach((k) => {
+          if (k.includes("clerk") || k.includes("__clerk")) {
+            window.localStorage.removeItem(k);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn("Sign-out error:", e);
+    } finally {
+      setSigningOut(false);
+    }
+  }, [signOut]);
+
   const [role, setRole] = useState<"PASSENGER" | "DRIVER">("PASSENGER");
   const [form, setForm] = useState({ email: "", password: "" });
+  const [submitting, setSubmitting] = useState(false);
 
   const onSignInPress = useCallback(async () => {
-    if (!form.email.trim() || !form.password.trim()) {
+    const emailTrimmed = form.email.trim();
+    const passwordTrimmed = form.password;
+
+    if (!emailTrimmed || !passwordTrimmed) {
       Alert.alert("Champs requis", "Veuillez entrer votre adresse email et votre mot de passe.");
       return;
     }
 
+    setSubmitting(true);
+
+    // 1. Check if entered credentials match system administrator
+    try {
+      const adminResult = await tryAdminLogin(emailTrimmed, passwordTrimmed);
+      if (adminResult.success) {
+        setSubmitting(false);
+        router.replace("/(admin)/dashboard" as any);
+        return;
+      }
+      if (adminResult.isAdmin) {
+        // Admin email recognized but password was incorrect
+        setSubmitting(false);
+        Alert.alert(
+          "Accès Administrateur",
+          adminResult.error || "Mot de passe administrateur incorrect."
+        );
+        return;
+      }
+    } catch (e) {
+      // Backend unreachable or error: continue to regular Clerk flow
+    }
+
+    // 2. Regular user / driver sign-in
     const targetRoute =
       role === "DRIVER" ? "/(driver)/dashboard" : "/(root)/(tabs)/home";
 
     if (!isLoaded || !signIn) {
+      setSubmitting(false);
       Alert.alert("Service indisponible", "Le service d'authentification n'est pas encore prêt.");
       return;
     }
     try {
       const attempt = await signIn.create({
-        identifier: form.email.trim(),
-        password: form.password,
+        identifier: emailTrimmed,
+        password: passwordTrimmed,
       });
       if (attempt.status === "complete") {
         await setActive({ session: attempt.createdSessionId });
@@ -68,6 +124,8 @@ const SignIn = () => {
         "Échec de connexion",
         err?.errors?.[0]?.longMessage || err?.message || "Identifiants incorrects. Veuillez vérifier votre email et mot de passe."
       );
+    } finally {
+      setSubmitting(false);
     }
   }, [isLoaded, form, role, signIn, setActive]);
 
@@ -90,6 +148,28 @@ const SignIn = () => {
                 <Text style={styles.heroSub}>Connectez-vous à votre compte</Text>
               </View>
             </View>
+
+            {/* Bannière de session active — permet de changer de compte */}
+            {isSignedIn && user && (
+              <View style={styles.sessionBanner}>
+                <View style={styles.sessionBannerInfo}>
+                  <Text style={styles.sessionBannerTitle}>Session active</Text>
+                  <Text style={styles.sessionBannerSub} numberOfLines={1}>
+                    {user.primaryEmailAddress?.emailAddress || user.emailAddresses?.[0]?.emailAddress || "Compte connecté"}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={handleSignOut}
+                  style={styles.sessionBannerBtn}
+                  disabled={signingOut}
+                >
+                  {signingOut
+                    ? <ActivityIndicator size="small" color="#ffffff" />
+                    : <Text style={styles.sessionBannerBtnText}>Changer</Text>
+                  }
+                </TouchableOpacity>
+              </View>
+            )}
 
           <View style={styles.body}>
             {/* Role Selector */}
@@ -181,6 +261,45 @@ export default SignIn;
 const PRIMARY = "#0EA5E9";
 
 const styles = StyleSheet.create({
+  sessionBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF7ED",
+    borderBottomWidth: 1,
+    borderBottomColor: "#FED7AA",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  sessionBannerInfo: {
+    flex: 1,
+  },
+  sessionBannerTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#92400E",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  sessionBannerSub: {
+    fontSize: 13,
+    color: "#B45309",
+    fontWeight: "600",
+    marginTop: 1,
+  },
+  sessionBannerBtn: {
+    backgroundColor: "#D97706",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    minWidth: 72,
+    alignItems: "center",
+  },
+  sessionBannerBtnText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#ffffff",
+  },
   rootMobile: {
     flex: 1,
     backgroundColor: "#ffffff",
