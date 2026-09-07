@@ -116,7 +116,7 @@ export const RideRatingModal: React.FC<RideRatingModalProps> = ({
               source={{
                 uri:
                   driverAvatar ||
-                  "https://ucarecdn.com/dae9be8a-fc66-43c0-988b-b37e1f7d1788/-/preview/1000x1000/",
+                  "https://api.dicebear.com/7.x/shapes/png?seed=VoraDriver&backgroundColor=0ea5e9",
               }}
               style={styles.avatar}
             />

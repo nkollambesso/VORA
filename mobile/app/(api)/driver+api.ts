@@ -5,7 +5,7 @@ const DEFAULT_DRIVERS = [
     id: "1",
     first_name: "Grégoire",
     last_name: "Legrand",
-    profile_image_url: "https://ucarecdn.com/dae9be8a-fc66-43c0-988b-b37e1f7d1788/-/preview/1000x1000/",
+    profile_image_url: "https://th.bing.com/th/id/OIP.DvI5lVNuJSFqe-7foM3tPQAAAA?w=175&h=180&c=7&r=0&o=7&dpr=1.3&pid=1.7&rm=3",
     car_image_url: "https://ucarecdn.com/a2dc52b2-8bf7-4e19-9a70-388147d3e696/-/preview/465x466/",
     car_seats: 4,
     rating: "4.90",
@@ -14,7 +14,7 @@ const DEFAULT_DRIVERS = [
     id: "2",
     first_name: "Amassoka",
     last_name: "Michelle",
-    profile_image_url: "https://ucarecdn.com/684fb6a2-f8b4-4672-986e-b1441582217c/-/preview/1000x1000/",
+    profile_image_url: "https://api.dicebear.com/7.x/shapes/png?seed=VoraMichelle&backgroundColor=10b981",
     car_image_url: "https://ucarecdn.com/dae9be8a-fc66-43c0-988b-b37e1f7d1788/-/preview/1000x1000/",
     car_seats: 4,
     rating: "4.85",
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
           d.current_lng,
           COALESCE(split_part(u.name, ' ', 1), 'Chauffeur') as first_name,
           COALESCE(NULLIF(split_part(u.name, ' ', 2), ''), 'VORA') as last_name,
-          COALESCE(u.avatar_url, 'https://ucarecdn.com/dae9be8a-fc66-43c0-988b-b37e1f7d1788/-/preview/1000x1000/') as profile_image_url,
+          COALESCE(u.avatar_url, 'https://api.dicebear.com/7.x/shapes/png?seed=DriverVora&backgroundColor=0ea5e9') as profile_image_url,
           'https://ucarecdn.com/a2dc52b2-8bf7-4e19-9a70-388147d3e696/-/preview/465x466/' as car_image_url,
           CASE WHEN d.vehicle_type = 'moto' THEN 1 ELSE 4 END as car_seats
         FROM drivers d

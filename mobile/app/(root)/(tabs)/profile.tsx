@@ -20,12 +20,12 @@ import InputField from "@/components/InputField";
 import { getBackendUrl } from "@/lib/config";
 
 const AVATAR_PRESETS = [
-  "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80",
-  "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=250&q=80",
-  "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=250&q=80",
-  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=250&q=80",
-  "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=250&q=80",
-  "https://images.unsplash.com/photo-1628157582853-a796fa650a6a?auto=format&fit=crop&w=250&q=80",
+  "https://api.dicebear.com/7.x/shapes/png?seed=VoraAero&backgroundColor=0284c7",
+  "https://api.dicebear.com/7.x/shapes/png?seed=VoraPulse&backgroundColor=0ea5e9",
+  "https://api.dicebear.com/7.x/shapes/png?seed=VoraShield&backgroundColor=10b981",
+  "https://api.dicebear.com/7.x/shapes/png?seed=VoraCyber&backgroundColor=6366f1",
+  "https://api.dicebear.com/7.x/shapes/png?seed=VoraSpark&backgroundColor=f59e0b",
+  "https://api.dicebear.com/7.x/shapes/png?seed=VoraNova&backgroundColor=8b5cf6",
 ];
 
 const RECHARGE_AMOUNTS = [1000, 2000, 5000, 10000, 20000];
@@ -201,8 +201,8 @@ const Profile = () => {
   const currentAvatar =
     selectedAvatar ||
     user?.externalAccounts?.[0]?.imageUrl ||
-    user?.imageUrl ||
-    "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80";
+    (user?.imageUrl && !user?.imageUrl?.includes("default_user") ? user.imageUrl : null) ||
+    "https://api.dicebear.com/7.x/shapes/png?seed=VoraUser&backgroundColor=0284c7";
 
   const handleSelectAvatar = (url: string) => {
     setSelectedAvatar(url);
