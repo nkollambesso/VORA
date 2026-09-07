@@ -18,6 +18,8 @@ import {
 import { router } from "expo-router";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
+import { Platform } from "react-native";
 import { useClerkUser, useClerkAuth } from "@/lib/useClerkSafe";
 import { voraSocket } from "@/lib/socket";
 
@@ -62,6 +64,7 @@ export default function DriverDashboard() {
   const [vehicleColor, setVehicleColor] = useState("");
   const [vehicleImage, setVehicleImage] = useState<string>("");
   const [vehicleDocuments, setVehicleDocuments] = useState<string>("");
+  const [vehicleDocumentName, setVehicleDocumentName] = useState<string>("");
   const [driverAvatar, setDriverAvatar] = useState<string>("");
   const [isAnalyzingFace, setIsAnalyzingFace] = useState(false);
   const [faceAnalysisResult, setFaceAnalysisResult] = useState<{ isPerson: boolean; message: string } | null>(null);
@@ -86,7 +89,13 @@ export default function DriverDashboard() {
         setLicensePlate(data.driver.license_plate || "");
         setVehicleColor(data.driver.color || "");
         if (data.driver.vehicle_image) setVehicleImage(data.driver.vehicle_image);
-        if (data.driver.vehicle_documents) setVehicleDocuments(data.driver.vehicle_documents);
+        if (data.driver.vehicle_documents) {
+          setVehicleDocuments(data.driver.vehicle_documents);
+          // Déduire le nom du fichier depuis l'URL si possible
+          const docUrl: string = data.driver.vehicle_documents;
+          const urlParts = docUrl.split("/");
+          setVehicleDocumentName(urlParts[urlParts.length - 1] || "Document existant");
+        }
         if (data.driver.avatar_url) setDriverAvatar(data.driver.avatar_url);
 
         if (data.driver.today_earnings !== undefined) {
@@ -128,23 +137,60 @@ export default function DriverDashboard() {
     }
   };
 
-  // Choisir les papiers du véhicule (Carte grise, assurance, permis)
+  // Choisir les papiers du véhicule (Carte grise, assurance, permis) — image OU PDF/DOC
   const handlePickVehicleDocuments = async () => {
+    // Sur le web, on utilise un input file HTML invisible
+    if (Platform.OS === "web") {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*,application/pdf,.doc,.docx";
+      input.onchange = async (e: any) => {
+        const file: File = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          setVehicleDocuments(reader.result as string);
+          setVehicleDocumentName(file.name);
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+      return;
+    }
+
+    // Sur mobile : choix entre image ou document
     try {
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.6,
-        base64: true,
+      const docRes = await DocumentPicker.getDocumentAsync({
+        type: ["image/*", "application/pdf", "application/msword",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+        copyToCacheDirectory: true,
+        multiple: false,
       });
-      if (!res.canceled && res.assets?.[0]) {
-        const asset = res.assets[0];
-        const dataUrl = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
-        setVehicleDocuments(dataUrl);
+      if (docRes.canceled) return;
+      const asset = docRes.assets?.[0];
+      if (!asset) return;
+
+      if (asset.mimeType?.startsWith("image/")) {
+        // Image : convertir en base64
+        const imgRes = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.6,
+          base64: true,
+        });
+        if (!imgRes.canceled && imgRes.assets?.[0]) {
+          const a = imgRes.assets[0];
+          setVehicleDocuments(a.base64 ? `data:image/jpeg;base64,${a.base64}` : a.uri);
+          setVehicleDocumentName(a.fileName || "document.jpg");
+        }
+      } else {
+        // PDF/DOC : stocker l'URI locale (sera envoyée au backend comme URI)
+        setVehicleDocuments(asset.uri);
+        setVehicleDocumentName(asset.name || "document.pdf");
       }
     } catch {
-      Alert.alert("Erreur", "Impossible d'accéder aux photos pour les papiers du véhicule.");
+      Alert.alert("Erreur", "Impossible d'accéder aux fichiers du véhicule.");
     }
   };
 
@@ -698,16 +744,26 @@ export default function DriverDashboard() {
                 activeOpacity={0.8}
               >
                 {vehicleDocuments ? (
-                  <View style={styles.uploadedImgWrapper}>
-                    <Image source={{ uri: vehicleDocuments }} style={styles.uploadedImgPreview} resizeMode="cover" />
-                    <View style={styles.changeImgBadge}>
-                      <Text style={styles.changeImgText}>Modifier le document</Text>
+                  vehicleDocuments.startsWith("data:image") || vehicleDocuments.match(/\.(jpg|jpeg|png|webp)/i) ? (
+                    <View style={styles.uploadedImgWrapper}>
+                      <Image source={{ uri: vehicleDocuments }} style={styles.uploadedImgPreview} resizeMode="cover" />
+                      <View style={styles.changeImgBadge}>
+                        <Text style={styles.changeImgText}>Modifier le document</Text>
+                      </View>
                     </View>
-                  </View>
+                  ) : (
+                    <View style={[styles.uploadPlaceholder, { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }]}>
+                      <Text style={{ fontSize: 28, marginBottom: 6 }}>📄</Text>
+                      <Text style={[styles.uploadPlaceholderTitle, { color: "#1D4ED8" }]}>
+                        {vehicleDocumentName || "Document ajouté"}
+                      </Text>
+                      <Text style={[styles.uploadPlaceholderSub, { color: "#3B82F6" }]}>Appuyer pour changer</Text>
+                    </View>
+                  )
                 ) : (
                   <View style={styles.uploadPlaceholder}>
                     <Text style={styles.uploadPlaceholderTitle}>Ajouter les papiers du véhicule</Text>
-                    <Text style={styles.uploadPlaceholderSub}>Format JPG, PNG ou PDF scanné</Text>
+                    <Text style={styles.uploadPlaceholderSub}>Image, PDF ou document Word</Text>
                   </View>
                 )}
               </TouchableOpacity>
