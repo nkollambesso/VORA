@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import * as ImagePicker from "expo-image-picker";
+import { Ionicons } from "@expo/vector-icons";
 import { useClerkUser } from "@/lib/useClerkSafe";
 
 interface LocationPhotoPickerProps {
@@ -55,6 +55,9 @@ export const LocationPhotoPicker: React.FC<LocationPhotoPickerProps> = ({
 
   const handlePickPhoto = async () => {
     try {
+      // Lazy-load expo-image-picker to avoid module-level crash
+      const ImagePicker = await import("expo-image-picker");
+
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
         Alert.alert("Permission refusée", "Accès aux photos nécessaire.");
@@ -75,6 +78,7 @@ export const LocationPhotoPicker: React.FC<LocationPhotoPickerProps> = ({
       }
     } catch (err) {
       console.error("Erreur sélection photo:", err);
+      Alert.alert("Erreur", "Le sélecteur de photos n'est pas disponible.");
     }
   };
 
@@ -131,9 +135,12 @@ export const LocationPhotoPicker: React.FC<LocationPhotoPickerProps> = ({
           setIsModalOpen(true);
         }}
       >
-        <Text style={styles.addLandmarkBtnText}>
-          📸 Filmer / Assigner une photo à ce lieu
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Ionicons name="camera-outline" size={18} color="#0284C7" style={{ marginRight: 6 }} />
+          <Text style={styles.addLandmarkBtnText}>
+            Filmer / Assigner une photo à ce lieu
+          </Text>
+        </View>
       </TouchableOpacity>
 
       {/* Galerie des photos de repères proches */}
@@ -184,7 +191,8 @@ export const LocationPhotoPicker: React.FC<LocationPhotoPickerProps> = ({
               </View>
             ) : (
               <TouchableOpacity style={styles.pickImageBox} onPress={handlePickPhoto}>
-                <Text style={styles.pickImageText}>📷 Prendre / Choisir une photo</Text>
+                <Ionicons name="camera" size={24} color="#0284C7" style={{ marginBottom: 4 }} />
+                <Text style={styles.pickImageText}>Prendre / Choisir une photo</Text>
               </TouchableOpacity>
             )}
 

@@ -32,10 +32,11 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "expo-secure-store",
       [
         "expo-router",
         {
-          "origin": "https://uber.dev/"
+          "origin": "https://vora.app/"
         }
       ]
     ],

@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Ionicons } from "@expo/vector-icons";
 import CustomButton from "@/components/CustomButton";
 import InputField from "@/components/InputField";
 
@@ -75,21 +76,32 @@ const Profile = () => {
     }
   };
 
-  const handleSimulateKyc = async (status: string) => {
+  const handlePickAvatarFromDevice = async () => {
     try {
-      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
-      await fetch(`${backendUrl}/api/didit/simulate-status`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: user?.id || "user_demo",
-          status,
-        }),
+      const ImagePicker = await import("expo-image-picker");
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission refusée", "Accès à la galerie requis pour changer votre photo.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+        base64: true,
       });
-      setKycStatus(status);
-      Alert.alert("Statut KYC Mis à jour", `Le statut Didit a été passé à '${status}' pour le test.`);
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const base64Image = `data:image/jpeg;base64,${asset.base64}`;
+        setSelectedAvatar(base64Image);
+        setShowAvatarModal(false);
+        Alert.alert("Succès", "Votre photo de profil a été mise à jour !");
+      }
     } catch (err) {
-      Alert.alert("Erreur", "Échec de mise à jour du statut.");
+      console.error("Erreur sélection avatar:", err);
+      Alert.alert("Erreur", "Le sélecteur d'image n'est pas disponible.");
     }
   };
 
@@ -97,23 +109,12 @@ const Profile = () => {
     selectedAvatar ||
     user?.externalAccounts?.[0]?.imageUrl ||
     user?.imageUrl ||
-    AVATAR_PRESETS[0];
+    "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80";
 
   const handleSelectAvatar = (url: string) => {
     setSelectedAvatar(url);
     setShowAvatarModal(false);
-    Alert.alert("Photo mise à jour", "Votre photo de profil VORA a été modifiée avec succès.");
-  };
-
-  const [adminTapCount, setAdminTapCount] = useState(0);
-
-  const handleAdminTap = () => {
-    const next = adminTapCount + 1;
-    setAdminTapCount(next);
-    if (next >= 5) {
-      setAdminTapCount(0);
-      router.push("/(admin)/login" as any);
-    }
+    Alert.alert("Photo mise à jour", "Votre photo de profil VORA a été modifiée.");
   };
 
   return (
@@ -127,9 +128,7 @@ const Profile = () => {
       >
         {/* Top title & mode badge */}
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={handleAdminTap} activeOpacity={1}>
-            <Text style={styles.title}>Mon Profil VORA</Text>
-          </TouchableOpacity>
+          <Text style={styles.title}>Mon Profil VORA</Text>
           <TouchableOpacity
             style={styles.driverBadge}
             onPress={() => router.push("/(driver)/dashboard" as any)}
@@ -148,14 +147,15 @@ const Profile = () => {
             />
             <TouchableOpacity
               style={styles.editPhotoBtn}
-              onPress={() => setShowAvatarModal(true)}
+              onPress={handlePickAvatarFromDevice}
               activeOpacity={0.85}
             >
-              <Text style={styles.editPhotoIcon}>Edit</Text>
+              <Ionicons name="camera" size={16} color="#ffffff" />
             </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={() => setShowAvatarModal(true)}>
-            <Text style={styles.changePhotoText}>Changer ma photo de profil</Text>
+          <TouchableOpacity style={styles.changePhotoRow} onPress={handlePickAvatarFromDevice}>
+            <Ionicons name="cloud-upload-outline" size={16} color="#0EA5E9" style={{ marginRight: 6 }} />
+            <Text style={styles.changePhotoText}>Téléverser ma photo de profil</Text>
           </TouchableOpacity>
 
           {/* Badge ID Public Anonymisé */}
@@ -213,26 +213,6 @@ const Profile = () => {
                 : "Vérifier mon identité avec Didit →"}
             </Text>
           </TouchableOpacity>
-
-          {/* Boutons de simulation rapide pour démo */}
-          <View style={styles.simulKycRow}>
-            <TouchableOpacity
-              onPress={() => handleSimulateKyc("verified")}
-              style={[styles.simulKycBtn, { backgroundColor: "#DCFCE7" }]}
-            >
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#15803D" }}>
-                Simuler Verified
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => handleSimulateKyc("unverified")}
-              style={[styles.simulKycBtn, { backgroundColor: "#FEE2E2" }]}
-            >
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#B91C1C" }}>
-                Simuler Unverified
-              </Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         {/* Main profile card */}
@@ -344,10 +324,20 @@ const Profile = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Choisir une photo de profil</Text>
+            <Text style={styles.modalTitle}>Photo de profil</Text>
             <Text style={styles.modalSub}>
-              Sélectionnez votre nouvel avatar VORA :
+              Choisissez ou téléversez votre avatar VORA :
             </Text>
+
+            <TouchableOpacity
+              style={styles.deviceUploadBtn}
+              onPress={handlePickAvatarFromDevice}
+            >
+              <Ionicons name="images-outline" size={20} color="#0284C7" style={{ marginRight: 8 }} />
+              <Text style={styles.deviceUploadBtnText}>Choisir une photo sur mon téléphone</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.orSub}>Ou choisir parmi nos avatars :</Text>
 
             <View style={styles.presetGrid}>
               {AVATAR_PRESETS.map((url, idx) => (
@@ -655,6 +645,35 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 35,
+  },
+  changePhotoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  deviceUploadBtn: {
+    flexDirection: "row",
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1.5,
+    borderColor: "#0EA5E9",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  deviceUploadBtnText: {
+    color: "#0284C7",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  orSub: {
+    fontSize: 12,
+    color: "#94A3B8",
+    marginBottom: 12,
+    fontWeight: "600",
   },
   closeModalBtn: {
     paddingVertical: 12,

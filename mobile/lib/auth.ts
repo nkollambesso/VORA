@@ -28,45 +28,66 @@ export const tokenCache = {
   },
 };
 
-export const googleOAuth = async (startOAuthFlow: any) => {
+export const googleOAuth = async (startOAuthFlow: any, role: string = "PASSENGER") => {
   try {
+    const targetRoute =
+      role === "DRIVER" ? "/(driver)/dashboard" : "/(root)/(tabs)/home";
+    const redirectUrl = Linking.createURL(targetRoute, { scheme: "vora" });
+
     const { createdSessionId, setActive, signUp } = await startOAuthFlow({
-      redirectUrl: Linking.createURL("/(root)/(tabs)/home", { scheme: "vora" }),
+      redirectUrl,
     });
 
     if (createdSessionId) {
       if (setActive) {
         await setActive({ session: createdSessionId });
 
+        const name =
+          `${signUp?.firstName || ""} ${signUp?.lastName || ""}`.trim() ||
+          "Utilisateur Google";
+        const email = signUp?.emailAddress || "";
+
         if (signUp?.createdUserId) {
-          await fetchAPI("/(api)/user", {
-            method: "POST",
-            body: JSON.stringify({
-              name: `${signUp.firstName || ""} ${signUp.lastName || ""}`.trim() || "Utilisateur Google",
-              email: signUp.emailAddress || "",
-              clerkId: signUp.createdUserId,
-            }),
-          });
+          try {
+            const backendUrl =
+              process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            await fetch(`${backendUrl}/api/users`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                id: signUp.createdUserId,
+                name,
+                email,
+                role,
+              }),
+            });
+          } catch (syncErr) {
+            console.warn("Google sync warning:", syncErr);
+          }
         }
 
         return {
           success: true,
           code: "success",
-          message: "You have successfully signed in with Google",
+          targetRoute,
+          message: "Connexion Google réussie",
         };
       }
     }
 
     return {
       success: false,
-      message: "An error occurred while signing in with Google",
+      message: "Session Google non créée",
     };
   } catch (err: any) {
-    console.error(err);
+    console.error("Google OAuth error:", err);
     return {
       success: false,
-      code: err.code,
-      message: err?.errors[0]?.longMessage,
+      code: err?.code,
+      message:
+        err?.errors?.[0]?.longMessage ||
+        err?.message ||
+        "Échec de l'authentification Google",
     };
   }
 };

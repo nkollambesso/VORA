@@ -33,14 +33,7 @@ export default function Chat() {
     vehicle_model: "Toyota Corolla HSD (LT-849-AK)",
   });
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      senderId: "driver-user-1",
-      text: "Bonjour, je suis en route vers Carrefour Mokolo. Je serai là dans 3 minutes.",
-      timestamp: "18:04",
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
 
   // In-App Call States
@@ -101,6 +94,14 @@ export default function Chat() {
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
     setMessages((prev) => [...prev, newMsg]);
+
+    const socket = voraSocket.getSocket();
+    socket?.emit("send-chat-message", {
+      targetUserId: activeDriver.id,
+      text: inputText.trim(),
+      senderId: user?.id || "me",
+    });
+
     setInputText("");
   };
 
@@ -114,13 +115,8 @@ export default function Chat() {
       targetUserId: activeDriver.id,
       callerId: user?.id || "rider_me",
       callerName: user?.fullName || "Passager VORA",
-      offer: { type: "offer", sdp: "simulated-sdp-audio" },
+      offer: { type: "offer", sdp: "sdp-audio-stream" },
     });
-
-    // Simulation de réponse automatique pour démonstration fluide
-    setTimeout(() => {
-      setCallStatus("connected");
-    }, 2500);
   };
 
   const handleEndCall = () => {
@@ -144,9 +140,9 @@ export default function Chat() {
       <View style={[styles.mainWrapper, isWide && { maxWidth: 840, alignSelf: "center", width: "100%" }]}>
         {/* Header Discussion & Bouton Appel Audio */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.headerTitle}>{activeDriver.name}</Text>
-            <Text style={styles.headerSub}>
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <Text style={styles.headerTitle} numberOfLines={1}>{activeDriver.name}</Text>
+            <Text style={styles.headerSub} numberOfLines={1}>
               {activeDriver.public_id} • {activeDriver.vehicle_model}
             </Text>
           </View>

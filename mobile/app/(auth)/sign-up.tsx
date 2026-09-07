@@ -47,20 +47,33 @@ const SignUp = () => {
   });
 
   const onSignUpPress = async () => {
+    if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
+      Alert.alert("Champs requis", "Veuillez remplir votre nom, email et mot de passe.");
+      return;
+    }
+
     if (!isLoaded || !signUp) {
-      if (role === "DRIVER") {
-        router.replace("/(driver)/dashboard" as any);
-      } else {
-        router.replace("/(root)/(tabs)/home");
-      }
+      Alert.alert("Service indisponible", "Le service d'authentification n'est pas encore prêt.");
       return;
     }
     try {
-      await signUp.create({ emailAddress: form.email, password: form.password });
+      const nameParts = form.name.trim().split(" ");
+      const firstName = nameParts[0] || form.name.trim();
+      const lastName = nameParts.slice(1).join(" ") || " ";
+
+      await signUp.create({
+        emailAddress: form.email.trim(),
+        password: form.password,
+        firstName,
+        lastName,
+      });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setVerification({ ...verification, state: "pending" });
     } catch (err: any) {
-      Alert.alert("Erreur", err.errors?.[0]?.longMessage || "Échec d'inscription");
+      Alert.alert(
+        "Erreur d'inscription",
+        err.errors?.[0]?.longMessage || err.message || "Échec d'inscription. Vérifiez les informations saisies."
+      );
     }
   };
 
@@ -68,25 +81,47 @@ const SignUp = () => {
     if (!isLoaded) return;
     try {
       const completeSignUp = await signUp.attemptEmailAddressVerification({
-        code: verification.code,
+        code: verification.code.trim(),
       });
       if (completeSignUp.status === "complete") {
-        await fetchAPI("/(api)/user", {
-          method: "POST",
-          body: JSON.stringify({
-            name: form.name,
-            email: form.email,
-            clerkId: completeSignUp.createdUserId,
-            role,
-          }),
-        });
-        await setActive({ session: completeSignUp.createdSessionId });
+        try {
+          const backendUrl =
+            process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+          await fetch(`${backendUrl}/api/users`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: completeSignUp.createdUserId,
+              name: form.name,
+              email: form.email,
+              role,
+            }),
+          });
+        } catch (syncErr) {
+          console.warn("Backend user sync warning:", syncErr);
+        }
+
+        if (setActive) {
+          await setActive({ session: completeSignUp.createdSessionId });
+        }
         setVerification({ ...verification, state: "success" });
       } else {
-        setVerification({ ...verification, error: "Échec de vérification.", state: "failed" });
+        setVerification({
+          ...verification,
+          error: "Échec de vérification (Statut: " + completeSignUp.status + ")",
+          state: "failed",
+        });
       }
     } catch (err: any) {
-      setVerification({ ...verification, error: err.errors?.[0]?.longMessage || "Erreur", state: "failed" });
+      console.error("Verification error:", err);
+      setVerification({
+        ...verification,
+        error:
+          err.errors?.[0]?.longMessage ||
+          err.message ||
+          "Code de vérification invalide ou expiré.",
+        state: "failed",
+      });
     }
   };
 
@@ -215,6 +250,9 @@ const SignUp = () => {
               onChangeText={(v: string) => setForm({ ...form, password: v })}
             />
 
+            {/* Clerk Captcha container for Bot Protection on Web */}
+            <View nativeID="clerk-captcha" />
+
             <View style={{ marginTop: 20 }}>
               <CustomButton
                 title={role === "DRIVER" ? "S'inscrire comme Chauffeur" : "Créer mon compte Passager"}
@@ -222,7 +260,7 @@ const SignUp = () => {
               />
             </View>
 
-            <OAuth />
+            <OAuth role={role} />
 
             <View style={styles.linkRow}>
               <Text style={styles.linkGray}>Déjà un compte ? </Text>

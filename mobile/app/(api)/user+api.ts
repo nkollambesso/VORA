@@ -14,15 +14,17 @@ export async function POST(request: Request) {
 
     const response = await sql`
       INSERT INTO users (
+        id,
         name, 
-        email, 
-        clerk_id
+        email
       ) 
       VALUES (
+        ${clerkId},
         ${name}, 
-        ${email},
-        ${clerkId}
-     );`;
+        ${email}
+      )
+      ON CONFLICT (id) DO UPDATE
+      SET name = EXCLUDED.name, email = EXCLUDED.email;`;
 
     return new Response(JSON.stringify({ data: response }), {
       status: 201,

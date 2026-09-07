@@ -39,27 +39,35 @@ const SignIn = () => {
   const [form, setForm] = useState({ email: "", password: "" });
 
   const onSignInPress = useCallback(async () => {
+    if (!form.email.trim() || !form.password.trim()) {
+      Alert.alert("Champs requis", "Veuillez entrer votre adresse email et votre mot de passe.");
+      return;
+    }
+
     const targetRoute =
       role === "DRIVER" ? "/(driver)/dashboard" : "/(root)/(tabs)/home";
 
     if (!isLoaded || !signIn) {
-      router.replace(targetRoute as any);
+      Alert.alert("Service indisponible", "Le service d'authentification n'est pas encore prêt.");
       return;
     }
     try {
       const attempt = await signIn.create({
-        identifier: form.email,
+        identifier: form.email.trim(),
         password: form.password,
       });
       if (attempt.status === "complete") {
         await setActive({ session: attempt.createdSessionId });
         router.replace(targetRoute as any);
       } else {
-        Alert.alert("Erreur", "Connexion échouée. Réessayez.");
+        Alert.alert("Erreur de connexion", "Connexion non finalisée. Statut: " + attempt.status);
       }
     } catch (err: any) {
-      // Fallback demo mode navigation if Clerk unauthenticated
-      router.replace(targetRoute as any);
+      console.error("Sign in error:", err);
+      Alert.alert(
+        "Échec de connexion",
+        err?.errors?.[0]?.longMessage || err?.message || "Identifiants incorrects. Veuillez vérifier votre email et mot de passe."
+      );
     }
   }, [isLoaded, form, role, signIn, setActive]);
 
@@ -147,6 +155,9 @@ const SignIn = () => {
               onChangeText={(v) => setForm({ ...form, password: v })}
             />
 
+            {/* Clerk Captcha container for Bot Protection on Web */}
+            <View nativeID="clerk-captcha" />
+
             <View style={{ marginTop: 20 }}>
               <CustomButton
                 title={
@@ -158,7 +169,7 @@ const SignIn = () => {
               />
             </View>
 
-            <OAuth />
+            <OAuth role={role} />
 
             <Link href="/sign-up" style={styles.linkRow}>
               <Text style={styles.linkGray}>Pas encore de compte ? </Text>

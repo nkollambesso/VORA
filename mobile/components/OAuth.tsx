@@ -1,5 +1,6 @@
 import { router } from "expo-router";
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Constants from "expo-constants";
+import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { icons } from "@/constants";
 
@@ -9,7 +10,14 @@ try { _useOAuth = require("@clerk/clerk-expo").useOAuth; } catch {}
 let _googleOAuth: any = null;
 try { _googleOAuth = require("@/lib/auth").googleOAuth; } catch {}
 
-const OAuth = () => {
+// Detect if running inside Expo Go (OAuth won't work there)
+const isExpoGo = Constants.appOwnership === "expo";
+
+interface OAuthProps {
+  role?: "PASSENGER" | "DRIVER";
+}
+
+const OAuth = ({ role = "PASSENGER" }: OAuthProps) => {
   let startOAuthFlow: any = null;
   try {
     if (_useOAuth) {
@@ -19,20 +27,35 @@ const OAuth = () => {
   } catch {}
 
   const handleGoogleSignIn = async () => {
+    // Google OAuth does NOT work in Expo Go — requires a custom dev build
+    if (isExpoGo) {
+      Alert.alert(
+        "⚠️ Expo Go — Google OAuth indisponible",
+        "La connexion Google ne fonctionne pas dans Expo Go.\n\nUtilisez email + mot de passe, ou faites un build de développement (expo run:android / expo run:ios).",
+        [{ text: "Compris", style: "default" }]
+      );
+      return;
+    }
+
     try {
       if (startOAuthFlow && _googleOAuth) {
-        const result = await _googleOAuth(startOAuthFlow);
-        if (result && (result.code === "session_exists" || result.success)) {
-          router.replace("/(root)/(tabs)/home");
+        const result = await _googleOAuth(startOAuthFlow, role);
+        if (result && (result.code === "success" || result.code === "session_exists" || result.success)) {
+          const target = result.targetRoute || (role === "DRIVER" ? "/(driver)/dashboard" : "/(root)/(tabs)/home");
+          router.replace(target as any);
+          return;
+        } else {
+          Alert.alert("Connexion Google", result?.message || "La connexion avec Google a échoué. Assurez-vous que l'option Google SSO est activée.");
           return;
         }
       }
-    } catch (e) {
+      Alert.alert("Google OAuth", "Le service d'authentification Google n'est pas disponible actuellement.");
+    } catch (e: any) {
       console.warn("Google OAuth notice:", e);
+      Alert.alert("Erreur Google OAuth", e?.message || "Une erreur est survenue lors de la connexion Google.");
     }
-    // Fallback: Continue to home screen smoothly
-    router.replace("/(root)/(tabs)/home");
   };
+
 
   return (
     <View style={styles.root}>
