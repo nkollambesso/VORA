@@ -6,6 +6,7 @@ import {
   Alert,
   Image,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -18,8 +19,6 @@ import {
 import { router } from "expo-router";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
-import * as DocumentPicker from "expo-document-picker";
-import { Platform } from "react-native";
 import { useClerkUser, useClerkAuth } from "@/lib/useClerkSafe";
 import { voraSocket } from "@/lib/socket";
 
@@ -158,8 +157,11 @@ export default function DriverDashboard() {
       return;
     }
 
-    // Sur mobile : choix entre image ou document
+    // Sur mobile natif : utiliser expo-document-picker
     try {
+      // Import conditionnel pour éviter les erreurs sur web si module absent
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const DocumentPicker = require("expo-document-picker");
       const docRes = await DocumentPicker.getDocumentAsync({
         type: ["image/*", "application/pdf", "application/msword",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
@@ -171,7 +173,6 @@ export default function DriverDashboard() {
       if (!asset) return;
 
       if (asset.mimeType?.startsWith("image/")) {
-        // Image : convertir en base64
         const imgRes = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: true,
@@ -185,7 +186,6 @@ export default function DriverDashboard() {
           setVehicleDocumentName(a.fileName || "document.jpg");
         }
       } else {
-        // PDF/DOC : stocker l'URI locale (sera envoyée au backend comme URI)
         setVehicleDocuments(asset.uri);
         setVehicleDocumentName(asset.name || "document.pdf");
       }
