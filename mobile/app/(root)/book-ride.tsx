@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { useClerkUser } from "@/lib/useClerkSafe";
@@ -9,8 +9,9 @@ import LocationPhotoPicker from "@/components/LocationPhotoPicker";
 import CamerPaySelector from "@/components/CamerPaySelector";
 import { icons } from "@/constants";
 import { useLocationStore } from "@/store";
-import { PricingDetail } from "@/lib/vora-pricing";
+import { calculateVoraFare, PricingDetail } from "@/lib/vora-pricing";
 import { voraSocket } from "@/lib/socket";
+import { getBackendUrl } from "@/lib/config";
 
 const BookRide = () => {
   const { user } = useClerkUser();
@@ -20,21 +21,31 @@ const BookRide = () => {
   const [selectedVehicleType, setSelectedVehicleType] = useState<"moto" | "taxi" | "confort">("taxi");
   const [passengerCount, setPassengerCount] = useState(1);
   const [luggageCount, setLuggageCount] = useState(0);
-  const [selectedPricing, setSelectedPricing] = useState<PricingDetail | null>(null);
 
-  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "MTN_MOMO" | "ORANGE_MONEY" | "WALLET">("MTN_MOMO");
+  // Initialisation immédiate du tarif par défaut pour éviter tout blocage
+  const [selectedPricing, setSelectedPricing] = useState<PricingDetail>(() =>
+    calculateVoraFare(4.5, 12, "taxi", 0, 1)
+  );
+
+  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "MTN_MOMO" | "ORANGE_MONEY" | "WALLET">("CASH");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isBooking, setIsBooking] = useState(false);
 
+  // Recalculer le tarif si les options changent
+  useEffect(() => {
+    const updated = calculateVoraFare(4.5, 12, selectedVehicleType, luggageCount, passengerCount);
+    setSelectedPricing(updated);
+  }, [selectedVehicleType, luggageCount, passengerCount]);
+
   const handleBookRide = async () => {
-    if (!selectedPricing) {
-      Alert.alert("Sélection requise", "Veuillez sélectionner un type de véhicule.");
+    if (paymentMethod !== "CASH" && paymentMethod !== "WALLET" && (!phoneNumber || phoneNumber.length < 9)) {
+      Alert.alert("Numéro Requis", "Veuillez entrer un numéro de téléphone Mobile Money valide (9 chiffres) pour le règlement.");
       return;
     }
 
     setIsBooking(true);
     try {
-      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+      const backendUrl = getBackendUrl();
       const res = await fetch(`${backendUrl}/api/rides`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -62,8 +73,8 @@ const BookRide = () => {
         voraSocket.requestRide(data.ride.id);
 
         Alert.alert(
-          "Recherche de Chauffeur",
-          `Votre demande de course ${selectedPricing.label} (${selectedPricing.finalFare} FCFA) a été transmise au chauffeur le plus proche.`
+          "Course Demandée !",
+          `Votre demande de course ${selectedPricing.label} (${selectedPricing.finalFare.toLocaleString()} FCFA) a été transmise aux chauffeurs à proximité.`
         );
 
         router.replace({
@@ -75,7 +86,7 @@ const BookRide = () => {
       }
     } catch (err) {
       console.error("Erreur réservation course:", err);
-      Alert.alert("Erreur", "Problème de connexion au serveur backend VORA.");
+      Alert.alert("Erreur réseau", "Impossible de joindre le serveur VORA. Veuillez réessayer.");
     } finally {
       setIsBooking(false);
     }
@@ -83,7 +94,7 @@ const BookRide = () => {
 
   return (
     <RideLayout title="Réservation de Course">
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
         <Text style={styles.sectionTitle}>Détails de l'itinéraire</Text>
 
         <View style={styles.locationBox}>
@@ -91,7 +102,7 @@ const BookRide = () => {
             <Image source={icons.to} style={{ width: 20, height: 20, marginRight: 10 }} />
             <View style={{ flex: 1 }}>
               <Text style={styles.locationLabel}>DÉPART</Text>
-              <Text style={styles.locationText}>{userAddress || "Prise en charge géolocalisée"}</Text>
+              <Text style={styles.locationText}>{userAddress || "Prise en charge géolocalisée (Mokolo, Yaoundé)"}</Text>
             </View>
           </View>
 
@@ -101,7 +112,7 @@ const BookRide = () => {
             <Image source={icons.point} style={{ width: 20, height: 20, marginRight: 10 }} />
             <View style={{ flex: 1 }}>
               <Text style={styles.locationLabel}>DESTINATION</Text>
-              <Text style={styles.locationText}>{destinationAddress || "Point de destination"}</Text>
+              <Text style={styles.locationText}>{destinationAddress || "Quartier Bastos, Yaoundé"}</Text>
             </View>
           </View>
         </View>
@@ -110,7 +121,7 @@ const BookRide = () => {
         <LocationPhotoPicker
           currentLat={userLatitude || 3.8667}
           currentLng={userLongitude || 11.5167}
-          placeName={userAddress}
+          placeName={userAddress || "Carrefour Mokolo, Yaoundé"}
         />
 
         {/* Sélecteur des 3 Catégories + Passagers & Bagages */}
@@ -128,13 +139,13 @@ const BookRide = () => {
           }}
         />
 
-        {/* Sélecteur de Mode de Paiement (Mobile Money / Cash) */}
+        {/* Sélecteur de Mode de Paiement (Mobile Money / Cash / Wallet) */}
         <CamerPaySelector
-          amountFcfa={selectedPricing?.finalFare || 1500}
-          rideId={`VORA-${Date.now()}`}
-          onPaymentSuccess={(txId, method) => {
-            setPaymentMethod(method === "cash" ? "CASH" : method === "mtn" ? "MTN_MOMO" : "ORANGE_MONEY");
-          }}
+          amountFcfa={selectedPricing.finalFare}
+          selectedMethod={paymentMethod}
+          onSelectMethod={setPaymentMethod}
+          phoneNumber={phoneNumber}
+          onPhoneChange={setPhoneNumber}
         />
 
         {/* Bouton de Confirmation Finale */}
@@ -146,8 +157,8 @@ const BookRide = () => {
         >
           <Text style={styles.confirmBtnText}>
             {isBooking
-              ? "Recherche en cours..."
-              : `Confirmer la Course (${selectedPricing?.finalFare || 1000} FCFA)`}
+              ? "Recherche de chauffeur en cours..."
+              : `Confirmer la Course (${selectedPricing.finalFare.toLocaleString()} FCFA)`}
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -198,8 +209,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: "center",
-    marginTop: 16,
-    boxShadow: "0px 4px 12px rgba(14, 165, 233, 0.35)",
+    marginTop: 18,
+    shadowColor: "#0EA5E9",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
     elevation: 4,
   },
   confirmBtnText: {
@@ -208,4 +222,3 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 });
-

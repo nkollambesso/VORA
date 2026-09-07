@@ -1,18 +1,15 @@
 import { io, Socket } from "socket.io-client";
+import { getSocketUrl } from "./config";
 
 class VoraSocketService {
   private socket: Socket | null = null;
-  private backendUrl: string;
-
-  constructor() {
-    this.backendUrl = process.env.EXPO_PUBLIC_SOCKET_URL || "http://localhost:5000";
-  }
 
   public connect(userId: string, role: "PASSENGER" | "DRIVER" | "ADMIN") {
     if (typeof window === "undefined") return null;
     if (this.socket && this.socket.connected) return this.socket;
 
-    this.socket = io(this.backendUrl, {
+    const socketUrl = getSocketUrl();
+    this.socket = io(socketUrl, {
       transports: ["websocket"],
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,

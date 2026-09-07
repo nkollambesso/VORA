@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useClerkUser } from "@/lib/useClerkSafe";
+import { getBackendUrl } from "@/lib/config";
 
 interface LocationPhotoPickerProps {
   currentLat: number;
@@ -35,8 +36,7 @@ export const LocationPhotoPicker: React.FC<LocationPhotoPickerProps> = ({
   // Charger les photos de repères proches
   const fetchNearbyPhotos = async () => {
     try {
-      const backendUrl =
-        process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+      const backendUrl = getBackendUrl();
       const res = await fetch(
         `${backendUrl}/api/location-photos/nearby?lat=${currentLat}&lng=${currentLng}`
       );
@@ -94,8 +94,7 @@ export const LocationPhotoPicker: React.FC<LocationPhotoPickerProps> = ({
 
     setIsUploading(true);
     try {
-      const backendUrl =
-        process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+      const backendUrl = getBackendUrl();
       const res = await fetch(`${backendUrl}/api/location-photos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

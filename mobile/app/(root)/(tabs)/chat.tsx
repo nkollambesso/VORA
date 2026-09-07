@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import { voraSocket } from "@/lib/socket";
 import { useClerkUser } from "@/lib/useClerkSafe";
 import { useDriverStore } from "@/store";
@@ -32,15 +33,7 @@ export default function Chat() {
   const assignedDriver = drivers.find((d) => d.id === selectedDriver);
 
   const [activeDriver, setActiveDriver] = useState<any>(null);
-
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome-msg",
-      senderId: "system",
-      text: "Bienvenue dans la messagerie sécurisée VORA. Vos échanges sont chiffrés et vos coordonnées téléphoniques restent strictement confidentielles.",
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
 
   // In-App Call States
@@ -58,13 +51,17 @@ export default function Chat() {
         name: assignedDriver.title || "Chauffeur VORA",
         vehicle_model: `Véhicule ${assignedDriver.car_seats || 4} places`,
       });
+      setMessages([
+        {
+          id: "sys-init",
+          senderId: "system",
+          text: `Discussion sécurisée avec votre chauffeur ${assignedDriver.title}. Vos numéros réels ne sont jamais partagés.`,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        },
+      ]);
     } else {
-      setActiveDriver({
-        id: "support-agent",
-        public_id: "VORA-ASSIST",
-        name: "Support & Dispatch VORA",
-        vehicle_model: "Assistance 24/7",
-      });
+      setActiveDriver(null);
+      setMessages([]);
     }
   }, [assignedDriver]);
 
@@ -126,7 +123,7 @@ export default function Chat() {
   }, []);
 
   const handleSendMessage = () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || !activeDriver) return;
     const msgText = inputText.trim();
     const newMsg: Message = {
       id: Date.now().toString(),
@@ -145,31 +142,17 @@ export default function Chat() {
         senderId: user?.id || "me",
       });
     }
-
-    // Si on est avec le support/dispatch et pas de chauffeur réel assigné, simuler une réponse intelligente
-    if (!assignedDriver) {
-      setTimeout(() => {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: (Date.now() + 1).toString(),
-            senderId: "support-agent",
-            text: "Merci pour votre message ! Notre centre de dispatch VORA est connecté. Dès que vous confirmez une course, votre chauffeur désigné apparaîtra directement ici.",
-            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          },
-        ]);
-      }, 800);
-    }
   };
 
   const handleStartCall = () => {
+    if (!activeDriver) return;
     setIsCallActive(true);
     setCallStatus("calling");
     setCallDuration(0);
 
     const socket = voraSocket.getSocket();
     socket?.emit("webrtc-call-user", {
-      targetUserId: activeDriver?.id || "support-agent",
+      targetUserId: activeDriver.id,
       callerId: user?.id || "rider_me",
       callerName: user?.fullName || "Passager VORA",
       offer: { type: "offer", sdp: "sdp-audio-stream" },
@@ -178,7 +161,9 @@ export default function Chat() {
 
   const handleEndCall = () => {
     const socket = voraSocket.getSocket();
-    socket?.emit("webrtc-hangup", { targetUserId: activeDriver?.id || "support-agent" });
+    if (activeDriver) {
+      socket?.emit("webrtc-hangup", { targetUserId: activeDriver.id });
+    }
     setCallStatus("ended");
     setTimeout(() => {
       setIsCallActive(false);
@@ -195,103 +180,151 @@ export default function Chat() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={[styles.mainWrapper, isWide && { maxWidth: 840, alignSelf: "center", width: "100%" }]}>
-        {/* Header Discussion & Bouton Appel Audio */}
+        {/* Header Discussion Chauffeur */}
         <View style={styles.header}>
           <View style={{ flex: 1, marginRight: 12 }}>
             <Text style={styles.headerTitle} numberOfLines={1}>
-              {activeDriver?.name || "Support VORA"}
+              {activeDriver ? activeDriver.name : "Discussion Chauffeur"}
             </Text>
             <Text style={styles.headerSub} numberOfLines={1}>
-              {activeDriver?.public_id || "VORA-SECURE"} • {activeDriver?.vehicle_model || "Service Client"}
+              {activeDriver
+                ? `${activeDriver.public_id} • ${activeDriver.vehicle_model}`
+                : "Canal de communication dédié Chauffeur / Client"}
             </Text>
           </View>
 
-          <TouchableOpacity style={styles.callAudioBtn} onPress={handleStartCall} activeOpacity={0.8}>
-            <Ionicons name="call" size={14} color="#ffffff" style={{ marginRight: 4 }} />
-            <Text style={styles.callAudioBtnText}>Appel Audio</Text>
-          </TouchableOpacity>
+          {activeDriver ? (
+            <TouchableOpacity style={styles.callAudioBtn} onPress={handleStartCall} activeOpacity={0.8}>
+              <Ionicons name="call" size={14} color="#ffffff" style={{ marginRight: 4 }} />
+              <Text style={styles.callAudioBtnText}>Appel Audio</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.supportLinkBtn}
+              onPress={() => router.push("/support" as any)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="headset-outline" size={14} color="#0EA5E9" style={{ marginRight: 4 }} />
+              <Text style={styles.supportLinkBtnText}>Assistance VORA</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* Zone des messages */}
-        <ScrollView style={styles.messagesScroll} contentContainerStyle={styles.messagesContent}>
-          <View style={styles.securityNotice}>
-            <Text style={styles.securityNoticeText}>
-              🔒 Discussion cryptée et anonymisée sous identifiant VORA. Vos numéros réels ne sont jamais partagés.
-            </Text>
-          </View>
-
-          {messages.map((msg) => {
-            const isMe = msg.senderId === (user?.id || "me");
-            const isSystem = msg.senderId === "system";
-
-            if (isSystem) {
-              return (
-                <View key={msg.id} style={styles.systemBubble}>
-                  <Text style={styles.systemText}>{msg.text}</Text>
-                </View>
-              );
-            }
-
-            return (
-              <View
-                key={msg.id}
-                style={[
-                  styles.messageBubble,
-                  isMe ? styles.messageBubbleMe : styles.messageBubbleOther,
-                ]}
-              >
-                <Text style={[styles.messageText, isMe ? styles.messageTextMe : styles.messageTextOther]}>
-                  {msg.text}
-                </Text>
-                <Text style={[styles.messageTime, isMe ? styles.messageTimeMe : styles.messageTimeOther]}>
-                  {msg.timestamp}
+        {/* Corps du Chat ou État Vide Chauffeur */}
+        {activeDriver ? (
+          <>
+            <ScrollView style={styles.messagesScroll} contentContainerStyle={styles.messagesContent}>
+              <View style={styles.securityNotice}>
+                <Text style={styles.securityNoticeText}>
+                  🔒 Échange sécurisé et anonymisé avec votre chauffeur. Vos numéros réels ne sont jamais visibles.
                 </Text>
               </View>
-            );
-          })}
-        </ScrollView>
 
-        {/* Input Bar - positioned above floating navbar */}
-        <View style={styles.inputBar}>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Écrire un message..."
-            placeholderTextColor="#94A3B8"
-            value={inputText}
-            onChangeText={setInputText}
-            onSubmitEditing={handleSendMessage}
-            returnKeyType="send"
-          />
-          <TouchableOpacity
-            style={[styles.sendBtn, !inputText.trim() && { opacity: 0.6 }]}
-            onPress={handleSendMessage}
-            disabled={!inputText.trim()}
-          >
-            <Ionicons name="send" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
-            <Text style={styles.sendBtnText}>Envoyer</Text>
-          </TouchableOpacity>
-        </View>
+              {messages.map((msg) => {
+                const isMe = msg.senderId === (user?.id || "me");
+                const isSystem = msg.senderId === "system";
+
+                if (isSystem) {
+                  return (
+                    <View key={msg.id} style={styles.systemBubble}>
+                      <Text style={styles.systemText}>{msg.text}</Text>
+                    </View>
+                  );
+                }
+
+                return (
+                  <View
+                    key={msg.id}
+                    style={[
+                      styles.messageBubble,
+                      isMe ? styles.messageBubbleMe : styles.messageBubbleOther,
+                    ]}
+                  >
+                    <Text style={[styles.messageText, isMe ? styles.messageTextMe : styles.messageTextOther]}>
+                      {msg.text}
+                    </Text>
+                    <Text style={[styles.messageTime, isMe ? styles.messageTimeMe : styles.messageTimeOther]}>
+                      {msg.timestamp}
+                    </Text>
+                  </View>
+                );
+              })}
+            </ScrollView>
+
+            {/* Input Bar Chauffeur */}
+            <View style={styles.inputBar}>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Écrire un message à votre chauffeur..."
+                placeholderTextColor="#94A3B8"
+                value={inputText}
+                onChangeText={setInputText}
+                onSubmitEditing={handleSendMessage}
+                returnKeyType="send"
+              />
+              <TouchableOpacity
+                style={[styles.sendBtn, !inputText.trim() && { opacity: 0.6 }]}
+                onPress={handleSendMessage}
+                disabled={!inputText.trim()}
+              >
+                <Ionicons name="send" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={styles.sendBtnText}>Envoyer</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="car-outline" size={48} color="#0EA5E9" />
+            </View>
+            <Text style={styles.emptyTitle}>Aucune course active</Text>
+            <Text style={styles.emptyDesc}>
+              Cet espace est exclusivement réservé aux échanges directs et appels vocaux cryptés entre vous et le chauffeur qui prend en charge votre course.
+            </Text>
+            <Text style={styles.emptySubDesc}>
+              Dès qu'un chauffeur accepte votre réservation, sa fiche et la messagerie instantanée s'activeront automatiquement ici.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.bookRideBtn}
+              onPress={() => router.push("/(root)/(tabs)/home" as any)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="map-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.bookRideBtnText}>Commander une Course</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.helpBtn}
+              onPress={() => router.push("/support" as any)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="help-circle-outline" size={16} color="#64748B" style={{ marginRight: 6 }} />
+              <Text style={styles.helpBtnText}>Besoin d'aide ? Contacter l'Assistance VORA</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
-      {/* Modal Overlay d'Appel Vocale In-App (WebRTC) */}
+      {/* Modal Overlay d'Appel Vocal WebRTC avec le Chauffeur */}
       <Modal visible={isCallActive} animationType="slide" transparent>
         <View style={styles.callOverlay}>
           <View style={styles.callCard}>
             <View style={styles.callAvatarCircle}>
               <Text style={styles.callAvatarInitial}>
-                {activeDriver?.name?.charAt(0) || "V"}
+                {activeDriver?.name?.charAt(0) || "C"}
               </Text>
             </View>
 
-            <Text style={styles.callName}>{activeDriver?.name || "Support VORA"}</Text>
+            <Text style={styles.callName}>{activeDriver?.name || "Chauffeur VORA"}</Text>
             <Text style={styles.callPublicId}>
-              Identifiant Sécurisé : {activeDriver?.public_id || "VORA-SECURE"}
+              Identifiant Sécurisé : {activeDriver?.public_id || "VORA-CHAUFFEUR"}
             </Text>
 
             <View style={styles.callStatusBadge}>
               <Text style={styles.callStatusText}>
                 {callStatus === "calling"
-                  ? "Sonnerie en cours..."
+                  ? "Appel du chauffeur en cours..."
                   : callStatus === "connected"
                   ? `En communication (${formatSeconds(callDuration)})`
                   : "Appel terminé"}
@@ -369,6 +402,21 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "800",
+  },
+  supportLinkBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  supportLinkBtnText: {
+    color: "#0284C7",
+    fontSize: 12,
+    fontWeight: "700",
   },
   messagesScroll: {
     flex: 1,
@@ -460,7 +508,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#E2E8F0",
     gap: 10,
-    marginBottom: 96, // Keeps input bar completely above floating bottom nav
+    marginBottom: 96,
   },
   textInput: {
     flex: 1,
@@ -485,6 +533,72 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+    paddingBottom: 100,
+  },
+  emptyIconCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "#E0F2FE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  emptyDesc: {
+    fontSize: 14,
+    color: "#475569",
+    textAlign: "center",
+    lineHeight: 21,
+    marginBottom: 8,
+  },
+  emptySubDesc: {
+    fontSize: 12,
+    color: "#94A3B8",
+    textAlign: "center",
+    lineHeight: 18,
+    marginBottom: 24,
+  },
+  bookRideBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0EA5E9",
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 16,
+    shadowColor: "#0EA5E9",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 16,
+  },
+  bookRideBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  helpBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  helpBtnText: {
+    color: "#64748B",
+    fontSize: 13,
+    fontWeight: "600",
   },
   callOverlay: {
     flex: 1,

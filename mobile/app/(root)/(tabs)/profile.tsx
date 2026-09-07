@@ -9,15 +9,15 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import { Ionicons } from "@expo/vector-icons";
-import CustomButton from "@/components/CustomButton";
 import InputField from "@/components/InputField";
+import { getBackendUrl } from "@/lib/config";
 
 const AVATAR_PRESETS = [
   "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80",
@@ -28,6 +28,8 @@ const AVATAR_PRESETS = [
   "https://images.unsplash.com/photo-1628157582853-a796fa650a6a?auto=format&fit=crop&w=250&q=80",
 ];
 
+const RECHARGE_AMOUNTS = [1000, 2000, 5000, 10000, 20000];
+
 const Profile = () => {
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
@@ -37,14 +39,23 @@ const Profile = () => {
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [kycStatus, setKycStatus] = useState<string>("unverified");
 
+  // Wallet States
+  const [walletBalance, setWalletBalance] = useState<number>(12500);
+  const [showWalletModal, setShowWalletModal] = useState(false);
+  const [selectedRechargeAmount, setSelectedRechargeAmount] = useState<number>(5000);
+  const [rechargeMethod, setRechargeMethod] = useState<"mtn" | "orange">("mtn");
+  const [rechargePhone, setRechargePhone] = useState("670000000");
+  const [isRecharging, setIsRecharging] = useState(false);
+
   useEffect(() => {
     const fetchUserKyc = async () => {
       try {
-        const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+        const backendUrl = getBackendUrl();
         const res = await fetch(`${backendUrl}/api/users/${user?.id || "user_demo"}`);
         const data = await res.json();
-        if (data.success && data.user?.verification_status) {
-          setKycStatus(data.user.verification_status);
+        if (data.success && data.user) {
+          if (data.user.verification_status) setKycStatus(data.user.verification_status);
+          if (typeof data.user.wallet_balance === "number") setWalletBalance(data.user.wallet_balance);
         }
       } catch (err) {
         console.error("Erreur fetch user KYC:", err);
@@ -55,13 +66,13 @@ const Profile = () => {
 
   const handleStartDiditKyc = async () => {
     try {
-      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+      const backendUrl = getBackendUrl();
       const res = await fetch(`${backendUrl}/api/didit/session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user?.id || "user_demo",
-          callbackUrl: "http://localhost:8082/(root)/(tabs)/profile",
+          callbackUrl: "http://localhost:8081/profile",
         }),
       });
       const data = await res.json();
@@ -105,6 +116,32 @@ const Profile = () => {
     }
   };
 
+  const handleRechargeWallet = async () => {
+    if (!rechargePhone || rechargePhone.length < 9) {
+      Alert.alert("Numéro Requis", "Veuillez saisir un numéro Mobile Money valide (9 chiffres).");
+      return;
+    }
+
+    setIsRecharging(true);
+    try {
+      // Simuler / Traiter le rechargement via CamerPay
+      setTimeout(() => {
+        setWalletBalance((prev) => prev + selectedRechargeAmount);
+        setIsRecharging(false);
+        setShowWalletModal(false);
+        Alert.alert(
+          "Recharge Réussie ! 🎉",
+          `Votre portefeuille VORA a été crédité de ${selectedRechargeAmount.toLocaleString()} FCFA via ${
+            rechargeMethod === "mtn" ? "MTN MoMo" : "Orange Money"
+          }.`
+        );
+      }, 1200);
+    } catch (err) {
+      setIsRecharging(false);
+      Alert.alert("Erreur", "Impossible de recharger le portefeuille.");
+    }
+  };
+
   const currentAvatar =
     selectedAvatar ||
     user?.externalAccounts?.[0]?.imageUrl ||
@@ -129,15 +166,20 @@ const Profile = () => {
         {/* Top title */}
         <View style={styles.headerRow}>
           <Text style={styles.title}>Mon Profil VORA</Text>
+          <TouchableOpacity
+            style={styles.supportBadge}
+            onPress={() => router.push("/support" as any)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="headset-outline" size={14} color="#0284C7" style={{ marginRight: 4 }} />
+            <Text style={styles.supportBadgeText}>Assistance 24/7</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Avatar with edit overlay button */}
         <View style={styles.avatarWrapper}>
           <View style={styles.avatarContainer}>
-            <Image
-              source={{ uri: currentAvatar }}
-              style={styles.avatarImage}
-            />
+            <Image source={{ uri: currentAvatar }} style={styles.avatarImage} />
             <TouchableOpacity
               style={styles.editPhotoBtn}
               onPress={handlePickAvatarFromDevice}
@@ -156,6 +198,54 @@ const Profile = () => {
             <Text style={styles.publicIdBadgeText}>
               ID PUBLIC SÉCURISÉ : {user?.id ? `VORA-${user.id.substring(user.id.length - 6).toUpperCase()}` : "VORA-8K3P9A"}
             </Text>
+          </View>
+        </View>
+
+        {/* 💳 Portefeuille In-App (Wallet VORA) */}
+        <View style={styles.walletCard}>
+          <View style={styles.walletHeaderRow}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <View style={styles.walletIconCircle}>
+                <Ionicons name="wallet" size={22} color="#FFFFFF" />
+              </View>
+              <View style={{ marginLeft: 10 }}>
+                <Text style={styles.walletTitle}>Portefeuille VORA</Text>
+                <Text style={styles.walletSub}>Solde in-app disponible</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.rechargeBtn}
+              onPress={() => setShowWalletModal(true)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="add-circle-outline" size={16} color="#0284C7" style={{ marginRight: 4 }} />
+              <Text style={styles.rechargeBtnText}>Recharger</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.balanceRow}>
+            <Text style={styles.balanceAmount}>{walletBalance.toLocaleString()} FCFA</Text>
+            <View style={styles.statusPill}>
+              <Text style={styles.statusPillText}>Actif</Text>
+            </View>
+          </View>
+
+          <View style={styles.walletDivider} />
+
+          <View style={styles.walletFeaturesRow}>
+            <View style={styles.featureItem}>
+              <Ionicons name="flash-outline" size={14} color="#0284C7" style={{ marginRight: 4 }} />
+              <Text style={styles.featureText}>Paiement 1-clic</Text>
+            </View>
+            <View style={styles.featureItem}>
+              <Ionicons name="shield-checkmark-outline" size={14} color="#16A34A" style={{ marginRight: 4 }} />
+              <Text style={styles.featureText}>Garanti sans contact</Text>
+            </View>
+            <View style={styles.featureItem}>
+              <Ionicons name="refresh-outline" size={14} color="#D97706" style={{ marginRight: 4 }} />
+              <Text style={styles.featureText}>Remboursement auto</Text>
+            </View>
           </View>
         </View>
 
@@ -293,9 +383,103 @@ const Profile = () => {
             editable={false}
           />
         </View>
-
-
       </ScrollView>
+
+      {/* Modal de Recharge du Portefeuille */}
+      <Modal
+        visible={showWalletModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowWalletModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Recharger mon Portefeuille</Text>
+            <Text style={styles.modalSub}>
+              Choisissez un montant et votre mode de paiement Mobile Money :
+            </Text>
+
+            {/* Montants rapides */}
+            <Text style={styles.modalFieldLabel}>Montant de la recharge :</Text>
+            <View style={styles.amountsGrid}>
+              {RECHARGE_AMOUNTS.map((amt) => (
+                <TouchableOpacity
+                  key={amt}
+                  onPress={() => setSelectedRechargeAmount(amt)}
+                  style={[
+                    styles.amountOption,
+                    selectedRechargeAmount === amt && styles.amountOptionActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.amountOptionText,
+                      selectedRechargeAmount === amt && styles.amountOptionTextActive,
+                    ]}
+                  >
+                    {amt.toLocaleString()} F
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Choix Opérateur */}
+            <Text style={styles.modalFieldLabel}>Opérateur Mobile Money :</Text>
+            <View style={styles.operatorRow}>
+              <TouchableOpacity
+                onPress={() => setRechargeMethod("mtn")}
+                style={[
+                  styles.operatorBtn,
+                  rechargeMethod === "mtn" && styles.operatorBtnActive,
+                ]}
+              >
+                <Text style={[styles.operatorBtnText, { color: "#B45309" }]}>MTN MoMo</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setRechargeMethod("orange")}
+                style={[
+                  styles.operatorBtn,
+                  rechargeMethod === "orange" && styles.operatorBtnActive,
+                ]}
+              >
+                <Text style={[styles.operatorBtnText, { color: "#C2410C" }]}>Orange Money</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Numéro */}
+            <Text style={styles.modalFieldLabel}>Numéro de téléphone :</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="670000000"
+              placeholderTextColor="#94A3B8"
+              keyboardType="phone-pad"
+              value={rechargePhone}
+              onChangeText={setRechargePhone}
+              maxLength={9}
+            />
+
+            <TouchableOpacity
+              style={[styles.modalConfirmBtn, isRecharging && { opacity: 0.6 }]}
+              onPress={handleRechargeWallet}
+              disabled={isRecharging}
+            >
+              <Text style={styles.modalConfirmBtnText}>
+                {isRecharging
+                  ? "Paiement en cours..."
+                  : `Payer ${selectedRechargeAmount.toLocaleString()} FCFA`}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.closeModalBtn}
+              onPress={() => setShowWalletModal(false)}
+            >
+              <Text style={styles.closeModalText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Avatar Picker Modal */}
       <Modal
@@ -375,18 +559,20 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#0f172a",
   },
-  driverBadge: {
-    backgroundColor: "#e0f2fe",
+  supportBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0F9FF",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#38bdf8",
+    borderColor: "#BAE6FD",
   },
-  driverBadgeText: {
-    fontSize: 13,
+  supportBadgeText: {
+    fontSize: 12,
     fontWeight: "700",
-    color: PRIMARY,
+    color: "#0284C7",
   },
   avatarWrapper: {
     alignItems: "center",
@@ -396,9 +582,9 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   avatarImage: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     borderWidth: 4,
     borderColor: "#ffffff",
     shadowColor: "#0f172a",
@@ -412,21 +598,18 @@ const styles = StyleSheet.create({
     bottom: 2,
     right: 2,
     backgroundColor: PRIMARY,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 3,
     borderColor: "#ffffff",
     elevation: 5,
   },
-  editPhotoIcon: {
-    fontSize: 16,
-  },
   changePhotoText: {
     marginTop: 8,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
     color: PRIMARY,
   },
@@ -444,6 +627,157 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#0284C7",
     letterSpacing: 0.5,
+  },
+  // Wallet Card Styles
+  walletCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    marginTop: 8,
+    marginBottom: 8,
+    shadowColor: "#0EA5E9",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  walletHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  walletIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#0EA5E9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  walletTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  walletSub: {
+    fontSize: 12,
+    color: "#64748B",
+  },
+  rechargeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1.5,
+    borderColor: "#0EA5E9",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  rechargeBtnText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#0284C7",
+  },
+  balanceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    marginTop: 14,
+    gap: 10,
+  },
+  balanceAmount: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#0F172A",
+    letterSpacing: -0.5,
+  },
+  statusPill: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+  },
+  statusPillText: {
+    color: "#166534",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  walletDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginVertical: 12,
+  },
+  walletFeaturesRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  featureItem: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  featureText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  // KYC Card
+  kycCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginTop: 8,
+    marginBottom: 8,
+    shadowColor: "#64748B",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  kycHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  kycCardTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  kycCardSub: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  kycBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: "#F1F5F9",
+    borderColor: "#CBD5E1",
+  },
+  kycBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#475569",
+  },
+  diditBtn: {
+    backgroundColor: "#0EA5E9",
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  diditBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
   },
   card: {
     backgroundColor: "#ffffff",
@@ -497,93 +831,7 @@ const styles = StyleSheet.create({
   genderBtnTextActive: {
     color: "#ffffff",
   },
-  driverCard: {
-    backgroundColor: "#f0f9ff",
-    borderRadius: 20,
-    padding: 18,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: "#bae6fd",
-  },
-  driverCardTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#0369a1",
-    marginBottom: 4,
-  },
-  driverCardSub: {
-    fontSize: 13,
-    color: "#0284c7",
-    lineHeight: 18,
-    marginBottom: 12,
-  },
-  // Didit KYC Styles
-  kycCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    marginTop: 12,
-    marginBottom: 4,
-    shadowColor: "#64748B",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  kycHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  kycCardTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-  kycCardSub: {
-    fontSize: 12,
-    color: "#64748B",
-    marginTop: 2,
-  },
-  kycBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    backgroundColor: "#F1F5F9",
-    borderColor: "#CBD5E1",
-  },
-  kycBadgeText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#475569",
-  },
-  diditBtn: {
-    backgroundColor: "#0EA5E9",
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  diditBtnText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  simulKycRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  simulKycBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  // Modal
+  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.6)",
@@ -594,7 +842,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    alignItems: "center",
+    width: "100%",
   },
   modalTitle: {
     fontSize: 20,
@@ -603,9 +851,87 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   modalSub: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#64748b",
-    marginBottom: 20,
+    marginBottom: 16,
+  },
+  modalFieldLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#334155",
+    marginBottom: 8,
+  },
+  amountsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 14,
+  },
+  amountOption: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#F8FAFC",
+  },
+  amountOptionActive: {
+    backgroundColor: "#0EA5E9",
+    borderColor: "#0EA5E9",
+  },
+  amountOptionText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#334155",
+  },
+  amountOptionTextActive: {
+    color: "#FFFFFF",
+  },
+  operatorRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 14,
+  },
+  operatorBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+    alignItems: "center",
+  },
+  operatorBtnActive: {
+    borderColor: "#0EA5E9",
+    backgroundColor: "#F0F9FF",
+  },
+  operatorBtnText: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  modalInput: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginBottom: 16,
+  },
+  modalConfirmBtn: {
+    backgroundColor: "#0EA5E9",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  modalConfirmBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
   },
   presetGrid: {
     flexDirection: "row",
@@ -658,11 +984,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   closeModalBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingVertical: 10,
+    alignItems: "center",
   },
   closeModalText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
     color: "#64748b",
   },
