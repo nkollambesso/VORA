@@ -33,6 +33,32 @@ if (Platform.OS === "web") {
       buttons?.[0]?.onPress?.();
     }
   };
+
+  // Ensure PWA head tags and Service Worker are active on web
+  if (typeof document !== "undefined") {
+    const setHeadTag = (tag: string, attrs: Record<string, string>) => {
+      let el = document.querySelector(`${tag}[${Object.keys(attrs)[0]}="${Object.values(attrs)[0]}"]`);
+      if (!el) {
+        el = document.createElement(tag);
+        Object.entries(attrs).forEach(([k, v]) => el!.setAttribute(k, v));
+        document.head.appendChild(el);
+      }
+    };
+    setHeadTag("link", { rel: "manifest", href: "/manifest.json" });
+    setHeadTag("link", { rel: "apple-touch-icon", href: "/apple-touch-icon.png" });
+    setHeadTag("link", { rel: "icon", type: "image/png", href: "/icon-192.png" });
+    setHeadTag("meta", { name: "mobile-web-app-capable", content: "yes" });
+    setHeadTag("meta", { name: "apple-mobile-web-app-capable", content: "yes" });
+    setHeadTag("meta", { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" });
+    setHeadTag("meta", { name: "apple-mobile-web-app-title", content: "VORA" });
+    setHeadTag("meta", { name: "theme-color", content: "#0EA5E9" });
+
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js").catch(() => {});
+      });
+    }
+  }
 }
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
