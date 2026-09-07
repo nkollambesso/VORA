@@ -4,11 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export const pool = new Pool({
-  host: 'ep-dry-sun-ax115y43-pooler.c-4.us-east-2.aws.neon.tech',
-  user: 'neondb_owner',
-  password: 'npg_h6RFHoSMMmrk0ep',
-  database: 'neondb',
-  port: 5432,
+  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_h6RFHo5MNmrk@ep-dry-sun-ax115y43-pooler.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require',
   ssl: { rejectUnauthorized: false },
 });
 
