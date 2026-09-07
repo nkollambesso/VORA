@@ -232,7 +232,8 @@ router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const result = await query(
-      `SELECT r.*, d.vehicle_model, d.license_plate, d.color, u.name as driver_name, u.phone as driver_phone
+      `SELECT r.*, d.vehicle_model, d.license_plate, d.color, d.vehicle_image, d.rating as driver_rating,
+              u.name as driver_name, u.phone as driver_phone, u.avatar_url as driver_avatar
        FROM rides r
        LEFT JOIN drivers d ON r.driver_id = d.id
        LEFT JOIN users u ON d.user_id = u.id
@@ -256,7 +257,7 @@ router.get('/user/:userId', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const result = await query(
-      `SELECT r.*, d.vehicle_model, d.license_plate, d.color, 
+      `SELECT r.*, d.vehicle_model, d.license_plate, d.color, d.vehicle_image,
               COALESCE(u.name, 'Chauffeur VORA') as driver_name,
               u.avatar_url as driver_avatar,
               COALESCE(d.rating, 5.0) as driver_rating

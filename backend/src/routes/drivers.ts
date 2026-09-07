@@ -1,37 +1,120 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../db';
 import { formatDisplayName, generatePublicId } from '../utils/anonymize';
+import { verifyDriverFace } from '../utils/aiVision';
 
 const router = Router();
+
+// ─── POST /api/drivers/verify-face (Analyse faciale IA de la photo chauffeur) ──
+router.post('/verify-face', async (req: Request, res: Response) => {
+  try {
+    const { image } = req.body;
+    if (!image) {
+      return res.status(400).json({
+        success: false,
+        isPerson: false,
+        reason: 'Image manquante pour l\'analyse.',
+      });
+    }
+
+    const result = await verifyDriverFace(image);
+    return res.json({
+      success: true,
+      isPerson: result.isPerson,
+      confidence: result.confidence,
+      label: result.label,
+      reason: result.reason,
+      message: result.isPerson
+        ? 'Visage humain validé par l\'IA.'
+        : result.reason || 'Visage humain non reconnu sur cette photo.',
+    });
+  } catch (err: any) {
+    console.error('Erreur vérification faciale chauffeur:', err);
+    return res.status(500).json({
+      success: false,
+      isPerson: false,
+      reason: 'Erreur lors de l\'analyse IA de l\'image.',
+    });
+  }
+});
 
 // Inscrire ou mettre à jour un profil chauffeur
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { user_id, vehicle_type, vehicle_model, license_plate, color } = req.body;
-
-    // 1. Mettre à jour le rôle dans la table users
-    await query(`UPDATE users SET role = 'DRIVER' WHERE id = $1`, [user_id]);
-
-    // 2. Insérer ou mettre à jour dans la table drivers
-    const insertQuery = `
-      INSERT INTO drivers (user_id, vehicle_type, vehicle_model, license_plate, color)
-      VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (user_id) DO UPDATE
-      SET vehicle_type = EXCLUDED.vehicle_type,
-          vehicle_model = EXCLUDED.vehicle_model,
-          license_plate = EXCLUDED.license_plate,
-          color = EXCLUDED.color
-      RETURNING *;
-    `;
-
-    const result = await query(insertQuery, [
+    const {
       user_id,
       vehicle_type,
       vehicle_model,
       license_plate,
       color,
+      vehicle_image,
+      avatar_url,
+    } = req.body;
+
+    if (!vehicle_model?.trim() || !license_plate?.trim() || !color?.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Toutes les informations sur le véhicule (modèle, immatriculation, couleur) sont requises.',
+      });
+    }
+
+    // Validation obligatoire de la photo du véhicule
+    if (!vehicle_image || typeof vehicle_image !== 'string' || vehicle_image.trim().length < 50) {
+      return res.status(400).json({
+        success: false,
+        error: 'La photo de votre véhicule est obligatoire pour permettre aux passagers de vous reconnaître facilement.',
+      });
+    }
+
+    // Validation obligatoire de la photo de profil du chauffeur
+    if (!avatar_url || typeof avatar_url !== 'string' || avatar_url.trim().length < 50) {
+      return res.status(400).json({
+        success: false,
+        error: 'La photo de profil du chauffeur est obligatoire pour la sécurité de la communauté VORA.',
+      });
+    }
+
+    // Analyse IA de la photo de profil
+    const faceCheck = await verifyDriverFace(avatar_url);
+    if (!faceCheck.isPerson) {
+      return res.status(400).json({
+        success: false,
+        error: faceCheck.reason || 'La photo de profil fournie ne représente pas un visage humain valide. Veuillez fournir un selfie clair de face.',
+      });
+    }
+
+    // 1. Mettre à jour le rôle et l'avatar dans la table users
+    await query(
+      `UPDATE users 
+       SET role = 'DRIVER', 
+           avatar_url = COALESCE($1, avatar_url) 
+       WHERE id = $2`,
+      [avatar_url.trim(), user_id]
+    );
+
+    // 2. Insérer ou mettre à jour dans la table drivers
+    const insertQuery = `
+      INSERT INTO drivers (user_id, vehicle_type, vehicle_model, license_plate, color, vehicle_image)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (user_id) DO UPDATE
+      SET vehicle_type = EXCLUDED.vehicle_type,
+          vehicle_model = EXCLUDED.vehicle_model,
+          license_plate = EXCLUDED.license_plate,
+          color = EXCLUDED.color,
+          vehicle_image = COALESCE(EXCLUDED.vehicle_image, drivers.vehicle_image)
+      RETURNING *;
+    `;
+
+    const result = await query(insertQuery, [
+      user_id,
+      vehicle_type || 'taxi',
+      vehicle_model.trim(),
+      license_plate.trim().toUpperCase(),
+      color.trim(),
+      vehicle_image.trim(),
     ]);
 
+    console.log(`[DRIVER REGISTER] Chauffeur ${user_id} enregistré avec véhicule ${vehicle_model} et photo validée IA.`);
     return res.status(201).json({ success: true, driver: result.rows[0] });
   } catch (error) {
     console.error('Erreur inscription chauffeur:', error);
@@ -117,7 +200,7 @@ router.get('/profile/:userId', async (req: Request, res: Response) => {
 router.get('/online', async (req: Request, res: Response) => {
   try {
     const result = await query(
-      `SELECT d.id, d.vehicle_type, d.vehicle_model, d.license_plate, d.color, d.current_lat, d.current_lng, d.rating, u.public_id, u.name, u.avatar_url 
+      `SELECT d.id, d.vehicle_type, d.vehicle_model, d.license_plate, d.color, d.vehicle_image, d.current_lat, d.current_lng, d.rating, u.public_id, u.name, u.avatar_url 
        FROM drivers d 
        JOIN users u ON d.user_id = u.id 
        WHERE d.is_online = TRUE`

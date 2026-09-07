@@ -235,6 +235,9 @@ export function setupSocketIO(io: any) {
             driver_public_id: driverInfo.driver_public_id || generatePublicId(),
             vehicle_model: driverInfo.vehicle_model,
             license_plate: driverInfo.license_plate,
+            color: driverInfo.color,
+            vehicle_image: driverInfo.vehicle_image,
+            driver_avatar: driverInfo.driver_avatar,
             rating: driverInfo.rating || 5.0,
           };
 

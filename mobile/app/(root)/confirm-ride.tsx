@@ -333,11 +333,15 @@ export default function ConfirmRide() {
         {/* Carte Chauffeur & Véhicule */}
         <View style={styles.driverCard}>
           <View style={styles.driverInfoRow}>
-            <View style={styles.driverAvatar}>
-              <Text style={{ fontSize: 11, fontWeight: "900", color: "#0284C7" }}>
-                {ride?.vehicle_type === "moto" ? "MOTO" : "TAXI"}
-              </Text>
-            </View>
+            {ride?.driver_avatar ? (
+              <Image source={{ uri: ride.driver_avatar }} style={styles.driverAvatarImg} resizeMode="cover" />
+            ) : (
+              <View style={styles.driverAvatar}>
+                <Text style={{ fontSize: 11, fontWeight: "900", color: "#0284C7" }}>
+                  {ride?.vehicle_type === "moto" ? "MOTO" : "TAXI"}
+                </Text>
+              </View>
+            )}
             <View style={{ flex: 1 }}>
               <Text style={styles.driverName}>
                 {ride?.driver_display_name || ride?.driver_name || "Paul M. (Chauffeur VORA)"}
@@ -346,7 +350,7 @@ export default function ConfirmRide() {
                 {ride?.vehicle_model || "Toyota Yaris"} • {ride?.color || "Jaune Taxi"}
               </Text>
               <View style={styles.ratingRow}>
-                <Text style={styles.starText}>Note : {ride?.rating || "4.9"}/5</Text>
+                <Text style={styles.starText}>Note : {ride?.driver_rating || ride?.rating || "4.9"}/5</Text>
                 <Text style={styles.ratingSub}>Notoriété vérifiée</Text>
               </View>
             </View>
@@ -357,6 +361,23 @@ export default function ConfirmRide() {
               <Text style={styles.plateText}>{ride?.license_plate || "LT-842-CA"}</Text>
             </View>
           </View>
+
+          {/* Photo du véhicule pour identification visuelle rapide par le passager */}
+          {ride?.vehicle_image && (
+            <View style={styles.vehiclePhotoCard}>
+              <View style={styles.vehiclePhotoHeader}>
+                <Text style={styles.vehiclePhotoLabel}>VÉHICULE EN APPROCHE</Text>
+                <Text style={styles.vehiclePhotoSub}>
+                  {ride.vehicle_model} • {ride.color}
+                </Text>
+              </View>
+              <Image
+                source={{ uri: ride.vehicle_image }}
+                style={styles.vehiclePhotoImg}
+                resizeMode="cover"
+              />
+            </View>
+          )}
 
           {/* Boutons d'interaction */}
           <View style={styles.actionButtonsRow}>
@@ -610,6 +631,47 @@ const styles = StyleSheet.create({
     marginRight: 12,
     borderWidth: 1,
     borderColor: "#E2E8F0",
+  },
+  driverAvatarImg: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 12,
+    borderWidth: 1.5,
+    borderColor: "#0EA5E9",
+  },
+  vehiclePhotoCard: {
+    marginTop: 12,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    overflow: "hidden",
+  },
+  vehiclePhotoHeader: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  vehiclePhotoLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#0369A1",
+    letterSpacing: 0.5,
+  },
+  vehiclePhotoSub: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  vehiclePhotoImg: {
+    width: "100%",
+    height: 140,
   },
   driverName: {
     fontSize: 15,

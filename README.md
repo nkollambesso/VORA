@@ -73,6 +73,29 @@ Elle combine un **Frontend Web & Mobile sous React Native & Expo Router** (`/mob
 - Les routes protégées de l'application (`/(root)`, `/(driver)`) disposent d'un garde d'authentification strict : tout utilisateur non inscrit ou non connecté est immédiatement redirigé vers l'écran d'accueil/onboarding (`/(auth)/welcome`).
 - Les utilisateurs déjà connectés accèdent directement à l'accueil sans repasser par les écrans de bienvenue.
 
+### 9. Page de Connexion Unique & Redirection Automatique Admin
+- **Aucune page de connexion administrateur séparée** : Tous les utilisateurs (passagers, chauffeurs et administrateurs) utilisent la même page de connexion (`/(auth)/sign-in`).
+- Si des identifiants administrateur sont saisis, le système vérifie automatiquement auprès de l'API backend et redirige l'utilisateur directement vers le panneau d'administration sécurisé (`/(admin)/dashboard`).
+- Si les identifiants appartiennent à un passager ou un chauffeur, la connexion normale se poursuit vers leurs espaces respectifs.
+
+### 10. Gestion des Comptes Administrateurs & Sécurité du Profil
+- **Gestion des comptes administrateurs** : Interface dédiée permettant de lister tous les administrateurs enregistrés, d'en créer de nouveaux avec des rôles spécifiques (`ADMIN`, `SUPER_ADMIN`), et de révoquer les accès.
+- **Modification du profil & mot de passe** : L'administrateur peut à tout moment mettre à jour son adresse email, son nom, et modifier son mot de passe de manière sécurisée directement depuis l'onglet *Mon Profil & Sécurité*.
+- **Supervision des comptes usagers** : Vue centralisée de l'ensemble des passagers et chauffeurs avec leurs statuts de vérification, soldes et informations véhicules.
+
+### 11. Photo du Véhicule Obligatoire pour les Chauffeurs
+- Lors de l'enregistrement de son compte, le chauffeur doit **obligatoirement télécharger une photo de son véhicule**.
+- Cette photo est transmise et affichée sur la carte de confirmation de course du passager (`confirm-ride.tsx`), lui permettant de reconnaître immédiatement la voiture ou la moto en approche lors de la prise de contact.
+
+### 12. Photo de Profil Chauffeur Obligatoire avec Analyse Faciale par IA
+- La photo de profil du chauffeur est strictement obligatoire.
+- Pour certifier qu'il s'agit bien d'une véritable personne humaine (et non d'un objet, d'un paysage ou d'un véhicule), une **intelligence artificielle de vision par ordinateur** analyse automatiquement l'image avant de valider l'inscription.
+- Le chauffeur reçoit un retour instantané dans l'interface confirmant la détection et la validation faciale.
+
+### 13. Annulation de Course Passager avec Pénalité de Retard
+- Bouton d'annulation intégré dans l'écran de suivi passager tant que la course est au statut `ACCEPTED`.
+- Calcul automatique d'une pénalité de 500 FCFA déduite du portefeuille passager si l'annulation intervient plus de 2 minutes après l'acceptation par le chauffeur.
+
 ---
 
 ## Structure du Projet

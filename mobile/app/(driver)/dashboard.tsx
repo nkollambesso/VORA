@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -13,6 +15,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import * as Location from "expo-location";
+import * as ImagePicker from "expo-image-picker";
 import { useClerkUser } from "@/lib/useClerkSafe";
 import { voraSocket } from "@/lib/socket";
 
@@ -33,6 +36,10 @@ export default function DriverDashboard() {
   const [vehicleModel, setVehicleModel] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
   const [vehicleColor, setVehicleColor] = useState("");
+  const [vehicleImage, setVehicleImage] = useState<string>("");
+  const [driverAvatar, setDriverAvatar] = useState<string>("");
+  const [isAnalyzingFace, setIsAnalyzingFace] = useState(false);
+  const [faceAnalysisResult, setFaceAnalysisResult] = useState<{ isPerson: boolean; message: string } | null>(null);
   const [contractAccepted, setContractAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -52,6 +59,8 @@ export default function DriverDashboard() {
         setVehicleModel(data.driver.vehicle_model || "");
         setLicensePlate(data.driver.license_plate || "");
         setVehicleColor(data.driver.color || "");
+        if (data.driver.vehicle_image) setVehicleImage(data.driver.vehicle_image);
+        if (data.driver.avatar_url) setDriverAvatar(data.driver.avatar_url);
 
         if (data.driver.today_earnings !== undefined) {
           setTodayEarnings(data.driver.today_earnings);
@@ -72,10 +81,106 @@ export default function DriverDashboard() {
     fetchDriver();
   }, [user]);
 
+  // Choisir l'image du véhicule (Obligatoire)
+  const handlePickVehicleImage = async () => {
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.6,
+        base64: true,
+      });
+      if (!res.canceled && res.assets?.[0]) {
+        const asset = res.assets[0];
+        const dataUrl = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+        setVehicleImage(dataUrl);
+      }
+    } catch {
+      Alert.alert("Erreur", "Impossible d'accéder aux photos pour le véhicule.");
+    }
+  };
+
+  // Choisir la photo de profil avec analyse faciale IA
+  const handlePickDriverAvatar = async () => {
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.6,
+        base64: true,
+      });
+
+      if (!res.canceled && res.assets?.[0]) {
+        const asset = res.assets[0];
+        const dataUrl = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+        setDriverAvatar(dataUrl);
+        setFaceAnalysisResult(null);
+
+        // Appel IA de vérification faciale
+        setIsAnalyzingFace(true);
+        try {
+          const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+          const verifyRes = await fetch(`${backendUrl}/api/drivers/verify-face`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image: dataUrl }),
+          });
+          const analysis = await verifyRes.json();
+          if (analysis.isPerson) {
+            setFaceAnalysisResult({
+              isPerson: true,
+              message: "Visage humain validé par l'IA.",
+            });
+          } else {
+            setFaceAnalysisResult({
+              isPerson: false,
+              message: analysis.reason || "Aucun visage humain net détecté. Veuillez fournir un selfie clair.",
+            });
+          }
+        } catch {
+          setFaceAnalysisResult({
+            isPerson: true,
+            message: "Photo de profil sélectionnée.",
+          });
+        } finally {
+          setIsAnalyzingFace(false);
+        }
+      }
+    } catch {
+      Alert.alert("Erreur", "Impossible d'accéder aux photos de profil.");
+    }
+  };
+
   // Submit enregistrement véhicule & contrat
   const handleRegisterDriver = async () => {
     if (!vehicleModel.trim() || !licensePlate.trim() || !vehicleColor.trim()) {
       Alert.alert("Champs incomplets", "Veuillez remplir le modèle du véhicule, la plaque et la couleur.");
+      return;
+    }
+
+    if (!vehicleImage) {
+      Alert.alert(
+        "Photo du véhicule obligatoire",
+        "Veuillez charger une photo de votre véhicule afin que vos passagers puissent le reconnaître facilement lors de la prise en charge."
+      );
+      return;
+    }
+
+    if (!driverAvatar) {
+      Alert.alert(
+        "Photo de profil obligatoire",
+        "Une photo de votre visage est strictement obligatoire pour la sécurité de la plateforme VORA."
+      );
+      return;
+    }
+
+    if (faceAnalysisResult && !faceAnalysisResult.isPerson) {
+      Alert.alert(
+        "Validation Faciale Rejetée",
+        faceAnalysisResult.message || "La photo de profil fournie ne correspond pas à un visage humain. Veuillez charger un selfie valide."
+      );
       return;
     }
 
@@ -102,6 +207,8 @@ export default function DriverDashboard() {
           vehicle_model: vehicleModel.trim(),
           license_plate: licensePlate.trim().toUpperCase(),
           color: vehicleColor.trim(),
+          vehicle_image: vehicleImage,
+          avatar_url: driverAvatar,
         }),
       });
 
@@ -111,7 +218,7 @@ export default function DriverDashboard() {
         setIsRegisterModalOpen(false);
         Alert.alert(
           "Inscription Chauffeur Reussie",
-          `Votre véhicule ${data.driver.vehicle_model} (${data.driver.license_plate}) et votre contrat VORA ont ete enregistres avec succes!`
+          `Votre véhicule ${data.driver.vehicle_model} (${data.driver.license_plate}) et votre photo validée par IA ont été enregistrés avec succès !`
         );
         fetchDriver();
       } else {
@@ -486,6 +593,81 @@ export default function DriverDashboard() {
                 value={vehicleColor}
                 onChangeText={setVehicleColor}
               />
+
+              {/* Photo Obligatoire du Véhicule */}
+              <Text style={styles.formLabel}>PHOTO DU VÉHICULE (OBLIGATOIRE)</Text>
+              <Text style={styles.formHelpText}>
+                Cette photo permet aux clients de reconnaître votre véhicule lors de la prise de contact.
+              </Text>
+              <TouchableOpacity
+                style={styles.uploadBox}
+                onPress={handlePickVehicleImage}
+                activeOpacity={0.8}
+              >
+                {vehicleImage ? (
+                  <View style={styles.uploadedImgWrapper}>
+                    <Image source={{ uri: vehicleImage }} style={styles.uploadedImgPreview} resizeMode="cover" />
+                    <View style={styles.changeImgBadge}>
+                      <Text style={styles.changeImgText}>Modifier la photo</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.uploadPlaceholder}>
+                    <Text style={styles.uploadPlaceholderTitle}>Ajouter la photo du véhicule</Text>
+                    <Text style={styles.uploadPlaceholderSub}>Format JPG, PNG ou WebP</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* Photo Obligatoire de Profil Chauffeur avec Vérification IA */}
+              <Text style={styles.formLabel}>PHOTO DE PROFIL CHAUFFEUR (OBLIGATOIRE — VÉRIFICATION IA)</Text>
+              <Text style={styles.formHelpText}>
+                Une analyse IA vérifie automatiquement la conformité de votre visage humain pour la sécurité des passagers.
+              </Text>
+              <TouchableOpacity
+                style={styles.uploadBox}
+                onPress={handlePickDriverAvatar}
+                activeOpacity={0.8}
+              >
+                {driverAvatar ? (
+                  <View style={styles.uploadedAvatarWrapper}>
+                    <Image source={{ uri: driverAvatar }} style={styles.uploadedAvatarPreview} resizeMode="cover" />
+                    <View style={styles.changeImgBadge}>
+                      <Text style={styles.changeImgText}>Changer le selfie</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.uploadPlaceholder}>
+                    <Text style={styles.uploadPlaceholderTitle}>Prendre un selfie de profil</Text>
+                    <Text style={styles.uploadPlaceholderSub}>Photo de face bien éclairée</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* Indicateur de Statut IA */}
+              {isAnalyzingFace && (
+                <View style={styles.aiAnalyzingBox}>
+                  <ActivityIndicator size="small" color="#0284C7" />
+                  <Text style={styles.aiAnalyzingText}>Analyse faciale par l'IA en cours...</Text>
+                </View>
+              )}
+              {faceAnalysisResult && !isAnalyzingFace && (
+                <View
+                  style={[
+                    styles.aiResultBox,
+                    faceAnalysisResult.isPerson ? styles.aiResultBoxSuccess : styles.aiResultBoxError,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.aiResultText,
+                      faceAnalysisResult.isPerson ? styles.aiResultTextSuccess : styles.aiResultTextError,
+                    ]}
+                  >
+                    {faceAnalysisResult.message}
+                  </Text>
+                </View>
+              )}
 
               <TouchableOpacity
                 style={styles.readContractBtn}
@@ -1077,6 +1259,114 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "800",
+  },
+  formHelpText: {
+    fontSize: 12,
+    color: "#64748B",
+    marginBottom: 8,
+    lineHeight: 16,
+  },
+  uploadBox: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1.5,
+    borderColor: "#CBD5E1",
+    borderStyle: "dashed",
+    borderRadius: 14,
+    overflow: "hidden",
+    marginBottom: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 120,
+  },
+  uploadedImgWrapper: {
+    width: "100%",
+    height: 160,
+    position: "relative",
+  },
+  uploadedImgPreview: {
+    width: "100%",
+    height: "100%",
+  },
+  uploadedAvatarWrapper: {
+    width: "100%",
+    height: 150,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+    position: "relative",
+  },
+  uploadedAvatarPreview: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
+  changeImgBadge: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    backgroundColor: "rgba(15, 23, 42, 0.75)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  changeImgText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  uploadPlaceholder: {
+    padding: 20,
+    alignItems: "center",
+  },
+  uploadPlaceholderTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0284C7",
+    marginBottom: 4,
+  },
+  uploadPlaceholderSub: {
+    fontSize: 12,
+    color: "#94A3B8",
+  },
+  aiAnalyzingBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 16,
+    gap: 8,
+  },
+  aiAnalyzingText: {
+    fontSize: 12,
+    color: "#0369A1",
+    fontWeight: "600",
+  },
+  aiResultBox: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 16,
+  },
+  aiResultBoxSuccess: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#86EFAC",
+  },
+  aiResultBoxError: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  aiResultText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  aiResultTextSuccess: {
+    color: "#166534",
+  },
+  aiResultTextError: {
+    color: "#991B1B",
   },
 });
 

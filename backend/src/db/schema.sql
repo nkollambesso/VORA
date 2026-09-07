@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS drivers (
   vehicle_model VARCHAR(100) NOT NULL,
   license_plate VARCHAR(50) NOT NULL,
   color VARCHAR(50) NOT NULL,
+  vehicle_image TEXT, -- Photo obligatoire du véhicule pour reconnaissance client
   is_online BOOLEAN DEFAULT FALSE,
   current_lat DOUBLE PRECISION,
   current_lng DOUBLE PRECISION,
@@ -108,16 +109,14 @@ CREATE TABLE IF NOT EXISTS ride_disputes (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Seed Chauffeurs VORA (Grégoire Legrand & Amassoka Michelle)
-INSERT INTO users (id, public_id, name, email, role, verification_status)
-VALUES 
-  ('driver-user-1', 'VORA-DRV01', 'Grégoire Legrand', 'gregoire.legrand@vora.cm', 'DRIVER', 'verified'),
-  ('driver-user-2', 'VORA-DRV02', 'Amassoka Michelle', 'amassoka.michelle@vora.cm', 'DRIVER', 'verified')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO drivers (id, user_id, vehicle_type, vehicle_model, license_plate, color, is_online, current_lat, current_lng, rating)
-VALUES 
-  (1, 'driver-user-1', 'confort', 'Toyota Corolla HSD', 'LT-849-AK', 'Gris Métal', TRUE, 3.848, 11.502, 4.90),
-  (2, 'driver-user-2', 'moto', 'Yamaha YBR 125', 'CE-102-XY', 'Bleu Ciel VORA', TRUE, 3.854, 11.516, 4.85)
-ON CONFLICT (id) DO NOTHING;
+-- 7. Table des Comptes Administrateurs VORA
+CREATE TABLE IF NOT EXISTS admin_accounts (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  name VARCHAR(255) NOT NULL DEFAULT 'Administrateur VORA',
+  role VARCHAR(50) DEFAULT 'ADMIN', -- ADMIN | SUPER_ADMIN
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 

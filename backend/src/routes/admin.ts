@@ -4,16 +4,11 @@ import * as crypto from 'crypto';
 
 const router = Router();
 
-// ─── Admin Credentials (env-based, never exposed client-side) ───────────────
-// Set these in backend/.env:
-//   ADMIN_EMAIL=admin@vora.cm
-//   ADMIN_PASSWORD=VoraAdmin2025!  (plain text for comparison — use hashed in prod)
-// Multiple admins can be defined via ADMIN_CREDENTIALS as JSON array:
-//   ADMIN_CREDENTIALS=[{"email":"admin@vora.cm","passwordHash":"sha256hex"}]
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@vora.cm';
+// ─── Environment Fallbacks ──────────────────────────────────────────────────
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@vora.cm').trim().toLowerCase();
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'VoraAdmin2025!';
 
-// In-memory session store (replace with Redis/DB in production)
+// In-memory session store: token -> { email: string, expiresAt: number }
 const activeSessions = new Map<string, { email: string; expiresAt: number }>();
 
 function sha256(input: string): string {
@@ -24,10 +19,58 @@ function generateSessionToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function isConfiguredAdminEmail(email: string): boolean {
+// ─── Database Initialization & Migrations for Admin & Drivers ───────────────
+async function ensureAdminTables() {
+  try {
+    // 1. Create admin_accounts table
+    await query(`
+      CREATE TABLE IF NOT EXISTS admin_accounts (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        name VARCHAR(255) NOT NULL DEFAULT 'Administrateur VORA',
+        role VARCHAR(50) DEFAULT 'SUPER_ADMIN',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 2. Ensure vehicle_image column exists on drivers table
+    await query(`
+      ALTER TABLE drivers ADD COLUMN IF NOT EXISTS vehicle_image TEXT;
+    `);
+
+    // 3. Purge mock demo drivers from database
+    await query(`
+      DELETE FROM drivers WHERE user_id IN ('driver-user-1', 'driver-user-2');
+      DELETE FROM users WHERE id IN ('driver-user-1', 'driver-user-2');
+    `);
+
+    // 4. Seed initial default admin if table is empty
+    const defaultHash = sha256(ADMIN_PASSWORD);
+    await query(`
+      INSERT INTO admin_accounts (email, password_hash, name, role)
+      VALUES ($1, $2, 'Super Administrateur VORA', 'SUPER_ADMIN')
+      ON CONFLICT (email) DO NOTHING;
+    `, [ADMIN_EMAIL, defaultHash]);
+
+    console.log('[ADMIN DB] Tables d\'administration et schema chauffeur initialisés.');
+  } catch (err) {
+    console.error('[ADMIN DB] Erreur lors de l\'initialisation des tables admin:', err);
+  }
+}
+ensureAdminTables();
+
+// ─── Verify if an email belongs to an Admin ─────────────────────────────────
+async function isKnownAdminEmail(email: string): Promise<boolean> {
   const clean = email.trim().toLowerCase();
-  const configured = (process.env.ADMIN_EMAIL || 'admin@vora.cm').trim().toLowerCase();
-  if (clean === configured) return true;
+  if (clean === ADMIN_EMAIL) return true;
+
+  try {
+    const res = await query('SELECT id FROM admin_accounts WHERE LOWER(email) = $1', [clean]);
+    if (res.rows.length > 0) return true;
+  } catch {}
+
   const credJson = process.env.ADMIN_CREDENTIALS;
   if (credJson) {
     try {
@@ -35,29 +78,48 @@ function isConfiguredAdminEmail(email: string): boolean {
       return creds.some((c) => c.email?.trim().toLowerCase() === clean);
     } catch {}
   }
+
   return false;
 }
 
-function isValidAdminCredentials(email: string, password: string): boolean {
-  const cleanEmail = email.trim().toLowerCase();
-  // Support ADMIN_CREDENTIALS JSON array for multiple admins
+// ─── Verify Admin Credentials ───────────────────────────────────────────────
+async function authenticateAdmin(email: string, password: string): Promise<{ valid: boolean; adminRecord?: any }> {
+  const clean = email.trim().toLowerCase();
+  const passwordHash = sha256(password);
+
+  // 1. Check database first (dynamic, allows changed passwords)
+  try {
+    const res = await query('SELECT * FROM admin_accounts WHERE LOWER(email) = $1', [clean]);
+    if (res.rows.length > 0) {
+      const admin = res.rows[0];
+      if (admin.password_hash === passwordHash) {
+        return { valid: true, adminRecord: admin };
+      }
+      return { valid: false };
+    }
+  } catch {}
+
+  // 2. Fallback to process.env credentials
+  if (clean === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+    return { valid: true, adminRecord: { email: ADMIN_EMAIL, name: 'Super Admin', role: 'SUPER_ADMIN' } };
+  }
+
+  // 3. Fallback to ADMIN_CREDENTIALS json
   const credJson = process.env.ADMIN_CREDENTIALS;
   if (credJson) {
     try {
       const creds: Array<{ email: string; password?: string; passwordHash?: string }> = JSON.parse(credJson);
-      return creds.some((c) => {
-        if (c.email?.trim().toLowerCase() !== cleanEmail) return false;
-        if (c.passwordHash) return sha256(password) === c.passwordHash;
+      const match = creds.find((c) => {
+        if (c.email?.trim().toLowerCase() !== clean) return false;
+        if (c.passwordHash) return passwordHash === c.passwordHash;
         if (c.password) return c.password === password;
         return false;
       });
-    } catch {
-      // Fall through to default check
-    }
+      if (match) return { valid: true, adminRecord: match };
+    } catch {}
   }
-  const defaultEmail = (process.env.ADMIN_EMAIL || 'admin@vora.cm').trim().toLowerCase();
-  const defaultPassword = process.env.ADMIN_PASSWORD || 'VoraAdmin2025!';
-  return cleanEmail === defaultEmail && password === defaultPassword;
+
+  return { valid: false };
 }
 
 // ─── POST /api/admin/login ────────────────────────────────────────────────────
@@ -72,7 +134,8 @@ router.post('/login', async (req: Request, res: Response) => {
     const cleanEmail = email.trim().toLowerCase();
 
     // Check if this email is a configured admin email
-    if (!isConfiguredAdminEmail(cleanEmail)) {
+    const isAdminCandidate = await isKnownAdminEmail(cleanEmail);
+    if (!isAdminCandidate) {
       return res.status(401).json({
         success: false,
         isAdmin: false,
@@ -83,7 +146,8 @@ router.post('/login', async (req: Request, res: Response) => {
     // Email belongs to an admin — apply brute-force delay
     await new Promise((r) => setTimeout(r, 400));
 
-    if (!isValidAdminCredentials(cleanEmail, password)) {
+    const authResult = await authenticateAdmin(cleanEmail, password);
+    if (!authResult.valid) {
       console.warn(`[ADMIN AUTH] Mot de passe invalide pour admin: ${cleanEmail}`);
       return res.status(401).json({
         success: false,
@@ -104,6 +168,8 @@ router.post('/login', async (req: Request, res: Response) => {
       isAdmin: true,
       token,
       email: cleanEmail,
+      name: authResult.adminRecord?.name || 'Administrateur',
+      role: authResult.adminRecord?.role || 'ADMIN',
       expiresIn: '4h',
       message: 'Authentification administrateur réussie.',
     });
@@ -142,7 +208,7 @@ router.post('/logout', (req: Request, res: Response) => {
 
 // ─── Middleware: validate admin token for protected routes ────────────────────
 function requireAdminAuth(req: Request, res: Response, next: any) {
-  const token = req.headers['x-admin-token'] as string || req.body?.adminToken;
+  const token = (req.headers['x-admin-token'] as string) || req.body?.adminToken;
   if (!token) {
     return res.status(401).json({ success: false, error: 'Accès non autorisé. Token admin requis.' });
   }
@@ -151,8 +217,211 @@ function requireAdminAuth(req: Request, res: Response, next: any) {
     activeSessions.delete(token || '');
     return res.status(401).json({ success: false, error: 'Session admin expirée.' });
   }
+  (req as any).adminEmail = session.email;
+  (req as any).adminToken = token;
   next();
 }
+
+// ─── GET /api/admin/admins (List all admin accounts) ─────────────────────────
+router.get('/admins', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const result = await query(
+      'SELECT id, email, name, role, created_at, updated_at FROM admin_accounts ORDER BY id ASC'
+    );
+    return res.json({ success: true, admins: result.rows });
+  } catch (error) {
+    console.error('Erreur liste admins:', error);
+    return res.status(500).json({ success: false, error: 'Impossible de charger la liste des administrateurs.' });
+  }
+});
+
+// ─── POST /api/admin/admins (Create new admin account) ───────────────────────
+router.post('/admins', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { email, password, name, role } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: 'Email et mot de passe requis.' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ success: false, error: 'Le mot de passe doit comporter au moins 8 caractères.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = await query('SELECT id FROM admin_accounts WHERE LOWER(email) = $1', [cleanEmail]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ success: false, error: 'Un compte administrateur avec cette adresse existe déjà.' });
+    }
+
+    const passwordHash = sha256(password);
+    const result = await query(
+      `INSERT INTO admin_accounts (email, password_hash, name, role)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, email, name, role, created_at`,
+      [cleanEmail, passwordHash, name?.trim() || 'Administrateur VORA', role || 'ADMIN']
+    );
+
+    console.log(`[ADMIN ACCOUNTS] Nouvel administrateur créé : ${cleanEmail}`);
+    return res.status(201).json({ success: true, admin: result.rows[0], message: 'Compte administrateur créé.' });
+  } catch (error) {
+    console.error('Erreur création admin:', error);
+    return res.status(500).json({ success: false, error: 'Erreur lors de la création de l\'administrateur.' });
+  }
+});
+
+// ─── DELETE /api/admin/admins/:id (Delete admin account) ─────────────────────
+router.delete('/admins/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const adminId = parseInt(req.params.id, 10);
+    const currentAdminEmail = (req as any).adminEmail;
+
+    // Check count
+    const countRes = await query('SELECT COUNT(*) FROM admin_accounts');
+    const totalAdmins = parseInt(countRes.rows[0].count, 10);
+    if (totalAdmins <= 1) {
+      return res.status(400).json({ success: false, error: 'Impossible de supprimer le dernier compte administrateur.' });
+    }
+
+    // Check target admin
+    const target = await query('SELECT * FROM admin_accounts WHERE id = $1', [adminId]);
+    if (target.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Administrateur introuvable.' });
+    }
+
+    if (target.rows[0].email.toLowerCase() === currentAdminEmail.toLowerCase()) {
+      return res.status(400).json({ success: false, error: 'Vous ne pouvez pas supprimer votre propre compte en cours d\'utilisation.' });
+    }
+
+    await query('DELETE FROM admin_accounts WHERE id = $1', [adminId]);
+    console.log(`[ADMIN ACCOUNTS] Administrateur #${adminId} supprimé.`);
+    return res.json({ success: true, message: 'Compte administrateur supprimé avec succès.' });
+  } catch (error) {
+    console.error('Erreur suppression admin:', error);
+    return res.status(500).json({ success: false, error: 'Erreur lors de la suppression.' });
+  }
+});
+
+// ─── PUT /api/admin/profile (Update current admin email / name) ──────────────
+router.put('/profile', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const currentAdminEmail = (req as any).adminEmail;
+    const currentToken = (req as any).adminToken;
+    const { newEmail, newName, currentPassword } = req.body;
+
+    if (!currentPassword) {
+      return res.status(400).json({ success: false, error: 'Mot de passe actuel requis pour modifier votre profil.' });
+    }
+
+    // Authenticate current password
+    const authResult = await authenticateAdmin(currentAdminEmail, currentPassword);
+    if (!authResult.valid) {
+      return res.status(401).json({ success: false, error: 'Mot de passe actuel incorrect.' });
+    }
+
+    const cleanNewEmail = newEmail ? newEmail.trim().toLowerCase() : currentAdminEmail;
+    const cleanNewName = newName ? newName.trim() : null;
+
+    // Check if changing email and email is taken
+    if (cleanNewEmail !== currentAdminEmail) {
+      const existing = await query('SELECT id FROM admin_accounts WHERE LOWER(email) = $1', [cleanNewEmail]);
+      if (existing.rows.length > 0) {
+        return res.status(400).json({ success: false, error: 'Cette adresse email est déjà utilisée.' });
+      }
+    }
+
+    const result = await query(
+      `UPDATE admin_accounts
+       SET email = COALESCE($1, email),
+           name = COALESCE($2, name),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE LOWER(email) = $3
+       RETURNING id, email, name, role, updated_at`,
+      [cleanNewEmail, cleanNewName, currentAdminEmail]
+    );
+
+    // Update active session memory
+    const session = activeSessions.get(currentToken);
+    if (session) {
+      session.email = cleanNewEmail;
+      activeSessions.set(currentToken, session);
+    }
+
+    console.log(`[ADMIN PROFILE] Profil mis à jour : ${currentAdminEmail} -> ${cleanNewEmail}`);
+    return res.json({
+      success: true,
+      message: 'Profil administrateur mis à jour avec succès.',
+      admin: result.rows[0] || { email: cleanNewEmail, name: cleanNewName },
+    });
+  } catch (error) {
+    console.error('Erreur mise à jour profil admin:', error);
+    return res.status(500).json({ success: false, error: 'Erreur lors de la mise à jour du profil.' });
+  }
+});
+
+// ─── PUT /api/admin/change-password (Update current admin password) ──────────
+router.put('/change-password', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const currentAdminEmail = (req as any).adminEmail;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, error: 'Mot de passe actuel et nouveau mot de passe requis.' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ success: false, error: 'Le nouveau mot de passe doit comporter au moins 8 caractères.' });
+    }
+
+    // Verify current password
+    const authResult = await authenticateAdmin(currentAdminEmail, currentPassword);
+    if (!authResult.valid) {
+      return res.status(401).json({ success: false, error: 'Mot de passe actuel incorrect.' });
+    }
+
+    const newHash = sha256(newPassword);
+
+    await query(
+      `UPDATE admin_accounts
+       SET password_hash = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE LOWER(email) = $2`,
+      [newHash, currentAdminEmail]
+    );
+
+    console.log(`[ADMIN PASSWORD] Mot de passe mis à jour pour admin : ${currentAdminEmail}`);
+    return res.json({ success: true, message: 'Mot de passe modifié avec succès.' });
+  } catch (error) {
+    console.error('Erreur changement mot de passe admin:', error);
+    return res.status(500).json({ success: false, error: 'Erreur lors du changement de mot de passe.' });
+  }
+});
+
+// ─── GET /api/admin/accounts (Unified User & Driver Accounts Management) ────
+router.get('/accounts', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const usersResult = await query(
+      `SELECT u.id, u.public_id, u.name, u.email, u.phone, u.role, u.verification_status, u.avatar_url, u.wallet_balance, u.created_at,
+              d.id as driver_id, d.vehicle_type, d.vehicle_model, d.license_plate, d.color, d.vehicle_image, d.is_online, d.rating
+       FROM users u
+       LEFT JOIN drivers d ON d.user_id = u.id
+       ORDER BY u.created_at DESC`
+    );
+
+    const adminsResult = await query(
+      'SELECT id, email, name, role, created_at, updated_at FROM admin_accounts ORDER BY id ASC'
+    );
+
+    return res.json({
+      success: true,
+      users: usersResult.rows,
+      admins: adminsResult.rows,
+    });
+  } catch (error) {
+    console.error('Erreur listing comptes admin:', error);
+    return res.status(500).json({ success: false, error: 'Erreur lors du chargement des comptes.' });
+  }
+});
 
 // ─── POST /api/admin/toggle-simulation (protected) ───────────────────────────
 router.post('/toggle-simulation', requireAdminAuth, async (req: Request, res: Response) => {
@@ -215,4 +484,3 @@ router.get('/dashboard-stats', requireAdminAuth, async (req: Request, res: Respo
 });
 
 export default router;
-

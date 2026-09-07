@@ -312,7 +312,7 @@ const SignUp = () => {
             onPress={() => {
               setShowSuccessModal(false);
               if (role === "DRIVER") {
-                router.replace("/(driver)/dashboard" as any);
+                router.replace("/(auth)/driver-register" as any);
               } else {
                 router.replace("/(root)/(tabs)/home");
               }
