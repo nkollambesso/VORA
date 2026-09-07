@@ -215,7 +215,8 @@ const FindRide = () => {
               </TouchableOpacity>
             </View>
           </View>
-        </Modal>
+        </View>
+      </Modal>
       </RideLayout>
   );
 };
