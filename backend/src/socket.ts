@@ -242,6 +242,7 @@ export function setupSocketIO(io: any) {
           const driverInfo = driverRes.rows[0] || {};
           const sanitizedRide = {
             ...updatedRide,
+            driver_user_id: driverInfo.user_id || null, // Clerk user ID — requis pour WebRTC/VoIP
             driver_display_name: formatDisplayName(driverInfo.driver_name),
             driver_name: driverInfo.driver_name || "Chauffeur VORA",
             driver_public_id: driverInfo.driver_public_id || generatePublicId(),

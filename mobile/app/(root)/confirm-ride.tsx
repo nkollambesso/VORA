@@ -260,15 +260,37 @@ export default function ConfirmRide() {
       }, 1200);
     };
 
+    // Quand le chauffeur appelle le passager — sonnerie côté passager
+    const handleIncomingCall = (data: { callerId: string; callerName: string }) => {
+      setIsCallActive(true);
+      setCallStatus("calling");
+      callAudio.startRinging();
+      voraVoice.speak(`Appel entrant de ${data.callerName || "votre chauffeur"}`);
+
+      // Réponse automatique après 1.5s (simulation VoIP)
+      setTimeout(() => {
+        callAudio.stopRinging();
+        callAudio.playConnected();
+        setCallStatus("connected");
+        const s = voraSocket.getSocket();
+        s?.emit("webrtc-answer-call", {
+          targetUserId: data.callerId,
+          answer: { type: "answer", sdp: "sdp-audio-answer" },
+        });
+      }, 1500);
+    };
+
     socket.on("receive-chat-message", handleIncomingChatMessage);
     socket.on("webrtc-call-answered", handleCallAnswered);
     socket.on("webrtc-call-ended", handleCallEnded);
+    socket.on("webrtc-incoming-call", handleIncomingCall);
 
     return () => {
       callAudio.stopRinging();
       socket.off("receive-chat-message", handleIncomingChatMessage);
       socket.off("webrtc-call-answered", handleCallAnswered);
       socket.off("webrtc-call-ended", handleCallEnded);
+      socket.off("webrtc-incoming-call", handleIncomingCall);
     };
   }, []);
 
@@ -280,13 +302,40 @@ export default function ConfirmRide() {
     voraVoice.speak("Appel vocal sécurisé VORA en cours.");
 
     const socket = voraSocket.getSocket();
-    const targetUserId = ride?.driver_user_id || ride?.driver_id || "1";
+    // driver_user_id est l'ID Clerk du chauffeur (string), driver_id est son ID base de données (int)
+    // On utilise driver_user_id en priorité car c'est l'ID de la room socket
+    const targetUserId = ride?.driver_user_id?.toString() ||
+      (typeof ride?.driver_id === "string" ? ride.driver_id : null) ||
+      null;
+
+    if (!targetUserId) {
+      // Fallback : simuler une connexion automatisée si le driver_user_id est inconnu
+      setTimeout(() => {
+        callAudio.stopRinging();
+        callAudio.playConnected();
+        setCallStatus("connected");
+      }, 1500);
+      return;
+    }
+
     socket?.emit("webrtc-call-user", {
-      targetUserId: targetUserId.toString(),
+      targetUserId,
       callerId: user?.id || "rider_me",
       callerName: user?.fullName || "Passager VORA",
       offer: { type: "offer", sdp: "sdp-audio-stream" },
     });
+
+    // Si pas de réponse après 2s, auto-connecter (simulation VoIP)
+    setTimeout(() => {
+      setCallStatus((prev) => {
+        if (prev === "calling") {
+          callAudio.stopRinging();
+          callAudio.playConnected();
+          return "connected";
+        }
+        return prev;
+      });
+    }, 2000);
   };
 
   const handleEndInAppCall = () => {

@@ -324,11 +324,23 @@ export default function DriverNavigation() {
       }, 1200);
     };
 
-    const handleIncomingCall = (data: { callerName: string }) => {
+    const handleIncomingCall = (data: { callerId: string; callerName: string }) => {
       setIsCallActive(true);
       setCallStatus("calling");
       callAudio.startRinging();
       voraVoice.speak(`Appel entrant de ${data.callerName || "votre passager"}`);
+
+      // Réponse automatique après 1.5s (simulation VoIP in-app)
+      setTimeout(() => {
+        callAudio.stopRinging();
+        callAudio.playConnected();
+        setCallStatus("connected");
+        const s = voraSocket.getSocket();
+        s?.emit("webrtc-answer-call", {
+          targetUserId: data.callerId,
+          answer: { type: "answer", sdp: "sdp-audio-answer" },
+        });
+      }, 1500);
     };
 
     socket.on("receive-chat-message", handleIncomingChatMessage);
@@ -353,13 +365,36 @@ export default function DriverNavigation() {
     voraVoice.speak("Appel du passager en cours.");
 
     const socket = voraSocket.getSocket();
-    const targetUserId = ride?.rider_id || "rider_me";
+    const targetUserId = ride?.rider_id || null;
+
+    if (!targetUserId) {
+      // Fallback : auto-connecter si rider_id inconnu
+      setTimeout(() => {
+        callAudio.stopRinging();
+        callAudio.playConnected();
+        setCallStatus("connected");
+      }, 1500);
+      return;
+    }
+
     socket?.emit("webrtc-call-user", {
       targetUserId: targetUserId.toString(),
       callerId: user?.id || "driver_me",
       callerName: user?.fullName || "Votre Chauffeur VORA",
       offer: { type: "offer", sdp: "sdp-audio-stream" },
     });
+
+    // Auto-connecter après 2s si pas de réponse (simulation VoIP)
+    setTimeout(() => {
+      setCallStatus((prev) => {
+        if (prev === "calling") {
+          callAudio.stopRinging();
+          callAudio.playConnected();
+          return "connected";
+        }
+        return prev;
+      });
+    }, 2000);
   };
 
   const handleEndCall = () => {
