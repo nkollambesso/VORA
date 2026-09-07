@@ -20,7 +20,7 @@ import { clearAdminToken, getAdminToken } from "@/lib/adminAuth";
 
 const BACKEND_URL = getBackendUrl();
 
-type DashboardTab = "OVERVIEW" | "ACCOUNTS" | "ADMINS" | "SECURITY";
+type DashboardTab = "OVERVIEW" | "WALLET" | "SUPPORT" | "ACCOUNTS" | "ADMINS" | "SECURITY";
 
 export default function AdminDashboard() {
   const { width } = useWindowDimensions();
@@ -36,6 +36,18 @@ export default function AdminDashboard() {
   const [disputes, setDisputes] = useState<any[]>([]);
   const [adminEmail, setAdminEmail] = useState<string>("");
   const [adminName, setAdminName] = useState<string>("Administrateur VORA");
+
+  // ─── Data: Admin Wallet & Commissions ──────────────────────────────────────
+  const [walletInfo, setWalletInfo] = useState<any>(null);
+  const [recentCommissions, setRecentCommissions] = useState<any[]>([]);
+  const [rateInput, setRateInput] = useState<string>("10");
+  const [updatingRate, setUpdatingRate] = useState<boolean>(false);
+  const [showRateModal, setShowRateModal] = useState<boolean>(false);
+
+  // ─── Data: Support Calls & Social Assistants ───────────────────────────────
+  const [supportCalls, setSupportCalls] = useState<any[]>([]);
+  const [loadingSupport, setLoadingSupport] = useState<boolean>(false);
+  const [supportFilter, setSupportFilter] = useState<string>("ALL");
 
   // ─── Data: Accounts & Admins ───────────────────────────────────────────────
   const [adminsList, setAdminsList] = useState<any[]>([]);
@@ -141,6 +153,165 @@ export default function AdminDashboard() {
     }
   };
 
+  // ─── Fetch Admin Wallet & Commissions ──────────────────────────────────────
+  const fetchWalletData = async () => {
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${BACKEND_URL}/api/admin/wallet`, { headers });
+      const data = await res.json();
+      if (data.success) {
+        setWalletInfo(data.wallet);
+        setRecentCommissions(data.recent_commissions || []);
+        if (data.wallet?.commission_rate) {
+          setRateInput(String(Math.round(parseFloat(data.wallet.commission_rate) * 100)));
+        }
+      }
+    } catch (err) {
+      console.error("Erreur chargement wallet:", err);
+    }
+  };
+
+  // ─── Fetch Support Calls & Conflicts ───────────────────────────────────────
+  const fetchSupportCalls = async () => {
+    setLoadingSupport(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${BACKEND_URL}/api/admin/support-calls`, { headers });
+      const data = await res.json();
+      if (data.success) {
+        setSupportCalls(data.calls || []);
+      }
+    } catch (err) {
+      console.error("Erreur chargement support calls:", err);
+    } finally {
+      setLoadingSupport(false);
+    }
+  };
+
+  // ─── Update Commission Rate ────────────────────────────────────────────────
+  const handleUpdateCommissionRate = async () => {
+    const parsed = parseFloat(rateInput);
+    if (isNaN(parsed) || parsed < 0 || parsed > 50) {
+      Alert.alert("Taux invalide", "Veuillez saisir un pourcentage compris entre 0% et 50%.");
+      return;
+    }
+    setUpdatingRate(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${BACKEND_URL}/api/admin/wallet/rate`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ rate: parsed / 100 }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        Alert.alert("Taux mis à jour", data.message || `Commission fixée à ${parsed}%.`);
+        setShowRateModal(false);
+        fetchWalletData();
+        fetchStats();
+      } else {
+        Alert.alert("Erreur", data.error || "Impossible de mettre à jour le taux.");
+      }
+    } catch {
+      Alert.alert("Erreur", "Erreur réseau lors de la mise à jour du taux.");
+    } finally {
+      setUpdatingRate(false);
+    }
+  };
+
+  // ─── Block / Unblock User Account ──────────────────────────────────────────
+  const handleToggleBlockUser = (userId: string, shouldBlock: boolean, userName: string) => {
+    Alert.alert(
+      shouldBlock ? "Bloquer le compte" : "Débloquer le compte",
+      `Êtes-vous certain de vouloir ${shouldBlock ? "suspendre" : "réactiver"} le compte de ${userName} ?`,
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: shouldBlock ? "Bloquer" : "Débloquer",
+          style: shouldBlock ? "destructive" : "default",
+          onPress: async () => {
+            try {
+              const headers = await getAuthHeaders();
+              const res = await fetch(`${BACKEND_URL}/api/admin/users/${userId}/block`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ isBlocked: shouldBlock }),
+              });
+              const data = await res.json();
+              if (data.success) {
+                Alert.alert("Statut mis à jour", data.message);
+                fetchAccountsAndAdmins();
+                fetchStats();
+              } else {
+                Alert.alert("Erreur", data.error || "Action impossible.");
+              }
+            } catch {
+              Alert.alert("Erreur", "Problème réseau lors du blocage.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // ─── Support Call Status Update ────────────────────────────────────────────
+  const handleUpdateSupportCallStatus = async (callId: number, newStatus: string) => {
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${BACKEND_URL}/api/admin/support-calls/${callId}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ status: newStatus, assigned_to: adminEmail }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        Alert.alert("Succès", `Appel #${callId} mis à jour : ${newStatus}.`);
+        fetchSupportCalls();
+        fetchStats();
+      } else {
+        Alert.alert("Erreur", data.error || "Impossible de mettre à jour l'appel.");
+      }
+    } catch {
+      Alert.alert("Erreur", "Erreur réseau lors de la mise à jour.");
+    }
+  };
+
+  // ─── Reset / Wipe Database ─────────────────────────────────────────────────
+  const handleResetDatabase = () => {
+    Alert.alert(
+      "Réinitialiser la Base de Données",
+      "ATTENTION : Cette action supprimera toutes les courses, chauffeurs, litiges et comptes usagers de test. Voulez-vous continuer ?",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Vider la Base",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const headers = await getAuthHeaders();
+              const res = await fetch(`${BACKEND_URL}/api/admin/reset-database`, {
+                method: "POST",
+                headers,
+              });
+              const data = await res.json();
+              if (data.success) {
+                Alert.alert("Base de données vidée", data.message);
+                fetchStats();
+                fetchAccountsAndAdmins();
+                fetchWalletData();
+                fetchSupportCalls();
+              } else {
+                Alert.alert("Erreur", data.error || "Échec de réinitialisation.");
+              }
+            } catch {
+              Alert.alert("Erreur", "Erreur réseau.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   useEffect(() => {
     // Verify admin token on mount before loading data
     const init = async () => {
@@ -166,6 +337,8 @@ export default function AdminDashboard() {
       } catch {}
       fetchStats();
       fetchAccountsAndAdmins();
+      fetchWalletData();
+      fetchSupportCalls();
     };
     init();
   }, []);
@@ -404,6 +577,8 @@ export default function AdminDashboard() {
               setRefreshing(true);
               fetchStats();
               fetchAccountsAndAdmins();
+              fetchWalletData();
+              fetchSupportCalls();
             }}
           />
         }
@@ -454,6 +629,24 @@ export default function AdminDashboard() {
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={[styles.tabItem, activeTab === "WALLET" && styles.tabItemActive]}
+            onPress={() => setActiveTab("WALLET")}
+          >
+            <Text style={[styles.tabText, activeTab === "WALLET" && styles.tabTextActive]}>
+              Commissions
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === "SUPPORT" && styles.tabItemActive]}
+            onPress={() => setActiveTab("SUPPORT")}
+          >
+            <Text style={[styles.tabText, activeTab === "SUPPORT" && styles.tabTextActive]}>
+              Assistance ({supportCalls.filter((c: any) => c.status === "PENDING").length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.tabItem, activeTab === "ACCOUNTS" && styles.tabItemActive]}
             onPress={() => setActiveTab("ACCOUNTS")}
           >
@@ -467,7 +660,7 @@ export default function AdminDashboard() {
             onPress={() => setActiveTab("ADMINS")}
           >
             <Text style={[styles.tabText, activeTab === "ADMINS" && styles.tabTextActive]}>
-              Comptes Admin ({adminsList.length})
+              Équipe ({adminsList.length})
             </Text>
           </TouchableOpacity>
 
@@ -476,7 +669,7 @@ export default function AdminDashboard() {
             onPress={() => setActiveTab("SECURITY")}
           >
             <Text style={[styles.tabText, activeTab === "SECURITY" && styles.tabTextActive]}>
-              Mon Profil & Sécurité
+              Sécurité
             </Text>
           </TouchableOpacity>
         </View>
@@ -563,6 +756,22 @@ export default function AdminDashboard() {
                     sub="Volume de la plateforme"
                     accent
                   />
+                  <StatCard
+                    label="COMMISSIONS ADMIN"
+                    value={`${(stats?.adminCommissions ?? 0).toLocaleString()} FCFA`}
+                    sub={`Taux actif : ${((stats?.commissionRate ?? 0.10) * 100).toFixed(0)}% par course`}
+                    accent
+                  />
+                  <StatCard
+                    label="APPELS D'AIDE"
+                    value={stats?.pendingSupportCalls ?? 0}
+                    sub="En attente d'arbitrage"
+                  />
+                  <StatCard
+                    label="COMPTES BLOQUÉS"
+                    value={stats?.blockedUsers ?? 0}
+                    sub="Usagers suspendus"
+                  />
                 </View>
               )}
 
@@ -571,19 +780,35 @@ export default function AdminDashboard() {
               <View style={[styles.actionsGrid, isWide && styles.actionsGridWide]}>
                 <TouchableOpacity
                   style={styles.actionCard}
-                  onPress={() => router.push("/(root)/(tabs)/home")}
+                  onPress={() => setActiveTab("WALLET")}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.actionCardTitle}>App Passager</Text>
-                  <Text style={styles.actionCardSub}>Voir l'interface utilisateur</Text>
+                  <Text style={styles.actionCardTitle}>Portefeuille Commissions</Text>
+                  <Text style={styles.actionCardSub}>Gérer le solde & pourcentage</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionCard}
-                  onPress={() => router.push("/(driver)/dashboard" as any)}
+                  onPress={() => setActiveTab("SUPPORT")}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.actionCardTitle}>Espace Chauffeur</Text>
-                  <Text style={styles.actionCardSub}>Tableau de bord chauffeur</Text>
+                  <Text style={styles.actionCardTitle}>Assistance & Conflits</Text>
+                  <Text style={styles.actionCardSub}>Appels d'aide usagers</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionCard}
+                  onPress={() => setActiveTab("ACCOUNTS")}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.actionCardTitle}>Gestion des Comptes</Text>
+                  <Text style={styles.actionCardSub}>Bloquer / Débloquer usagers</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionCard, { borderColor: "#FCA5A5", backgroundColor: "#FEF2F2" }]}
+                  onPress={handleResetDatabase}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.actionCardTitle, { color: "#DC2626" }]}>Vider la Base (Reset)</Text>
+                  <Text style={[styles.actionCardSub, { color: "#991B1B" }]}>Réinitialiser les tests</Text>
                 </TouchableOpacity>
               </View>
 
@@ -659,6 +884,186 @@ export default function AdminDashboard() {
             </>
           )}
 
+          {/* TAB: WALLET & COMMISSIONS */}
+          {activeTab === "WALLET" && (
+            <View>
+              <Text style={styles.sectionTitle}>Portefeuille Commissions Administrateur</Text>
+              <Text style={styles.sectionSubtitle}>
+                Solde perçu automatiquement par prélèvement de votre pourcentage sur chaque course payée.
+              </Text>
+
+              {/* Commission Balance Hero Card */}
+              <View style={styles.walletHeroCard}>
+                <View style={styles.walletHeroHeader}>
+                  <Text style={styles.walletHeroLabel}>SOLDE DES COMMISSIONS CUMULÉES</Text>
+                  <TouchableOpacity
+                    style={styles.editRateBtn}
+                    onPress={() => setShowRateModal(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.editRateBtnText}>
+                      Modifier Taux ({((walletInfo?.commission_rate ? parseFloat(walletInfo.commission_rate) : (stats?.commissionRate ?? 0.10)) * 100).toFixed(0)}%)
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.walletHeroAmount}>
+                  {((walletInfo?.total_commissions ?? stats?.adminCommissions) ?? 0).toLocaleString()} FCFA
+                </Text>
+                <Text style={styles.walletHeroSub}>
+                  Prélèvement automatique configuré à {((walletInfo?.commission_rate ? parseFloat(walletInfo.commission_rate) : (stats?.commissionRate ?? 0.10)) * 100).toFixed(0)}% sur chaque paiement de chauffeur.
+                </Text>
+              </View>
+
+              {/* Commissions Log */}
+              <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Historique des Commissions Prélevées</Text>
+              {recentCommissions.length === 0 ? (
+                <View style={styles.emptyBox}>
+                  <Text style={styles.emptyText}>
+                    Aucune commission prélevée pour le moment. Les montants apparaîtront dès la clôture et le paiement d'une course.
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ gap: 10 }}>
+                  {recentCommissions.map((c: any, idx: number) => (
+                    <View key={c.id || idx} style={styles.commissionCard}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.commissionRideId}>Course #{c.ride_id || idx + 1}</Text>
+                        <Text style={styles.commissionDate}>
+                          {c.created_at ? new Date(c.created_at).toLocaleString() : "Date récente"}
+                        </Text>
+                        <Text style={styles.commissionMeta}>
+                          Course : {(c.ride_fare ?? 0).toLocaleString()} FCFA • Taux : {((c.commission_rate ?? 0.1) * 100).toFixed(0)}%
+                        </Text>
+                      </View>
+                      <View style={styles.commissionAmountBox}>
+                        <Text style={styles.commissionAmountText}>
+                          +{(c.commission_amount ?? 0).toLocaleString()} FCFA
+                        </Text>
+                        <Text style={styles.commissionBadge}>PERÇU</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* TAB: SUPPORT & CONFLICTS */}
+          {activeTab === "SUPPORT" && (
+            <View>
+              <View style={styles.rowBetween}>
+                <View>
+                  <Text style={styles.sectionTitle}>Appels d'Aide & Conflits Usagers</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Prise en charge des réclamations et assistance sociale en direct.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.refreshSupportBtn}
+                  onPress={fetchSupportCalls}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.refreshSupportBtnText}>Actualiser</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Filter Pills */}
+              <View style={styles.filterRow}>
+                {["ALL", "PENDING", "ASSIGNED", "RESOLVED"].map((f) => (
+                  <TouchableOpacity
+                    key={f}
+                    style={[styles.filterPill, supportFilter === f && styles.filterPillActive]}
+                    onPress={() => setSupportFilter(f)}
+                  >
+                    <Text style={[styles.filterPillText, supportFilter === f && styles.filterPillTextActive]}>
+                      {f === "ALL" ? "Tous" : f === "PENDING" ? "En Attente" : f === "ASSIGNED" ? "En Cours" : "Résolus"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {loadingSupport ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator size="small" color="#0284C7" />
+                  <Text style={styles.loadingText}>Chargement des appels d'aide...</Text>
+                </View>
+              ) : supportCalls.length === 0 ? (
+                <View style={styles.emptyBox}>
+                  <Text style={styles.emptyText}>Aucun appel d'aide enregistré pour l'instant.</Text>
+                </View>
+              ) : (
+                <View style={{ gap: 12 }}>
+                  {supportCalls
+                    .filter((c: any) => supportFilter === "ALL" || c.status === supportFilter)
+                    .map((call: any) => (
+                      <View key={call.id} style={styles.supportCard}>
+                        <View style={styles.supportHeader}>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                              <Text style={styles.supportUserName}>{call.user_name || call.user_full_name || "Usager VORA"}</Text>
+                              <View style={[
+                                styles.badge,
+                                call.status === "PENDING" ? { backgroundColor: "#FEF3C7", borderColor: "#FCD34D" }
+                                : call.status === "ASSIGNED" ? { backgroundColor: "#DBEAFE", borderColor: "#93C5FD" }
+                                : { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }
+                              ]}>
+                                <Text style={[
+                                  styles.badgeText,
+                                  call.status === "PENDING" ? { color: "#D97706", fontWeight: "800" }
+                                  : call.status === "ASSIGNED" ? { color: "#2563EB", fontWeight: "800" }
+                                  : { color: "#16A34A", fontWeight: "800" }
+                                ]}>
+                                  {call.status === "PENDING" ? "EN ATTENTE" : call.status === "ASSIGNED" ? "EN COURS" : "RÉSOLU"}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={styles.supportUserMeta}>
+                              Rôle : {call.user_role || call.user_type || "PASSAGER"} • Tel : {call.caller_phone || "Non renseigné"} • Usager #{call.user_id}
+                            </Text>
+                            <Text style={styles.supportDate}>
+                              {call.created_at ? new Date(call.created_at).toLocaleString() : "Récent"}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.supportReasonBox}>
+                          <Text style={styles.supportReasonLabel}>MOTIF DU CONFLIT / APPEL :</Text>
+                          <Text style={styles.supportReasonText}>{call.reason}</Text>
+                        </View>
+
+                        {call.assigned_to && (
+                          <Text style={styles.supportAssignedText}>
+                            Pris en charge par : {call.assigned_to}
+                          </Text>
+                        )}
+
+                        {call.status !== "RESOLVED" && (
+                          <View style={styles.supportActionsRow}>
+                            {call.status === "PENDING" && (
+                              <TouchableOpacity
+                                style={styles.assignCallBtn}
+                                onPress={() => handleUpdateSupportCallStatus(call.id, "ASSIGNED")}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={styles.assignCallBtnText}>Prendre en charge</Text>
+                              </TouchableOpacity>
+                            )}
+                            <TouchableOpacity
+                              style={styles.resolveCallBtn}
+                              onPress={() => handleUpdateSupportCallStatus(call.id, "RESOLVED")}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={styles.resolveCallBtnText}>Marquer Résolu</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </View>
+                    ))}
+                </View>
+              )}
+            </View>
+          )}
+
           {/* TAB 2: USERS & DRIVERS ACCOUNTS */}
           {activeTab === "ACCOUNTS" && (
             <View>
@@ -681,27 +1086,52 @@ export default function AdminDashboard() {
                   {usersList.map((u: any) => (
                     <View key={u.id} style={styles.accountCard}>
                       <View style={styles.accountHeader}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.accountName}>{u.name || "Utilisateur"}</Text>
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                            <Text style={styles.accountName}>{u.name || "Utilisateur"}</Text>
+                            {u.is_blocked ? (
+                              <View style={[styles.badge, { backgroundColor: "#FEE2E2", borderColor: "#FCA5A5" }]}>
+                                <Text style={[styles.badgeText, { color: "#DC2626", fontWeight: "800" }]}>SUSPENDU</Text>
+                              </View>
+                            ) : (
+                              <View style={[styles.badge, { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }]}>
+                                <Text style={[styles.badgeText, { color: "#16A34A", fontWeight: "800" }]}>ACTIF</Text>
+                              </View>
+                            )}
+                          </View>
                           <Text style={styles.accountEmail}>{u.email}</Text>
                           <Text style={styles.accountPhone}>
                             ID Public : {u.public_id || "N/A"} {u.phone ? `• Tel : ${u.phone}` : ""}
                           </Text>
                         </View>
-                        <View
-                          style={[
-                            styles.badge,
-                            u.role === "DRIVER" ? styles.badgePrimary : styles.badgeMuted,
-                          ]}
-                        >
-                          <Text
+                        <View style={{ alignItems: "flex-end", gap: 8 }}>
+                          <View
                             style={[
-                              styles.badgeText,
-                              u.role === "DRIVER" ? styles.badgeTextPrimary : styles.badgeTextMuted,
+                              styles.badge,
+                              u.role === "DRIVER" ? styles.badgePrimary : styles.badgeMuted,
                             ]}
                           >
-                            {u.role}
-                          </Text>
+                            <Text
+                              style={[
+                                styles.badgeText,
+                                u.role === "DRIVER" ? styles.badgeTextPrimary : styles.badgeTextMuted,
+                              ]}
+                            >
+                              {u.role}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            style={[
+                              styles.userBlockBtn,
+                              u.is_blocked ? styles.userUnblockBtn : styles.userBlockBtnActive,
+                            ]}
+                            onPress={() => handleToggleBlockUser(u.id, !u.is_blocked, u.name || u.email)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={[styles.userBlockBtnText, u.is_blocked && { color: "#0284C7" }]}>
+                              {u.is_blocked ? "Débloquer" : "Bloquer"}
+                            </Text>
+                          </TouchableOpacity>
                         </View>
                       </View>
 
@@ -770,8 +1200,20 @@ export default function AdminDashboard() {
                           Créé le {new Date(adm.created_at).toLocaleDateString()}
                         </Text>
                       </View>
-                      <View style={[styles.badge, styles.badgePrimary]}>
-                        <Text style={[styles.badgeText, styles.badgeTextPrimary]}>{adm.role}</Text>
+                      <View style={[
+                        styles.badge,
+                        adm.role === "SOCIAL_ASSISTANT"
+                          ? { backgroundColor: "#F3E8FF", borderColor: "#D8B4FE" }
+                          : styles.badgePrimary,
+                      ]}>
+                        <Text style={[
+                          styles.badgeText,
+                          adm.role === "SOCIAL_ASSISTANT"
+                            ? { color: "#7E22CE", fontWeight: "800" }
+                            : styles.badgeTextPrimary,
+                        ]}>
+                          {adm.role === "SOCIAL_ASSISTANT" ? "ASSISTANT SOCIAL" : "ADMINISTRATEUR"}
+                        </Text>
                       </View>
                     </View>
 
@@ -924,6 +1366,42 @@ export default function AdminDashboard() {
               placeholder="ex: Jean Dupont"
             />
 
+            <Text style={styles.inputLabel}>RÔLE DU COMPTE</Text>
+            <View style={styles.modalRoleRow}>
+              <TouchableOpacity
+                style={[
+                  styles.modalRoleBtn,
+                  newAdminRole === "ADMIN" && styles.modalRoleBtnActive,
+                ]}
+                onPress={() => setNewAdminRole("ADMIN")}
+              >
+                <Text
+                  style={[
+                    styles.modalRoleBtnText,
+                    newAdminRole === "ADMIN" && styles.modalRoleBtnTextActive,
+                  ]}
+                >
+                  Administrateur
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalRoleBtn,
+                  newAdminRole === "SOCIAL_ASSISTANT" && styles.modalRoleBtnActive,
+                ]}
+                onPress={() => setNewAdminRole("SOCIAL_ASSISTANT")}
+              >
+                <Text
+                  style={[
+                    styles.modalRoleBtnText,
+                    newAdminRole === "SOCIAL_ASSISTANT" && styles.modalRoleBtnTextActive,
+                  ]}
+                >
+                  Assistant Social
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             <View style={styles.modalActionsRow}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
@@ -937,7 +1415,47 @@ export default function AdminDashboard() {
                 disabled={submittingAdmin}
               >
                 <Text style={styles.modalSubmitText}>
-                  {submittingAdmin ? "Création..." : "Créer l'administrateur"}
+                  {submittingAdmin ? "Création..." : "Créer le compte"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal: Edit Commission Rate */}
+      <Modal visible={showRateModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Modifier le Taux de Commission</Text>
+            <Text style={styles.modalSub}>
+              Définissez le pourcentage perçu par la plateforme VORA sur chaque course payée par les chauffeurs (entre 0% et 50%).
+            </Text>
+
+            <Text style={styles.inputLabel}>POURCENTAGE DE COMMISSION (%)</Text>
+            <TextInput
+              style={styles.inputField}
+              value={rateInput}
+              onChangeText={setRateInput}
+              placeholder="Ex: 10"
+              keyboardType="numeric"
+              maxLength={3}
+            />
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowRateModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSubmitBtn, updatingRate && { opacity: 0.6 }]}
+                onPress={handleUpdateCommissionRate}
+                disabled={updatingRate}
+              >
+                <Text style={styles.modalSubmitText}>
+                  {updatingRate ? "Mise à jour..." : "Enregistrer le Taux"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1527,5 +2045,265 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
+  },
+  // ─── Block / Unblock Styles ───
+  userBlockBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  userBlockBtnActive: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FCA5A5",
+  },
+  userUnblockBtn: {
+    backgroundColor: "#F0F9FF",
+    borderColor: "#BAE6FD",
+  },
+  userBlockBtnText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#DC2626",
+  },
+  // ─── Wallet & Commission Styles ───
+  walletHeroCard: {
+    backgroundColor: "#0F172A",
+    borderRadius: 18,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "#1E293B",
+    marginBottom: 16,
+  },
+  walletHeroHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  walletHeroLabel: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#94A3B8",
+    letterSpacing: 1,
+  },
+  editRateBtn: {
+    backgroundColor: "rgba(14, 165, 233, 0.2)",
+    borderWidth: 1,
+    borderColor: "#0EA5E9",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  editRateBtnText: {
+    color: "#38BDF8",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  walletHeroAmount: {
+    fontSize: 32,
+    fontWeight: "900",
+    color: "#38BDF8",
+    marginBottom: 8,
+  },
+  walletHeroSub: {
+    fontSize: 13,
+    color: "#94A3B8",
+  },
+  commissionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  commissionRideId: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 2,
+  },
+  commissionDate: {
+    fontSize: 11,
+    color: "#64748B",
+    marginBottom: 4,
+  },
+  commissionMeta: {
+    fontSize: 12,
+    color: "#334155",
+    fontWeight: "600",
+  },
+  commissionAmountBox: {
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  commissionAmountText: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#16A34A",
+  },
+  commissionBadge: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#16A34A",
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  // ─── Support & Conflict Styles ───
+  refreshSupportBtn: {
+    backgroundColor: "#0284C7",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  refreshSupportBtnText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  filterRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginVertical: 14,
+    flexWrap: "wrap",
+  },
+  filterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  filterPillActive: {
+    backgroundColor: "#0284C7",
+    borderColor: "#0284C7",
+  },
+  filterPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  filterPillTextActive: {
+    color: "#FFFFFF",
+  },
+  supportCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  supportHeader: {
+    marginBottom: 12,
+  },
+  supportUserName: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  supportUserMeta: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  supportDate: {
+    fontSize: 11,
+    color: "#94A3B8",
+    marginTop: 2,
+  },
+  supportReasonBox: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: "#0284C7",
+  },
+  supportReasonLabel: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#64748B",
+    marginBottom: 4,
+  },
+  supportReasonText: {
+    fontSize: 13,
+    color: "#1E293B",
+    lineHeight: 18,
+  },
+  supportAssignedText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#7E22CE",
+    marginBottom: 10,
+  },
+  supportActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+  },
+  assignCallBtn: {
+    flex: 1,
+    backgroundColor: "#DBEAFE",
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#93C5FD",
+  },
+  assignCallBtnText: {
+    color: "#1D4ED8",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  resolveCallBtn: {
+    flex: 1,
+    backgroundColor: "#DCFCE7",
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+  },
+  resolveCallBtnText: {
+    color: "#15803D",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  // ─── Modal Role Selector ───
+  modalRoleRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 16,
+  },
+  modalRoleBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+  },
+  modalRoleBtnActive: {
+    borderColor: "#0284C7",
+    backgroundColor: "#F0F9FF",
+  },
+  modalRoleBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  modalRoleBtnTextActive: {
+    color: "#0284C7",
+    fontWeight: "900",
   },
 });

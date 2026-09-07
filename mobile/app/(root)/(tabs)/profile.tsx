@@ -1,4 +1,4 @@
-import { useClerkUser } from "@/lib/useClerkSafe";
+import { useClerkUser, useClerkAuth } from "@/lib/useClerkSafe";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -34,6 +34,13 @@ const Profile = () => {
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
   const { user } = useClerkUser();
+  const { signOut } = useClerkAuth();
+
+  const handleSignOut = () => {
+    signOut();
+    router.replace("/(auth)/sign-in");
+  };
+
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
   const [gender, setGender] = useState<"MALE" | "FEMALE" | "OTHER">("MALE");
   const [showAvatarModal, setShowAvatarModal] = useState(false);
@@ -414,6 +421,15 @@ const Profile = () => {
             placeholder={user?.primaryPhoneNumber?.phoneNumber || "+237 6XX XX XX XX"}
             editable={false}
           />
+
+          <TouchableOpacity
+            style={styles.profileLogoutBtn}
+            onPress={handleSignOut}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="log-out-outline" size={20} color="#DC2626" style={{ marginRight: 8 }} />
+            <Text style={styles.profileLogoutText}>Se Déconnecter</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -1023,5 +1039,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: "#64748b",
+  },
+  profileLogoutBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FEE2E2",
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+  },
+  profileLogoutText: {
+    color: "#DC2626",
+    fontSize: 15,
+    fontWeight: "700",
   },
 });

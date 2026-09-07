@@ -96,6 +96,28 @@ Elle combine un **Frontend Web & Mobile sous React Native & Expo Router** (`/mob
 - Bouton d'annulation intégré dans l'écran de suivi passager tant que la course est au statut `ACCEPTED`.
 - Calcul automatique d'une pénalité de 500 FCFA déduite du portefeuille passager si l'annulation intervient plus de 2 minutes après l'acceptation par le chauffeur.
 
+### 14. Suspension & Déblocage des Comptes Usagers
+- L'administrateur peut à tout moment suspendre ou réactiver le compte d'un passager ou d'un chauffeur suspect.
+- Tout compte suspendu est immédiatement bloqué côté serveur : interdiction de commander, d'accepter des courses ou de synchroniser son profil (erreur HTTP 403 avec message explicatif).
+- Bouton d'action direct dans l'onglet *Comptes Usagers* du tableau de bord d'administration.
+
+### 15. Portefeuille Commissions Administrateur en Temps Réel
+- Un portefeuille dédié collecte automatiquement le pourcentage de commission de la plateforme sur chaque course payée (par défaut 10%).
+- Onglet *Commissions & Solde* affichant le montant total perçu, l'historique détaillé des prélèvements par course et un outil d'ajustement du taux de commission (entre 0% et 50%).
+- Crédit automatique effectué lors de la clôture mutuelle ou de l'auto-confirmation de fin de course.
+
+### 16. Assistants Sociaux & Gestion des Conflits / Appels d'Aide
+- Création de profils dédiés aux **Assistants Sociaux** (`SOCIAL_ASSISTANT`) au sein de l'équipe d'administration.
+- Onglet *Assistance & Conflits* centralisant les appels d'aide et réclamations des usagers.
+- Suivi du cycle de vie des incidents : `EN ATTENTE` -> `EN COURS` (assigné à un assistant social) -> `RÉSOLU`.
+
+### 17. Déconnexion Sécurisée & Navigation Verrouillée sur `/sign-in`
+- Lorsqu'un utilisateur (passager, chauffeur ou administrateur) se déconnecte, l'historique est réinitialisé et la navigation est verrouillée sur la page de connexion unique (`/(auth)/sign-in`).
+- Les gardes de navigation empêchent tout retour arrière vers les écrans protégés sans ré-authentification préalable.
+
+### 18. Réinitialisation & Nettoyage Sécurisé de la Base de Données
+- Option sécurisée permettant à l'administrateur de vider l'ensemble des données de test (courses, chauffeurs, usagers, litiges, alertes) tout en préservant l'intégrité de la structure et les comptes administrateurs.
+
 ---
 
 ## Structure du Projet

@@ -10,6 +10,16 @@ router.post('/', async (req: Request, res: Response) => {
     const { id, name, email, phone, role, avatar_url } = req.body;
     const newPublicId = generatePublicId();
 
+    // Vérifier si le compte est suspendu
+    const existingCheck = await query(`SELECT is_blocked FROM users WHERE id = $1`, [id]);
+    if (existingCheck.rows.length > 0 && existingCheck.rows[0].is_blocked) {
+      return res.status(403).json({
+        success: false,
+        is_blocked: true,
+        error: 'Votre compte a été suspendu par un administrateur VORA.',
+      });
+    }
+
     const upsertQuery = `
       INSERT INTO users (id, public_id, name, email, phone, role, avatar_url)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -92,6 +102,19 @@ router.get('/:id', async (req: Request, res: Response) => {
 
     const display_name = formatDisplayName(user.name || 'Utilisateur');
 
+    if (user.is_blocked) {
+      return res.status(403).json({
+        success: false,
+        is_blocked: true,
+        error: 'Votre compte a été suspendu par un administrateur VORA.',
+        user: {
+          ...user,
+          is_blocked: true,
+          display_name,
+        },
+      });
+    }
+
     return res.json({
       success: true,
       user: {
@@ -99,6 +122,7 @@ router.get('/:id', async (req: Request, res: Response) => {
         wallet_balance: Number(user.wallet_balance) || 0,
         cancellation_debt: Number(user.cancellation_debt) || 0,
         verification_status: user.verification_status || 'unverified',
+        is_blocked: !!user.is_blocked,
         display_name,
       },
     });

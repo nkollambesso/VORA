@@ -7,11 +7,12 @@ CREATE TABLE IF NOT EXISTS users (
   name VARCHAR(255) NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
   phone VARCHAR(50),
-  role VARCHAR(50) DEFAULT 'PASSENGER', -- PASSENGER | DRIVER | ADMIN | SUPER_ADMIN
+  role VARCHAR(50) DEFAULT 'PASSENGER', -- PASSENGER | DRIVER | ADMIN | SUPER_ADMIN | SOCIAL_ASSISTANT
   verification_status VARCHAR(50) DEFAULT 'unverified', -- unverified | pending | verified | rejected
   avatar_url TEXT,
   wallet_balance INT DEFAULT 0,
   cancellation_debt INT DEFAULT 0,
+  is_blocked BOOLEAN DEFAULT FALSE, -- Compte bloqué par un administrateur
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -115,8 +116,35 @@ CREATE TABLE IF NOT EXISTS admin_accounts (
   email VARCHAR(255) UNIQUE NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   name VARCHAR(255) NOT NULL DEFAULT 'Administrateur VORA',
-  role VARCHAR(50) DEFAULT 'ADMIN', -- ADMIN | SUPER_ADMIN
+  role VARCHAR(50) DEFAULT 'ADMIN', -- ADMIN | SUPER_ADMIN | SOCIAL_ASSISTANT
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 8. Table Portefeuille Commissions Administrateur
+CREATE TABLE IF NOT EXISTS admin_wallet (
+  id SERIAL PRIMARY KEY,
+  admin_email VARCHAR(255) UNIQUE NOT NULL,
+  total_commissions INT DEFAULT 0, -- Somme totale des commissions FCFA recues
+  commission_rate NUMERIC(5,4) DEFAULT 0.1000, -- 10% par defaut
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Valeur par defaut du portefeuille admin principal
+INSERT INTO admin_wallet (admin_email, total_commissions, commission_rate)
+VALUES ('admin@vora.cm', 0, 0.1000)
+ON CONFLICT (admin_email) DO NOTHING;
+
+-- 9. Table Appels d'aide / Assistance Sociale
+CREATE TABLE IF NOT EXISTS support_calls (
+  id SERIAL PRIMARY KEY,
+  user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+  user_name VARCHAR(255),
+  user_role VARCHAR(50),
+  reason TEXT NOT NULL,
+  status VARCHAR(50) DEFAULT 'PENDING', -- PENDING | ASSIGNED | RESOLVED | CLOSED
+  assigned_to VARCHAR(255), -- email de l'assistant social assigne
+  ride_id VARCHAR(100) REFERENCES rides(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  resolved_at TIMESTAMP WITH TIME ZONE
+);

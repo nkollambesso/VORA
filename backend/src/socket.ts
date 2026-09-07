@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { query } from './db';
 import { formatDisplayName, generatePublicId } from './utils/anonymize';
+import { creditAdminCommission } from './routes/admin';
 
 interface DriverLocation {
   driverId: number;
@@ -385,6 +386,14 @@ export function setupSocketIO(io: any) {
                     await query(`UPDATE drivers SET total_rides = total_rides + 1 WHERE id = $1`, [completedRide.driver_id]);
                   }
 
+                  if (completedRide.fare_fcfa) {
+                    try {
+                      await creditAdminCommission(parseFloat(completedRide.fare_fcfa));
+                    } catch (cErr) {
+                      console.error('Erreur crédit commission admin:', cErr);
+                    }
+                  }
+
                   const payload = {
                     ride: completedRide,
                     autoConfirmed: true,
@@ -429,6 +438,14 @@ export function setupSocketIO(io: any) {
 
           if (completedRide.driver_id) {
             await query(`UPDATE drivers SET total_rides = total_rides + 1 WHERE id = $1`, [completedRide.driver_id]);
+          }
+
+          if (completedRide.fare_fcfa) {
+            try {
+              await creditAdminCommission(parseFloat(completedRide.fare_fcfa));
+            } catch (cErr) {
+              console.error('Erreur crédit commission admin:', cErr);
+            }
           }
 
           const payload = {

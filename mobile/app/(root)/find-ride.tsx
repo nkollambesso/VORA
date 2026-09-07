@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import CustomButton from "@/components/CustomButton";
 import GoogleTextInput from "@/components/GoogleTextInput";
@@ -8,6 +8,7 @@ import RideLayout from "@/components/RideLayout";
 import { icons } from "@/constants";
 import { useLocationStore } from "@/store";
 import { voraSocket } from "@/lib/socket";
+import { getBackendUrl } from "@/lib/config";
 
 const FindRide = () => {
   const { rideId } = useLocalSearchParams();
@@ -21,6 +22,44 @@ const FindRide = () => {
   const [isSearching, setIsSearching] = useState(!!rideId);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [extraTip, setExtraTip] = useState(200);
+  const [cancelling, setCancelling] = useState(false);
+
+  const handleCancelSearch = () => {
+    Alert.alert(
+      "Annuler la recherche",
+      "Voulez-vous annuler la recherche de chauffeur ?",
+      [
+        { text: "Non", style: "cancel" },
+        {
+          text: "Oui, annuler",
+          style: "destructive",
+          onPress: async () => {
+            setCancelling(true);
+            try {
+              if (rideId) {
+                const backendUrl = getBackendUrl();
+                await fetch(`${backendUrl}/api/rides/${rideId}/cancel`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ reason: "Annulé par le passager pendant la recherche" }),
+                });
+                const socket = voraSocket.getSocket();
+                if (socket) {
+                  socket.emit("ride-cancelled", { rideId, cancelledBy: "passenger" });
+                }
+              }
+            } catch (err) {
+              console.warn("Cancel search error:", err);
+            } finally {
+              setCancelling(false);
+              setIsSearching(false);
+              router.replace("/(root)/(tabs)/home" as any);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   useEffect(() => {
     const socket = voraSocket.getSocket();
@@ -90,6 +129,16 @@ const FindRide = () => {
           <Text style={styles.searchingSub}>
             Transmis au chauffeur le plus proche. Patientez pendant sa confirmation.
           </Text>
+          <TouchableOpacity
+            style={styles.cancelSearchBtn}
+            onPress={handleCancelSearch}
+            disabled={cancelling}
+          >
+            {cancelling
+              ? <ActivityIndicator size="small" color="#ef4444" />
+              : <Text style={styles.cancelSearchText}>Annuler la recherche</Text>
+            }
+          </TouchableOpacity>
         </View>
       ) : (
         <View style={{ marginTop: 24 }}>
@@ -179,6 +228,22 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 4,
     lineHeight: 18,
+  },
+  cancelSearchBtn: {
+    marginTop: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: "#ef4444",
+    backgroundColor: "#fff1f2",
+    minWidth: 160,
+    alignItems: "center",
+  },
+  cancelSearchText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#ef4444",
   },
   modalOverlay: {
     flex: 1,

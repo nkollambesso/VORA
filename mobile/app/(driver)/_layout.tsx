@@ -18,7 +18,7 @@ export default function DriverLayout() {
 
   // Protection stricte de navigation : redirection si non inscrit / non connecté
   if (!isSignedIn && !user) {
-    return <Redirect href="/(auth)/welcome" />;
+    return <Redirect href="/(auth)/sign-in" />;
   }
 
   return (
