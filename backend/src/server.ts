@@ -29,6 +29,7 @@ const io = new SocketIOServer(server, {
 
 app.use(cors());
 app.use(express.json());
+app.set('io', io);
 
 // Routes REST API
 app.use('/api/rides', ridesRouter);

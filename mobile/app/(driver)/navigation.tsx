@@ -19,6 +19,7 @@ import { voraSocket } from "@/lib/socket";
 import { voraVoice } from "@/lib/voiceAssistant";
 import { useClerkUser } from "@/lib/useClerkSafe";
 import { callAudio } from "@/lib/callAudio";
+import { getBackendUrl } from "@/lib/config";
 
 export default function DriverNavigation() {
   const { user } = useClerkUser();
@@ -201,6 +202,81 @@ export default function DriverNavigation() {
     const targetRideId = (rideId as string) || ride?.id;
     if (!targetRideId) return;
     voraSocket.declareArrival(targetRideId);
+  };
+
+  // Action 3 : Annuler la prise en charge (Strictement avant OTP / statut ACCEPTED)
+  const [isCancelling, setIsCancelling] = useState(false);
+  const handleDriverCancelRide = () => {
+    if (status !== "ACCEPTED") {
+      Alert.alert(
+        "Action non autorisée",
+        "Vous ne pouvez annuler la course qu'avant la prise en charge / validation du code OTP."
+      );
+      return;
+    }
+
+    const targetRideId = (rideId as string) || ride?.id;
+    if (!targetRideId) return;
+
+    const executeDriverCancel = async (reasonText: string) => {
+      setIsCancelling(true);
+      try {
+        const backendUrl = getBackendUrl();
+        await fetch(`${backendUrl}/api/rides/${targetRideId}/cancel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: reasonText, cancelledBy: "driver" }),
+        });
+
+        voraSocket.cancelRide(targetRideId, reasonText, "driver");
+        voraVoice.speak("Course annulée. Le passager a été notifié.");
+
+        if (Platform.OS === "web") {
+          window.alert("Course annulée avec succès. Le passager a été notifié.");
+          router.replace("/(driver)/dashboard" as any);
+          return;
+        }
+
+        Alert.alert(
+          "Course Annulée",
+          "La course a été annulée. Le passager a été notifié immédiatement.",
+          [
+            {
+              text: "OK",
+              onPress: () => router.replace("/(driver)/dashboard" as any),
+            },
+          ]
+        );
+      } catch (err) {
+        console.error("Erreur annulation chauffeur:", err);
+        Alert.alert("Erreur", "Une erreur est survenue lors de l'annulation de la course.");
+      } finally {
+        setIsCancelling(false);
+      }
+    };
+
+    if (Platform.OS === "web") {
+      const confirmed = typeof window !== "undefined"
+        ? window.confirm("Êtes-vous sûr de vouloir annuler cette course avant la prise en charge ? Le passager sera immédiatement prévenu.")
+        : true;
+      if (confirmed) {
+        executeDriverCancel("Annulé par le chauffeur avant ramassage");
+      }
+      return;
+    }
+
+    Alert.alert(
+      "Annuler la Course",
+      "Êtes-vous sûr de vouloir annuler cette course avant la prise en charge ? Le passager sera immédiatement informé.",
+      [
+        { text: "Non, poursuivre", style: "cancel" },
+        {
+          text: "Oui, annuler la course",
+          style: "destructive",
+          onPress: () => executeDriverCancel("Annulé par le chauffeur avant ramassage"),
+        },
+      ]
+    );
   };
 
   // ── IN-APP VOIP CALL & CHAT HANDLERS (CHAUFFEUR) ──
@@ -481,6 +557,19 @@ export default function DriverNavigation() {
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Bouton Annulation de course par le chauffeur (Strictement avant OTP) */}
+            <TouchableOpacity
+              onPress={handleDriverCancelRide}
+              disabled={isCancelling}
+              style={styles.cancelRideDriverBtn}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close-circle-outline" size={16} color="#EF4444" style={{ marginRight: 6 }} />
+              <Text style={styles.cancelRideDriverBtnText}>
+                {isCancelling ? "Annulation en cours..." : "Annuler la prise en charge (Avant OTP)"}
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -1286,5 +1375,21 @@ const styles = StyleSheet.create({
     backgroundColor: "#0EA5E9",
     alignItems: "center",
     justifyContent: "center",
+  },
+  cancelRideDriverBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#FCA5A5",
+    backgroundColor: "#FEF2F2",
+  },
+  cancelRideDriverBtnText: {
+    color: "#DC2626",
+    fontSize: 13,
+    fontWeight: "700",
   },
 });

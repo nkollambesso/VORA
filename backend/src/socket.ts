@@ -289,6 +289,47 @@ export function setupSocketIO(io: any) {
       }
     });
 
+    // Annulation d'une course (Chauffeur ou Passager)
+    socket.on('cancel-ride', async (data: { rideId: string; reason?: string; cancelledBy?: 'driver' | 'passenger'; driverId?: number }) => {
+      try {
+        const { rideId, reason, cancelledBy = 'driver' } = data;
+        const res = await query('SELECT * FROM rides WHERE id = $1', [rideId]);
+        if (res.rows.length === 0) return;
+        const ride = res.rows[0];
+
+        // Règle stricte : le chauffeur ne peut annuler QUE si status == 'ACCEPTED' (avant l'OTP)
+        if (cancelledBy === 'driver' && ride.status !== 'ACCEPTED') {
+          socket.emit('cancel-ride-error', {
+            message: "Impossible d'annuler cette course : la prise en charge a déjà été validée par code OTP.",
+          });
+          return;
+        }
+
+        await query(
+          `UPDATE rides SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`,
+          [rideId]
+        );
+
+        console.log(`🛑 [CANCEL] Course ${rideId} annulée via Socket par ${cancelledBy}. Raison: ${reason || 'non précisée'}`);
+
+        const payload = {
+          rideId,
+          cancelledBy,
+          reason: reason || (cancelledBy === 'driver' ? 'Le chauffeur a dû annuler sa prise en charge.' : 'Annulé par le passager.'),
+        };
+
+        if (ride.rider_id) {
+          io.to(ride.rider_id).emit('ride-cancelled', payload);
+        }
+        io.to(`ride:${rideId}`).emit('ride-cancelled', payload);
+        io.emit(`ride-cancelled:${rideId}`, payload);
+
+        socket.emit('cancel-ride-success', payload);
+      } catch (err) {
+        console.error('Erreur socket cancel-ride:', err);
+      }
+    });
+
     // =========================================================================
     // SIGNALISATION APPEL VOCAL IN-APP (WebRTC)
     // =========================================================================

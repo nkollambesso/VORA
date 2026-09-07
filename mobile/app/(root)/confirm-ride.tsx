@@ -153,15 +153,62 @@ export default function ConfirmRide() {
       voraVoice.speak("Un litige a été ouvert. Le support VORA traite votre réclamation.");
     });
 
+    // Annulation de la course par le chauffeur
+    const onRideCancelled = (data?: { reason?: string; cancelledBy?: string }) => {
+      voraVoice.speak("Attention, votre chauffeur a dû annuler la prise en charge.");
+      const reasonMsg = data?.reason || "Le chauffeur a rencontré un imprévu et a dû annuler la prise en charge avant le départ.";
+
+      if (Platform.OS === "web") {
+        window.alert(`Course annulée par le chauffeur.\n\n${reasonMsg}\n\nAucun frais ne vous a été débité. Vous pouvez commander un nouveau véhicule immédiatement.`);
+        router.replace("/(root)/(tabs)/home" as any);
+        return;
+      }
+
+      Alert.alert(
+        "Course Annulée par le Chauffeur",
+        `${reasonMsg}\n\nAucun frais ne vous a été débité.`,
+        [
+          {
+            text: "Trouver un autre chauffeur",
+            onPress: () => router.replace("/(root)/(tabs)/home" as any),
+          },
+        ]
+      );
+    };
+
+    socket.on("ride-cancelled", onRideCancelled);
+    if (rideId) {
+      socket.on(`ride-cancelled:${rideId}`, onRideCancelled);
+    }
+
+    // Vérification d'annulation active par polling
+    const cancelCheckInterval = setInterval(async () => {
+      if (!rideId) return;
+      try {
+        const backendUrl = getBackendUrl();
+        const res = await fetch(`${backendUrl}/api/rides/${rideId}`);
+        const data = await res.json();
+        if (data.success && data.ride && data.ride.status === "CANCELLED") {
+          clearInterval(cancelCheckInterval);
+          onRideCancelled({ reason: "Le chauffeur a annulé la prise en charge." });
+        }
+      } catch (e) {}
+    }, 2000);
+
     return () => {
+      clearInterval(cancelCheckInterval);
       socket.off(locationChannel);
       socket.off("passenger-picked-up");
       socket.off("ride-started");
       socket.off("arrival-declared");
       socket.off("ride-completed-mutual");
       socket.off("ride-disputed");
+      socket.off("ride-cancelled", onRideCancelled);
+      if (rideId) {
+        socket.off(`ride-cancelled:${rideId}`, onRideCancelled);
+      }
     };
-  }, [ride?.driver_id]);
+  }, [ride?.driver_id, rideId]);
 
   // 4. Timer d'Appel Vocal In-App
   useEffect(() => {

@@ -365,7 +365,7 @@ router.post('/:id/rate', async (req: Request, res: Response) => {
 router.post('/:id/cancel', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { reason } = req.body;
+    const { reason, cancelledBy = 'passenger' } = req.body;
 
     const rideRes = await query(`SELECT * FROM rides WHERE id = $1`, [id]);
     if (rideRes.rows.length === 0) {
@@ -373,6 +373,14 @@ router.post('/:id/cancel', async (req: Request, res: Response) => {
     }
 
     const ride = rideRes.rows[0];
+
+    // Règle stricte demandée : le chauffeur ne peut annuler QUE s'il l'a acceptée et AVANT l'OTP (status === 'ACCEPTED')
+    if (cancelledBy === 'driver' && ride.status !== 'ACCEPTED') {
+      return res.status(400).json({
+        success: false,
+        error: "Le chauffeur ne peut annuler la course qu'avant la validation du code OTP.",
+      });
+    }
 
     if (!['SEARCHING', 'ACCEPTED'].includes(ride.status)) {
       return res.status(400).json({
@@ -382,8 +390,8 @@ router.post('/:id/cancel', async (req: Request, res: Response) => {
     }
 
     let cancellationFee = 0;
-    // Pénalité de 500 FCFA si annulation plus de 2 min après acceptation
-    if (ride.status === 'ACCEPTED' && ride.updated_at) {
+    // Pénalité uniquement si annulé par le passager plus de 2 min après acceptation
+    if (cancelledBy === 'passenger' && ride.status === 'ACCEPTED' && ride.updated_at) {
       const timeDiffMinutes = (Date.now() - new Date(ride.updated_at).getTime()) / (1000 * 60);
       if (timeDiffMinutes > 2) {
         cancellationFee = 500;
@@ -402,7 +410,23 @@ router.post('/:id/cancel', async (req: Request, res: Response) => {
       );
     }
 
-    console.log(`[CANCEL] Course ${id} annulée. Raison: ${reason || 'non précisée'}. Frais: ${cancellationFee} FCFA`);
+    console.log(`[CANCEL] Course ${id} annulée par ${cancelledBy}. Raison: ${reason || 'non précisée'}. Frais: ${cancellationFee} FCFA`);
+
+    // Notifier le passager et les abonnés de la course via Socket.io
+    const io = req.app.get('io');
+    const cancelPayload = {
+      rideId: id,
+      cancelledBy,
+      reason: reason || (cancelledBy === 'driver' ? 'Le chauffeur a dû annuler sa prise en charge.' : 'Annulé par le passager.'),
+    };
+
+    if (io) {
+      if (ride.rider_id) {
+        io.to(ride.rider_id).emit('ride-cancelled', cancelPayload);
+      }
+      io.to(`ride:${id}`).emit('ride-cancelled', cancelPayload);
+      io.emit(`ride-cancelled:${id}`, cancelPayload);
+    }
 
     return res.json({
       success: true,
