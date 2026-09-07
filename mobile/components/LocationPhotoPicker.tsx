@@ -28,12 +28,18 @@ export const LocationPhotoPicker: React.FC<LocationPhotoPickerProps> = ({
   const { user } = useClerkUser();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  // Initialise with placeName; stays in sync when the parent resolves the real address
   const [inputPlaceName, setInputPlaceName] = useState(placeName);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-
   const [nearbyPhotos, setNearbyPhotos] = useState<any[]>([]);
 
-  // Charger les photos de repères proches
+  // Keep the field synced when the parent resolves the actual user address (async geo)
+  useEffect(() => {
+    if (placeName && placeName.trim().length > 0) {
+      setInputPlaceName(placeName);
+    }
+  }, [placeName]);
+
   const fetchNearbyPhotos = async () => {
     try {
       const backendUrl = getBackendUrl();
@@ -130,15 +136,23 @@ export const LocationPhotoPicker: React.FC<LocationPhotoPickerProps> = ({
       <TouchableOpacity
         style={styles.addLandmarkBtn}
         onPress={() => {
-          setInputPlaceName(placeName);
+          // On open: ensure field shows the latest resolved address
+          if (placeName && placeName.trim().length > 0) {
+            setInputPlaceName(placeName);
+          }
           setIsModalOpen(true);
         }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Ionicons name="camera-outline" size={18} color="#0284C7" style={{ marginRight: 6 }} />
-          <Text style={styles.addLandmarkBtnText}>
-            Filmer / Assigner une photo à ce lieu
-          </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Ionicons name="camera-outline" size={18} color="#0284C7" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.addLandmarkBtnText}>Assigner une photo à ce lieu</Text>
+            {inputPlaceName ? (
+              <Text style={styles.addLandmarkBtnSub} numberOfLines={1}>
+                {inputPlaceName}
+              </Text>
+            ) : null}
+          </View>
         </View>
       </TouchableOpacity>
 
@@ -168,14 +182,20 @@ export const LocationPhotoPicker: React.FC<LocationPhotoPickerProps> = ({
               Prenez une photo du repère (panneau, bâtiment, pharmacie) pour guider la communauté.
             </Text>
 
-            <Text style={styles.inputLabel}>NOM DU REPÈRE OU LIEU</Text>
+            <Text style={styles.inputLabel}>NOM DU REPÈRE / LIEU DE PRISE EN CHARGE</Text>
             <TextInput
               style={styles.textInput}
               placeholder="Ex: Devant le supermarché Bastos"
               placeholderTextColor="#94A3B8"
               value={inputPlaceName}
               onChangeText={setInputPlaceName}
+              autoFocus={false}
             />
+            {placeName ? (
+              <Text style={styles.inputHint}>
+                Position actuelle : {placeName}
+              </Text>
+            ) : null}
 
             {/* Aperçu de l'image sélectionnée */}
             {selectedImage ? (
@@ -231,12 +251,23 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 14,
-    alignItems: "center",
   },
   addLandmarkBtnText: {
     color: "#0284C7",
     fontSize: 13,
     fontWeight: "800",
+  },
+  addLandmarkBtnSub: {
+    color: "#0EA5E9",
+    fontSize: 11,
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  inputHint: {
+    fontSize: 10,
+    color: "#94A3B8",
+    marginTop: -12,
+    marginBottom: 8,
   },
   photosSection: {
     marginTop: 12,
