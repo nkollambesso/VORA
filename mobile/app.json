@@ -29,7 +29,13 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "VORA - VTC & Moto-Taxi Cameroun",
+      "shortName": "VORA",
+      "themeColor": "#0EA5E9",
+      "backgroundColor": "#FFFFFF",
+      "display": "standalone",
+      "orientation": "portrait"
     },
     "plugins": [
       "expo-secure-store",

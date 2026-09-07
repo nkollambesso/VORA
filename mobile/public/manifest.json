@@ -1,0 +1,33 @@
+{
+  "short_name": "VORA",
+  "name": "VORA - VTC & Moto-Taxi Cameroun",
+  "description": "Votre application de transport urbain sécurisée et rapide au Cameroun",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "type": "image/png",
+      "sizes": "180x180"
+    }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0EA5E9",
+  "background_color": "#FFFFFF",
+  "categories": ["travel", "navigation", "transportation"],
+  "lang": "fr-FR",
+  "dir": "ltr"
+}
