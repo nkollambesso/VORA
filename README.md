@@ -160,6 +160,27 @@ VORA/
 
 ---
 
+## Fournisseurs d'API & Services Intégrés
+
+VORA s'appuie sur une suite d'APIs et de services cloud de premier plan pour garantir performance, sécurité et adaptation au contexte camerounais :
+
+| Fournisseur / Service | Catégorie | Rôle & Utilisation dans VORA | Variables d'Environnement |
+| :--- | :--- | :--- | :--- |
+| **Google Gemini AI** *(Google AI Studio)* | Intelligence Artificielle (NLP & Vision) | • **Géocodage sémantique** : Conversion des repères informels camerounais (*Bastos, Mvog-Ada, Mokolo...*) en coordonnées GPS réelles.<br>• **Vision par IA** : Validation faciale obligatoire certifiant la présence d'une personne humaine réelle sur la photo de profil du chauffeur. | `EXPO_PUBLIC_GEMINI_API_KEY` |
+| **Neon Serverless** | Base de Données Cloud | Base PostgreSQL cloud managée hébergeant l'ensemble des données (courses, utilisateurs, chauffeurs, litiges, commissions d'administration et appels d'assistance). | `DATABASE_URL` |
+| **Clerk Authentication** | Authentification & Sécurité | Gestion unifiée des comptes usagers, sessions JWT sécurisées, rafraîchissement des tokens et synchronisation multi-plateforme. | `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`<br>`CLERK_SECRET_KEY` |
+| **Google Cloud Platform** | OAuth 2.0 & Identité | Authentification sociale sécurisée Google Sign-In pour passagers et chauffeurs. | `EXPO_PUBLIC_GOOGLE_CLIENT_ID`<br>`GOOGLE_CLIENT_SECRET` |
+| **CamerPay API** | Paiement Mobile Money | Passerelle de paiement locale pour le Cameroun : règlement instantané des courses et recharges de portefeuille in-app via **MTN Mobile Money** et **Orange Money**. | `CAMERPAY_API_KEY`<br>`CAMERPAY_API_SECRET`<br>`CAMERPAY_CALLBACK_SECRET`<br>`CAMERPAY_API_URL` |
+| **Geoapify API** | Cartographie & Géolocalisation | Recherche de lieux, autocomplétion d'adresses, géocodage inverse et calcul des directions / itinéraires routiers optimisés. | `EXPO_PUBLIC_GEOAPIFY_API_KEY`<br>`EXPO_PUBLIC_PLACES_API_KEY`<br>`EXPO_PUBLIC_DIRECTIONS_API_KEY` |
+| **OpenStreetMap & Leaflet / CARTO** | Cartographie Interactive | Moteur cartographique vectoriel haute définition avec niveau de zoom rapproché affichant les quartiers, carrefours et repères locaux. | Intégration OSM / CARTO Tile Servers |
+| **Stripe API** | Paiement Bancaire International | Gestion des transactions par carte de crédit/débit internationale (Visa, Mastercard) en environnement sécurisé. | `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` |
+| **Didit Identity (KYC)** | Vérification d'Identité & Conformité | Vérification biométrique et conformité d'identité des chauffeurs partenaires (KYC). | `DIDIT_API_KEY`<br>`DIDIT_WORKFLOW_ID` |
+| **Web Speech API** *(Standard W3C)* | Synthèse Vocale Embarquée | **Assistante Vocale VORA** : guidage sonore féminin fluide en français (`fr-FR`) à chaque étape du trajet (accueil, acceptation, arrivée, prise en charge, fin de course). | Natif navigateur / Web standard |
+| **WebRTC & Socket.io** | Communication Temps Réel | Appels vocaux audio in-app chiffrés avec chronomètre en direct et messagerie instantanée sécurisée (anonymisation `VORA-XXXXXX`). | `EXPO_PUBLIC_SOCKET_URL` |
+| **DiceBear API** | Génération Graphique d'Avatars | Génération d'avatars vectoriels et de formes géométriques stylisées pour les profils et presets afin de garantir des visuels neutres non-humains par défaut. | API publique DiceBear Shapes & Badges |
+
+---
+
 ## Guide d'Installation & Lancement Local
 
 ### Prérequis
