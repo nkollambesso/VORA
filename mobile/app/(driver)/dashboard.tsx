@@ -16,11 +16,29 @@ import {
 import { router } from "expo-router";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
-import { useClerkUser } from "@/lib/useClerkSafe";
+import { useClerkUser, useClerkAuth } from "@/lib/useClerkSafe";
 import { voraSocket } from "@/lib/socket";
 
 export default function DriverDashboard() {
   const { user } = useClerkUser();
+  const { signOut } = useClerkAuth();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      if (typeof window !== "undefined" && window.localStorage) {
+        Object.keys(window.localStorage).forEach((k) => {
+          if (k.includes("clerk") || k.includes("__clerk")) {
+            window.localStorage.removeItem(k);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn("Sign-out error:", e);
+    } finally {
+      router.replace("/(auth)/sign-in" as any);
+    }
+  };
   const [isOnline, setIsOnline] = useState(false);
   const [driverProfile, setDriverProfile] = useState<any>(null);
   const [currentLocation, setCurrentLocation] = useState<any>(null);
@@ -357,6 +375,14 @@ export default function DriverDashboard() {
             activeOpacity={0.8}
           >
             <Text style={styles.earningsBtnText}>Revenus</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleSignOut}
+            style={[styles.earningsBtn, { backgroundColor: "rgba(239,68,68,0.15)", borderColor: "rgba(239,68,68,0.4)" }]}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.earningsBtnText, { color: "#fca5a5" }]}>Se déconnecter</Text>
           </TouchableOpacity>
         </View>
 

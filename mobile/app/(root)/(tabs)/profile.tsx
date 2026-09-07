@@ -36,9 +36,22 @@ const Profile = () => {
   const { user } = useClerkUser();
   const { signOut } = useClerkAuth();
 
-  const handleSignOut = () => {
-    signOut();
-    router.replace("/(auth)/sign-in");
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      // Clear any cached Clerk tokens from localStorage (web) to prevent auto-reconnect
+      if (typeof window !== "undefined" && window.localStorage) {
+        Object.keys(window.localStorage).forEach((k) => {
+          if (k.includes("clerk") || k.includes("__clerk")) {
+            window.localStorage.removeItem(k);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn("Sign-out error:", e);
+    } finally {
+      router.replace("/(auth)/sign-in");
+    }
   };
 
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
