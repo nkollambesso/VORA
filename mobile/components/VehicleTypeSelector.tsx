@@ -1,6 +1,6 @@
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
-import { calculateVoraRidesFare, PricingDetail } from "@/lib/vora-pricing";
+import { calculateVoraRidesFare, PricingDetail, getMotoNightMultiplier } from "@/lib/vora-pricing";
 
 interface VehicleTypeSelectorProps {
   distanceKm: number;
@@ -29,6 +29,22 @@ export const VehicleTypeSelector: React.FC<VehicleTypeSelectorProps> = ({
     luggageCount,
     passengerCount
   );
+
+  const motoNight = getMotoNightMultiplier();
+  const isMotoNight = motoNight.multiplier > 1.0;
+
+  // Moto capacity rules:
+  // - With luggage: max 1 passenger
+  // - Without luggage: max 2 passengers
+  const getMotoDisabledReason = (): string | null => {
+    if (luggageCount >= 1 && passengerCount > 1) {
+      return "Max 1 passager avec bagages";
+    }
+    if (passengerCount > 2) {
+      return "Max 2 passagers sans bagages";
+    }
+    return null;
+  };
 
   const options: Array<{ type: "moto" | "taxi" | "confort"; detail: PricingDetail }> = [
     { type: "moto", detail: fares.moto },
@@ -61,24 +77,29 @@ export const VehicleTypeSelector: React.FC<VehicleTypeSelectorProps> = ({
             </Text>
           </View>
           <View style={{ flexDirection: "row", gap: 6 }}>
-            {[1, 2, 3, 4].map((num) => (
-              <TouchableOpacity
-                key={num}
-                onPress={() => onPassengerChange(num)}
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
-                  backgroundColor: passengerCount === num ? "#0EA5E9" : "#F1F5F9",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: "800", color: passengerCount === num ? "#FFFFFF" : "#475569" }}>
-                  {num}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {[1, 2, 3, 4].map((num) => {
+              const isDisabledByMoto = selectedType === "moto" && num > 2;
+              return (
+                <TouchableOpacity
+                  key={num}
+                  onPress={() => !isDisabledByMoto && onPassengerChange(num)}
+                  disabled={isDisabledByMoto}
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 10,
+                    backgroundColor: passengerCount === num ? "#0EA5E9" : isDisabledByMoto ? "#F8FAFC" : "#F1F5F9",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: isDisabledByMoto ? 0.35 : 1,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: passengerCount === num ? "#FFFFFF" : "#475569" }}>
+                    {num}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
@@ -123,13 +144,44 @@ export const VehicleTypeSelector: React.FC<VehicleTypeSelectorProps> = ({
         </View>
       </View>
 
+      {/* Tarif Nuit Moto Warning */}
+      {isMotoNight && (
+        <View style={{
+          backgroundColor: "#FFF7ED",
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: "#FED7AA",
+          padding: 10,
+          marginBottom: 10,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+        }}>
+          <View style={{
+            backgroundColor: "#EA580C",
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: 8,
+          }}>
+            <Text style={{ fontSize: 10, fontWeight: "900", color: "#FFFFFF", letterSpacing: 0.5 }}>NUIT</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 12, fontWeight: "800", color: "#C2410C" }}>Tarif Nuit Moto Actif (après 18h)</Text>
+            <Text style={{ fontSize: 11, color: "#92400E", lineHeight: 16 }}>
+              Les tarifs MOTO doublent automatiquement après 18h00 conformément à la réglementation VORA.
+            </Text>
+          </View>
+        </View>
+      )}
+
       <Text style={{ fontSize: 11, fontWeight: "800", color: "#64748B", letterSpacing: 0.6, marginBottom: 8 }}>
         CHOIX DU VÉHICULE VORA
       </Text>
 
       {options.map(({ type, detail }) => {
         const isSelected = selectedType === type;
-        const isDisabled = type === "moto" && passengerCount > 1;
+        const motoDisabledReason = type === "moto" ? getMotoDisabledReason() : null;
+        const isDisabled = !!motoDisabledReason;
 
         return (
           <TouchableOpacity
@@ -159,14 +211,14 @@ export const VehicleTypeSelector: React.FC<VehicleTypeSelectorProps> = ({
                   </Text>
                   <View style={{ marginLeft: 8, backgroundColor: "#F1F5F9", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
                     <Text style={{ fontSize: 10, fontWeight: "700", color: "#475569" }}>
-                      Max {detail.capacity} place{detail.capacity > 1 ? "s" : ""}
+                      {type === "moto" ? (luggageCount >= 1 ? "Max 1 place" : "Max 2 places") : `Max ${detail.capacity} places`}
                     </Text>
                   </View>
                 </View>
 
-                <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
-                  {isDisabled
-                    ? "Non disponible pour plus de 1 passager"
+                <Text style={{ fontSize: 12, color: isDisabled ? "#EF4444" : "#64748B", marginTop: 2 }}>
+                  {motoDisabledReason
+                    ? `[Non autorisé] ${motoDisabledReason}`
                     : type === "moto"
                     ? "Bendskin rapide & agile"
                     : type === "taxi"
@@ -194,4 +246,3 @@ export const VehicleTypeSelector: React.FC<VehicleTypeSelectorProps> = ({
 };
 
 export default VehicleTypeSelector;
-

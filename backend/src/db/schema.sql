@@ -46,6 +46,9 @@ CREATE TABLE IF NOT EXISTS rides (
   vehicle_type VARCHAR(50) NOT NULL,
   passenger_count INT DEFAULT 1,
   luggage_count INT DEFAULT 0,
+  booked_for_other BOOLEAN DEFAULT FALSE,
+  passenger_name VARCHAR(255),
+  passenger_phone VARCHAR(50),
   fare_fcfa INT NOT NULL,
   multiplier NUMERIC(3,2) DEFAULT 1.00,
   surge_multiplier NUMERIC(3,2) DEFAULT 1.00,
@@ -54,6 +57,7 @@ CREATE TABLE IF NOT EXISTS rides (
   payment_status VARCHAR(50) DEFAULT 'PENDING', -- PENDING | PAID | FAILED
   otp_code VARCHAR(6),
   rating INT,
+  feedback TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

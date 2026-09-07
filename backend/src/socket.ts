@@ -298,11 +298,46 @@ export function setupSocketIO(io: any) {
 
         const activeRide = updateRes.rows[0];
         io.to(activeRide.rider_id).emit('ride-started', activeRide);
+        io.to(activeRide.rider_id).emit('passenger-picked-up', {
+          ride: activeRide,
+          message: 'Client pris en charge. En route vers la destination !',
+        });
         socket.emit('ride-started-confirmed', activeRide);
+        socket.emit('pickup-confirmed', {
+          ride: activeRide,
+          message: 'Client pris en charge. Navigation vers la destination en cours.',
+        });
       } catch (err) {
         console.error('Erreur démarrage course OTP:', err);
       }
     });
+
+    // CHAUFFEUR NOTIFIE DIRECTEMENT LA PRISE EN CHARGE ("pickup-passenger")
+    socket.on('pickup-passenger', async (data: { rideId: string }) => {
+      try {
+        const updateRes = await query(
+          `UPDATE rides SET status = 'IN_TRANSIT', updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
+          [data.rideId]
+        );
+
+        if (updateRes.rows.length > 0) {
+          const activeRide = updateRes.rows[0];
+          console.log(`🚖 Client pris en charge pour la course ${data.rideId}`);
+
+          const payload = {
+            ride: activeRide,
+            message: 'Client pris en charge. En route vers la destination !',
+          };
+
+          io.to(activeRide.rider_id).emit('passenger-picked-up', payload);
+          io.to(activeRide.rider_id).emit('ride-started', activeRide);
+          socket.emit('pickup-confirmed', payload);
+        }
+      } catch (err) {
+        console.error('Erreur notification prise en charge passager:', err);
+      }
+    });
+
 
     // CHAUFFEUR DÉCLARE L'ARRIVÉE À DESTINATION ("arrivee_signalee")
     socket.on('declare-arrival', async (data: { rideId: string }) => {

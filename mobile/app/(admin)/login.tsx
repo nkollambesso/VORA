@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
+import * as ReactNative from "react-native";
 import {
   ActivityIndicator,
-  Animated,
   StyleSheet,
   Text,
   TextInput,
@@ -10,6 +10,8 @@ import {
   View,
 } from "react-native";
 import { router } from "expo-router";
+
+const Animated = (ReactNative as any).Animated;
 
 // ─── ADMIN PIN GATE ──────────────────────────────────────────────────────────
 // The admin PIN is stored as an env variable: EXPO_PUBLIC_ADMIN_PIN

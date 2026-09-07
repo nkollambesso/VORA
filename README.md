@@ -1,8 +1,8 @@
-# 🚗 VORA — Next-Gen Urban Mobility & Smart VTC Platform (African Context)
+# VORA — Plateforme de Mobilité Urbaine & VTC Intelligente (Contexte Africain)
 
 <div align="center">
 
-![VORA Banner](https://img.shields.io/badge/VORA-Mobilit%C3%A9%20S%C3%A9curis%C3%A9e-0EA5E9?style=for-the-badge&logo=uber&logoColor=white)
+![VORA Banner](https://img.shields.io/badge/VORA-Mobilite%20Securisee-0EA5E9?style=for-the-badge&logo=uber&logoColor=white)
 ![React Native](https://img.shields.io/badge/React_Native-0.74-61DAFB?style=for-the-badge&logo=react&logoColor=black)
 ![Expo Router](https://img.shields.io/badge/Expo_Router-v3-000000?style=for-the-badge&logo=expo&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
@@ -10,94 +10,104 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Neon_DB-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![AI Powered](https://img.shields.io/badge/IA-Natural_Language_Geocoding-8E44AD?style=for-the-badge&logo=google&logoColor=white)
 
-**Développé par l'équipe TEAM-VANGUARD pour le Nuxcine Hackathon 🚀**
+**Développé par l'équipe TEAM-VANGUARD pour le Nuxcine Hackathon**
 
 </div>
 
 ---
 
-## 📖 Présentation du Projet
+## Presentation du Projet
 
-**VORA** est une plateforme moderne de transport urbain (VTC / Moto-taxi / Voiture) spécifiquement conçue pour le contexte africain et camerounais. Elle résout les défis majeurs des villes en développement : l'absence d'adressage postal formel, la sécurité des passagers/chauffeurs, le dispatch efficace et le paiement sécurisé par Mobile Money.
+**VORA** est une plateforme moderne de transport urbain (VTC / Moto-taxi / Voiture) spécifiquement conçue pour le contexte africain et camerounais. Elle résout les défis majeurs des métropoles africaines :
+- L'absence d'adressage postal formel compensée par une IA d'analyse des repères informels.
+- La sécurité des passagers et des chauffeurs grâce à des identifiants anonymisés (`VORA-XXXXXX`) et la vérification d'identité Didit KYC.
+- Le géofencing strict intra-urbain (aucune course ne sort de sa ville d'origine).
+- La tarification équitable adaptée au contexte local (règles strictes moto, tarifs de nuit, surge pricing).
+- Le dispatch séquentiel en cascade au plus proche avec compte à rebours de 20 secondes.
+- Le paiement sécurisé par Mobile Money (MTN MoMo, Orange Money via CamerPay) et portefeuille in-app.
 
-Elle combine un **Frontend Web & Mobile ultra-réactif sous React Native & Expo Router** (`/mobile`) avec un **Backend Node.js/Express résilient connecté à une base PostgreSQL / Neon Serverless** (`/backend`).
-
----
-
-## 🌟 Fonctionnalités Majeures & Innovations VANGUARD
-
-### 🧠 1. Géolocalisation par IA & Langage Naturel Informel (Innovation Majeure)
-- **Le Problème** : Au Cameroun, l'adressage formel par numéros de rue est quasi-inexistant. Les résidents utilisent des repères informels : *"derrière la pharmacie Mvog-Ada"*, *"en face de la boulangerie à Bastos"*, *"au carrefour Nlongkak"*.
-- **La Solution VORA** : Un moteur d'IA basé sur **Google Gemini API** croisé avec un parseur NLP local. 
-- **Fonctionnement** : L'utilisateur tape sa phrase naturellement. L'IA décode le point d'ancrage (POI) et la relation spatiale (*derrière*, *en face*, *à côté*), applique un micro-offset spatial précis et génère les coordonnées GPS exactes de prise en charge.
-
-### 🚕 2. Tarification par Catégorie (3 Catégories) & Options Passagers / Bagages
-- **3 Catégories de Véhicules** :
-  1. **VORA Moto (Bendskin)** : Rapide & agile (Base 500 FCFA, 150 FCFA/km, 1 passager max).
-  2. **VORA Taxi Classique** : Taxi jaune urbain (Base 1 000 FCFA, 250 FCFA/km, 1 à 4 passagers).
-  3. **VORA Berline Confort** : Véhicule VIP climatisé (Base 2 000 FCFA, 400 FCFA/km, 1 à 4 passagers).
-- **Options de Transport** :
-  - **Nombre de passagers** : Choix flexible de 1 à 4 personnes.
-  - **Surcharge Bagages** : Déclaration des valises/sacs (+300 FCFA par bagage).
-- **Visibilité Chauffeur** : Le chauffeur visualises le nombre de personnes, la présence de bagages et la catégorie choisie avant d'accepter la course.
-
-### 📈 3. Tarification Dynamique (Surge Pricing Horaires & Zones)
-- **Majoration Horaires** :
-  - Pointe Matin (07h00 - 09h00) : `+20%` (Surge `1.20x`).
-  - Pointe Soir (17h00 - 20h00) : `+30%` (Surge `1.30x`).
-  - Tarif Nuit (22h00 - 05h00) : `+25%` (Surge `1.25x`).
-- **Majoration Zones à Forte Affluence** : Majoration automatique (+15%) dans les secteurs à très forte demande (*Bastos*, *Mokolo*, *Aéroport*, *Akwa*, *Bonanjo*).
-
-### 📡 4. Dispatch Séquentiel Chauffeur en Cascade (Timer 20s & Ajustement d'Offre)
-- **Tri par Proximité** : Le backend recherche et trie les chauffeurs en ligne par distance GPS croissante.
-- **Cascade au Chauffeur le Plus Proche** : La demande est transmise au **1er chauffeur le plus proche** avec un **compte à rebours de 20 secondes**.
-- **Transfert Automatique** : Si le 1er chauffeur refuse ou ne répond pas dans le délai imparti, la course est automatiquement transférée au chauffeur n°2 le plus proche.
-- **Réajustement d'Offre Tarifaire** : Si tous les chauffeurs déclinent, une modale propose au passager d'**ajouter un pourboire** (+200 FCFA, +500 FCFA) ou de changer de catégorie pour relancer la recherche.
-
-### 📑 5. Enregistrement Véhicule Chauffeur & Contrat de Partenariat VORA
-- **Formulaire d'Enregistrement Véhicule** : Saisie de la marque, du modèle, de la plaque d'immatriculation, de la couleur et de la catégorie.
-- **Contrat Partenaire Chauffeur VORA** :
-  - Commission fixe de **15%** prélevée par VORA sur les courses (85% des gains conservés par le chauffeur).
-  - Validation d'identité biométrique **Didit KYC** obligatoire pour passer "En Ligne".
-  - Respect de l'anonymat et de la vie privée des passagers (`VORA-XXXXXX`).
-
-### 📞 6. Appels Vocaux In-App dans le Chat (WebRTC)
-- **Appel Audio Sécurisé** : Bouton d'appel audio direct dans la messagerie `chat.tsx` via WebRTC sans exposer le numéro de téléphone réel.
-- **Interface d'Appel** : Overlay avec sonnerie, durée de communication, coupure micro et haut-parleur.
-
-### 📸 7. Photos Géolocalisées des Lieux (Repères Visuels Communautaires)
-- **Capture et Assignation** : Composant `LocationPhotoPicker.tsx` permettant d'assigner une photo réelle à un lieu de prise en charge (ex: *"Devant la pharmacie Bastos"*).
-- **Galerie de Repères** : Affichage des vignettes de photos partagées par la communauté pour guider les passagers et chauffeurs.
-
-### 💳 8. Portefeuille In-App (Wallet) & Paiement CamerPay (MTN & Orange Money)
-- **Paiement Mobile Money Réel** : Intégration de l'API CamerPay (`https://camerpay.biz/api`) pour MTN MoMo et Orange Money.
-- **Portefeuille In-App** : Recharge de solde, gestion des règlements direct et régularisation des frais d'annulation (500 FCFA après 2 min avec gestion du solde négatif/dette).
+Elle combine un **Frontend Web & Mobile sous React Native & Expo Router** (`/mobile`) avec un **Backend Node.js/Express résilient connecté à PostgreSQL / Neon Serverless** (`/backend`).
 
 ---
 
-## 📁 Structure du Projet
+## Fonctionnalités Majeures & Innovations VANGUARD
+
+### 1. Geolocalisation par IA & Reperes Informels Camerounais
+- Au Cameroun, l'adressage formel par numéros de rue est quasi-inexistant. Les résidents utilisent des repères informels (*"derrière la pharmacie Mvog-Ada"*, *"en face de la boulangerie à Bastos"*, *"au carrefour Mokolo"*).
+- VORA utilise un moteur d'IA basé sur Google Gemini API croisé avec une base locale de repères camerounais pour convertir ces expressions en coordonnées GPS réelles.
+- Interface de recherche nettoyée : affichage exclusif de lieux et de repères physiques clairs.
+
+### 2. Geofencing Strict Intra-Urbain (Toutes les Villes du Cameroun)
+- **Règle stricte** : Une course VORA ne peut **JAMAIS** sortir du périmètre urbain de la ville où elle a débuté.
+- S'applique à toutes les villes du Cameroun : Yaoundé, Douala, Bafoussam, Garoua, Bamenda, Maroua, Kribi, Limbe, Buea, etc.
+- Double validation (client et serveur) avec rejet immédiat des trajets interurbains ou dépassant le rayon urbain maximal autorisé (28 km).
+
+### 3. Regles de Capacite & Tarification Moto (Bendskin)
+- **Règle de capacité stricte** :
+  - Avec bagages (1 bagage ou plus) : **Maximum 1 passager**.
+  - Sans bagages : **Maximum 2 passagers**.
+- **Tarif Nuit Moto** : Les tarifs de la catégorie Moto **doublent automatiquement après 18h00** (de 18h00 à 06h00) avec affichage d'un badge NUIT explicite.
+- Validation préventive côté interface et validation bloquante côté serveur (erreur HTTP 400).
+
+### 4. Reservation pour Autrui ("Commander pour un Proche")
+- Possibilité de commander une course pour une tierce personne tout en **conservant l'intégralité du suivi GPS et de l'état du trajet en temps réel**.
+- Validation stricte des données : nom complet obligatoire et numéro de téléphone camerounais valide (`+237 6xx / 2xx`).
+- Le chauffeur est notifié des coordonnées du passager bénéficiaire pour une prise en charge sans friction.
+
+### 5. Carte Zoomee & Suivi Vehicule en Temps Reel
+- Intégration d'une cartographie dynamique OpenStreetMap / Leaflet avec un niveau de zoom rapproché (niveau 15-16) permettant de distinguer nettement les noms des quartiers camerounais (Mokolo, Bastos, Tsinga, Deido, Bonanjo...) et les carrefours.
+- Suivi en direct du véhicule du chauffeur (voiture ou moto) qui s'anime sur la carte du passager via WebSocket (`driver-location:${driverId}`).
+
+### 6. Navigation Chauffeur en 2 Etapes & Assistante Vocale VORA
+- **Navigation en 2 étapes** :
+  1. **Étape 1 (Vers le point de ramassage)** : La carte guide vers le client avec bouton *"Prendre en charge le client"* (émet `pickup-passenger`).
+  2. **Étape 2 (Vers la destination finale)** : Dès la prise en charge, la carte bascule sur l'itinéraire de destination avec bouton *"Terminer la course"*.
+- **Assistante Vocale VORA** : Système vocal féminin fluide en français (Web Speech API) guidant le chauffeur et le passager à chaque transition de statut.
+
+### 7. Cloture de Course & Notoriete du Chauffeur
+- En fin de course, l'assistante VORA remercie le passager et l'invite à évaluer son trajet.
+- Modale d'évaluation (`RideRatingModal`) permettant d'attribuer une note de 1 à 5 étoiles, des badges de compliments ("Conduite prudente", "Poli & Courtois", "Véhicule propre") et un retour texte.
+- L'API `POST /api/rides/:id/rate` met à jour la course et **recalcule automatiquement la note moyenne et la notoriété du chauffeur** dans NeonDB.
+
+### 8. Protection Stricte de Navigation & Authentification
+- Les routes protégées de l'application (`/(root)`, `/(driver)`) disposent d'un garde d'authentification strict : tout utilisateur non inscrit ou non connecté est immédiatement redirigé vers l'écran d'accueil/onboarding (`/(auth)/welcome`).
+- Les utilisateurs déjà connectés accèdent directement à l'accueil sans repasser par les écrans de bienvenue.
+
+---
+
+## Structure du Projet
 
 ```text
 VORA/
-├── backend/                  # API Rest Express Node.js & Base PostgreSQL / Neon
+├── backend/                  # API REST Express Node.js & Base PostgreSQL / Neon
 │   ├── src/
-│   │   ├── db/               # Schéma SQL, connecteur Neon et initialisation auto
-│   │   ├── routes/           # Endpoints API (Users, Rides, Drivers, Disputes, CamerPay, Didit, LocationPhotos)
-│   │   ├── utils/            # Calculateur de tarif dynamique (pricing.ts), anonymisation
-│   │   ├── socket.ts         # Dispatch séquentiel et signalisation WebRTC audio
+│   │   ├── db/               # Schéma SQL, pool Neon et migrations
+│   │   ├── routes/           # Routes API (Rides, Drivers, Users, CamerPay, Didit)
+│   │   │   ├── rides.ts      # Gestion des courses, validation moto, notation
+│   │   │   ├── drivers.ts    # Profils chauffeurs, validation, mise en ligne
+│   │   │   ├── users.ts      # Profils utilisateurs, portefeuille in-app
+│   │   │   └── camerpay.ts   # Passerelle Mobile Money MTN / Orange
+│   │   ├── utils/
+│   │   │   ├── pricing.ts    # Moteur tarifaire, surge pricing, nuit moto x2
+│   │   │   ├── geofence.ts   # Contrôle intra-urbain Cameroun
+│   │   │   └── anonymize.ts  # Anonymisation VORA-XXXXXX
+│   │   ├── socket.ts         # Dispatch séquentiel 20s, WebSockets, suivi temps réel
 │   │   └── server.ts         # Point d'entrée serveur Express
-│   ├── .env                  # Conf backend (DATABASE_URL, PORT, CamerPay API Keys)
 │   ├── package.json
 │   └── tsconfig.json
 │
 ├── mobile/                   # Application Mobile & Web Expo Router
-│   ├── app/                  # Routes Expo Router ((auth), (driver), (root), (api))
-│   ├── components/           # Composants UI (GoogleTextInput, VehicleTypeSelector, LocationPhotoPicker, CamerPaySelector)
-│   ├── constants/            # Constantes & Base des repères Camerounais
-│   ├── lib/                  # Utilities (aiLocationParser, vora-pricing, map, socket, useClerkSafe)
-│   ├── store/                # Zustand State Management (location, driver, auth)
-│   ├── .env                  # Conf mobile (Clerk, Geoapify, Gemini, CamerPay, Database URL)
-│   └── package.json
+│   ├── app/
+│   │   ├── (auth)/           # Routes authentification (welcome, sign-in, sign-up)
+│   │   ├── (driver)/         # Espace Chauffeur (dashboard, navigation 2 étapes, gains)
+│   │   ├── (root)/           # Espace Passager (tabs, book-ride, find-ride, confirm-ride)
+│   │   └── _layout.tsx       # Layout racine, configuration polices et Clerk
+│   ├── components/           # Composants UI (Map, VehicleTypeSelector, RideRatingModal, CamerPaySelector)
+│   ├── constants/            # Données de repères et imagerie
+│   ├── lib/                  # Utilitaires (vora-pricing, geofence, voiceAssistant, socket)
+│   ├── store/                # Zustand State Management (location, driver)
+│   ├── package.json
+│   └── tsconfig.json
 │
 ├── .gitignore
 └── README.md
@@ -105,69 +115,48 @@ VORA/
 
 ---
 
-## 🛠️ Architecture Technique
+## Guide d'Installation & Lancement Local
 
-```mermaid
-graph TD
-    Client[📱 Application Mobile / Web React Native Expo] -->|HTTP / REST API| Backend[⚙️ Serveur API Express Node.js]
-    Client -->|WebSockets & Sequential Dispatch| Socket[⚡ Service Realtime Socket.io]
-    Client -->|AI Geocoding| Gemini[🤖 Google Gemini API / NLP Local]
-    Backend -->|PostgreSQL Query| DB[(🐘 Neon Serverless Postgres DB)]
-    Backend -->|KYC Verification| Didit[🔐 Didit Protocol API v3]
-    Backend -->|Mobile Money Payment| CamerPay[💳 API CamerPay MTN / Orange]
-    Client -->|Authentication| Clerk[🔑 Clerk Auth Provider]
-```
+### Prérequis
+- **Node.js** v18+ ou v20+
+- **npm** ou **yarn**
+- Base de données PostgreSQL (ou instance Neon Serverless)
 
----
-
-## 🚀 Guide d'Utilisation & Mode d'Emploi
-
-### 1️⃣ Lancement des Services
+### 1. Démarrage du Backend
 
 ```bash
-# Terminal 1 : Lancer le Backend API VORA
 cd backend
+npm install
 npm run dev
+# Serveur actif sur http://localhost:5000
+```
 
-# Terminal 2 : Lancer l'application Mobile/Web Expo
+### 2. Démarrage de l'Application Mobile / Web
+
+```bash
 cd mobile
-npx expo start --web --port 8082
+npm install
+npx expo start --web --port 8081
+# Application accessible sur http://localhost:8081
 ```
 
 ---
 
-### 2️⃣ Parcours Passager
+## Verification Technique & Conformite
 
-1. **Connexion & Inscription** : Connectez-vous via Clerk. Un identifiant anonyme `VORA-XXXXXX` vous est attribué.
-2. **Recherche de Destination par IA** : Tapez un nom de repère informel (ex: `derrière la pharmacie de Mvog-Ada`).
-3. **Repères Visuels** : Prenez ou consultez des photos géolocalisées des points de rencontre (`LocationPhotoPicker`).
-4. **Saisie des Options & Catégories** :
-   - Indiquez le nombre de passagers (1 à 4) et le nombre de bagages (+300 FCFA/unité).
-   - Choisissez entre **VORA Moto**, **VORA Taxi** et **VORA Confort**.
-5. **Mode de Règlement** : Choisissez entre **Cash**, **Portefeuille In-App**, **MTN Mobile Money** ou **Orange Money** via **CamerPay**.
-6. **Dispatch Séquentiel & Réajustement** : Si les chauffeurs déclinent, réajustez votre offre avec un pourboire pour relancer la recherche.
+- **Compilation TypeScript Backend** : `npx tsc --noEmit` -> **0 erreur (Code 0)**
+- **Compilation TypeScript Mobile** : `npx tsc --noEmit` -> **0 erreur (Code 0)**
+- **Design & Interface** : Respect strict des directives d'affichage professionnelles (aucune émoticône superflue dans le front-end, composants vectoriels et SVG).
 
 ---
 
-### 3️⃣ Parcours Chauffeur
+## Équipe de Développement — TEAM-VANGUARD
 
-1. **Enregistrement Véhicule & Signature du Contrat VORA** :
-   - Saisissez votre modèle de véhicule, plaque d'immatriculation et couleur.
-   - Consultez et validez le **Contrat Partenaire Chauffeur VORA** (15% commission).
-2. **Vérification Didit KYC** : Effectuez la vérification d'identité pour déverrouiller le statut "En Ligne".
-3. **Réception des Demandes Séquentielles** :
-   - Recevez les notifications de courses individuelles avec un **compte à rebours de 20 secondes**.
-   - Visualisez les détails du trajet, le nombre de passagers, de bagages et le tarif avant d'accepter.
-
----
-
-## 👥 Équipe de Développement — TEAM-VANGUARD
-
-- **Patrick Assako** (@patrickassako) — *Lead Developer & Co-auteur*
-- **Legrand Onana** (@psycho237-prog) — *Fullstack Engineer & Contributeur*
+- **Patrick Assako** (@patrickassako) — *Lead Developer*
+- **Legrand Onana** (@psycho237-prog) — *Fullstack Engineer*
 
 ---
 
 <div align="center">
-  <sub>Fait avec ❤️ par TEAM-VANGUARD pour le Hackathon Nuxcine — © 2026 VORA Mobility. Tous droits réservés.</sub>
+  <sub>TEAM-VANGUARD pour le Hackathon Nuxcine — © 2026 VORA Mobility. Tous droits réservés.</sub>
 </div>

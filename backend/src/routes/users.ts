@@ -40,6 +40,8 @@ router.post('/', async (req: Request, res: Response) => {
       success: true,
       user: {
         ...user,
+        wallet_balance: Number(user.wallet_balance) || 0,
+        cancellation_debt: Number(user.cancellation_debt) || 0,
         display_name,
       },
     });
@@ -69,6 +71,8 @@ router.get('/:id', async (req: Request, res: Response) => {
           role: "PASSENGER",
           verification_status: "unverified",
           display_name: "Utilisateur VORA",
+          wallet_balance: 0,
+          cancellation_debt: 0,
         },
       });
     }
@@ -92,6 +96,8 @@ router.get('/:id', async (req: Request, res: Response) => {
       success: true,
       user: {
         ...user,
+        wallet_balance: Number(user.wallet_balance) || 0,
+        cancellation_debt: Number(user.cancellation_debt) || 0,
         verification_status: user.verification_status || 'unverified',
         display_name,
       },
@@ -106,8 +112,63 @@ router.get('/:id', async (req: Request, res: Response) => {
         name: "Utilisateur VORA",
         verification_status: "unverified",
         display_name: "Utilisateur VORA",
+        wallet_balance: 0,
+        cancellation_debt: 0,
       },
     });
+  }
+});
+
+// Recharger le portefeuille in-app VORA
+router.post('/:id/topup', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { amount, phone, operator } = req.body;
+    const rechargeAmount = Math.max(0, parseInt(amount, 10) || 0);
+
+    if (rechargeAmount <= 0) {
+      return res.status(400).json({ success: false, error: 'Montant de recharge invalide' });
+    }
+
+    // Tenter la mise à jour du solde
+    const updateRes = await query(
+      `UPDATE users 
+       SET wallet_balance = COALESCE(wallet_balance, 0) + $1 
+       WHERE id = $2 
+       RETURNING *`,
+      [rechargeAmount, id]
+    );
+
+    let newBalance = rechargeAmount;
+
+    if (updateRes.rows.length === 0) {
+      // Utilisateur non existant dans la base: l'insérer avec le nouveau solde
+      const newPublicId = generatePublicId();
+      const insertRes = await query(
+        `INSERT INTO users (id, public_id, name, email, phone, role, wallet_balance)
+         VALUES ($1, $2, 'Utilisateur VORA', $3, $4, 'PASSENGER', $5)
+         RETURNING *`,
+        [id, newPublicId, `${id}@vora.app`, phone || null, rechargeAmount]
+      );
+      if (insertRes.rows.length > 0) {
+        newBalance = Number(insertRes.rows[0].wallet_balance) || rechargeAmount;
+      }
+    } else {
+      newBalance = Number(updateRes.rows[0].wallet_balance) || 0;
+    }
+
+    console.log(`💰 [WALLET TOPUP] User ${id} rechargé de ${rechargeAmount} FCFA via ${operator || 'MoMo'}. Nouveau solde: ${newBalance} FCFA`);
+
+    return res.status(200).json({
+      success: true,
+      wallet_balance: newBalance,
+      amount: rechargeAmount,
+      operator: operator || 'mtn',
+      message: `Recharge de ${rechargeAmount.toLocaleString()} FCFA effectuée avec succès !`,
+    });
+  } catch (error: any) {
+    console.error('Erreur recharge portefeuille:', error);
+    return res.status(500).json({ success: false, error: error?.message || 'Erreur serveur lors de la recharge' });
   }
 });
 

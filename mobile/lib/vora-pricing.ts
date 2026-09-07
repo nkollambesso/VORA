@@ -13,6 +13,22 @@ export interface PricingDetail {
   icon: string;
 }
 
+/**
+ * Valide les règles de capacité spécifiques à la MOTO (Bendskin).
+ * - Max 1 passager si bagages ≥ 1
+ * - Max 2 passagers si aucun bagage
+ * Retourne null si OK, sinon un message d'erreur.
+ */
+export function validateMotoCapacity(passengerCount: number, luggageCount: number): string | null {
+  if (luggageCount >= 1 && passengerCount > 1) {
+    return "La MOTO (Bendskin) ne peut transporter qu'un seul passager lorsqu'il y a des bagages.";
+  }
+  if (passengerCount > 2) {
+    return "La MOTO (Bendskin) peut transporter au maximum 2 passagers sans bagages.";
+  }
+  return null;
+}
+
 export interface PeakPricingStatus {
   multiplier: number;
   label: string;
@@ -71,7 +87,7 @@ export const VORA_VEHICLE_RATES = {
     baseFare: 500,
     perKm: 150,
     perMin: 10,
-    capacity: 1,
+    capacity: 2, // 2 max sans bagages, 1 max avec bagages
     icon: "bike",
   },
   taxi: {
@@ -102,6 +118,19 @@ function roundToNearest50(amount: number): number {
 /**
  * Calcule le prix estimé d'une course pour tous les types de véhicules avec frais de bagages
  */
+/**
+ * Vérifie si la tarification nuit moto s'applique (après 18h)
+ * Règle : les tarifs moto DOUBLENT après 18h00
+ */
+export function getMotoNightMultiplier(date = new Date()): { multiplier: number; reason: string } {
+  const hour = date.getHours();
+  // Tarif nuit moto : de 18h00 à 05h59 (le lendemain)
+  if (hour >= 18 || hour < 6) {
+    return { multiplier: 2.0, reason: "Tarif Nuit Moto (x2 après 18h)" };
+  }
+  return { multiplier: 1.0, reason: "" };
+}
+
 export function calculateVoraRidesFare(
   distanceKm: number,
   durationMin: number,
@@ -109,7 +138,9 @@ export function calculateVoraRidesFare(
   passengerCount: number = 1,
   customDate?: Date
 ): Record<"moto" | "taxi" | "confort", PricingDetail> {
-  const peak = getVoraPricingMultiplier(customDate);
+  const now = customDate || new Date();
+  const peak = getVoraPricingMultiplier(now);
+  const motoNight = getMotoNightMultiplier(now);
   const luggageFare = luggageCount * 300;
 
   const calculateForType = (
@@ -117,7 +148,16 @@ export function calculateVoraRidesFare(
   ): PricingDetail => {
     const rate = VORA_VEHICLE_RATES[type];
     const rawFare = rate.baseFare + distanceKm * rate.perKm + durationMin * rate.perMin + luggageFare;
-    const multipliedFare = rawFare * peak.multiplier;
+
+    // Pour MOTO : multiplier de pointe × multiplicateur nuit moto (x2 après 18h)
+    let effectiveMultiplier = peak.multiplier;
+    let multiplierReason = peak.label;
+    if (type === "moto" && motoNight.multiplier > 1.0) {
+      effectiveMultiplier = effectiveMultiplier * motoNight.multiplier;
+      multiplierReason = motoNight.reason + (peak.isPeak ? ` + ${peak.label}` : "");
+    }
+
+    const multipliedFare = rawFare * effectiveMultiplier;
     const finalFare = Math.max(rate.baseFare, roundToNearest50(multipliedFare));
 
     return {
@@ -128,8 +168,8 @@ export function calculateVoraRidesFare(
       durationMin,
       luggageFare,
       fareBeforeMultiplier: Math.round(rawFare),
-      multiplier: peak.multiplier,
-      multiplierReason: peak.label,
+      multiplier: effectiveMultiplier,
+      multiplierReason,
       finalFare,
       capacity: rate.capacity,
       icon: rate.icon,

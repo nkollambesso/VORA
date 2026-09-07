@@ -216,7 +216,7 @@ export default function Chat() {
             <ScrollView style={styles.messagesScroll} contentContainerStyle={styles.messagesContent}>
               <View style={styles.securityNotice}>
                 <Text style={styles.securityNoticeText}>
-                  🔒 Échange sécurisé et anonymisé avec votre chauffeur. Vos numéros réels ne sont jamais visibles.
+                  Échange sécurisé et anonymisé avec votre chauffeur. Vos numéros réels ne sont jamais visibles.
                 </Text>
               </View>
 
@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#E2E8F0",
     gap: 10,
-    marginBottom: 96,
+    marginBottom: 80,
   },
   textInput: {
     flex: 1,

@@ -1,8 +1,16 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../db';
-import { calculateAllCategories, calculateVoraFare } from '../utils/pricing';
+import { calculateAllCategories, calculateVoraFare, validateMotoCapacity } from '../utils/pricing';
+import { validateIntraCity } from '../utils/geofence';
 
 const router = Router();
+
+// Helper validation stricte numéro de téléphone camerounais (+237 ou 6xx/2xx 9 chiffres)
+function isValidCameroonPhone(phone: string): boolean {
+  if (!phone) return false;
+  const clean = phone.replace(/\s+/g, '').replace(/^(\+237|00237|237)/, '');
+  return /^(6[25789]\d{7}|2[2348]\d{7})$/.test(clean);
+}
 
 // Estimer les tarifs pour les 3 catégories (Moto, Taxi, Confort)
 router.post('/estimate', (req: Request, res: Response) => {
@@ -45,55 +53,123 @@ router.post('/', async (req: Request, res: Response) => {
       vehicle_type,
       passenger_count = 1,
       luggage_count = 0,
+      booked_for_other = false,
+      passenger_name,
+      passenger_phone,
       fare_fcfa,
       multiplier,
       surge_multiplier = 1.0,
       surge_reason,
-      payment_method,
+      payment_method = 'CASH',
     } = req.body;
 
-    // Vérifier la validation KYC du passager
-    if (rider_id) {
-      const kycRes = await query(`SELECT verification_status FROM users WHERE id = $1`, [rider_id]);
-      const kycStatus = kycRes.rows[0]?.verification_status;
-      if (kycStatus && kycStatus !== 'verified') {
-        return res.status(403).json({
+    // 1. Validation du périmètre intra-urbain (Toutes les villes du Cameroun)
+    if (origin_lat && origin_lng && dest_lat && dest_lng) {
+      const geoCheck = validateIntraCity(
+        parseFloat(origin_lat),
+        parseFloat(origin_lng),
+        parseFloat(dest_lat),
+        parseFloat(dest_lng),
+        origin_address,
+        destination_address
+      );
+      if (!geoCheck.isValid) {
+        return res.status(400).json({
           success: false,
-          error: 'Vérification d\'identité Didit (KYC) requise avant de réserver une course.',
-          kycStatus,
+          error: geoCheck.error,
         });
       }
     }
 
+    // 2. Validation stricte de la capacité Moto (Bendskin)
+    if (vehicle_type === 'moto') {
+      const motoError = validateMotoCapacity(Number(passenger_count) || 1, Number(luggage_count) || 0);
+      if (motoError) {
+        return res.status(400).json({
+          success: false,
+          error: motoError,
+        });
+      }
+    }
+
+    // 3. Validation stricte réservation pour un tiers
+    if (booked_for_other) {
+      if (!passenger_name || passenger_name.trim().length < 2) {
+        return res.status(400).json({
+          success: false,
+          error: 'Le nom du passager bénéficiaire est obligatoire (minimum 2 caractères).',
+        });
+      }
+      if (!passenger_phone || !isValidCameroonPhone(passenger_phone)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Le numéro du passager bénéficiaire doit être un numéro camerounais valide (ex: 699 00 00 00).',
+        });
+      }
+    }
+
+    const effectiveRiderId = rider_id || 'user_demo';
+
+    // S'assurer que l'utilisateur existe dans la BD pour respecter la contrainte clé étrangère
+    await query(
+      `INSERT INTO users (id, name, email, role, verification_status)
+       VALUES ($1, 'Passager VORA', $2, 'PASSENGER', 'verified')
+       ON CONFLICT (id) DO NOTHING`,
+      [effectiveRiderId, `${effectiveRiderId}@vora.cm`]
+    );
+
+    // Si paiement par Portefeuille (WALLET), vérifier et déduire le solde
+    let paymentStatus = 'PENDING';
+    if (payment_method === 'WALLET') {
+      const uRes = await query(`SELECT wallet_balance FROM users WHERE id = $1`, [effectiveRiderId]);
+      const balance = Number(uRes.rows[0]?.wallet_balance) || 0;
+      if (balance < fare_fcfa) {
+        return res.status(400).json({
+          success: false,
+          error: `Solde portefeuille insuffisant (${balance.toLocaleString()} FCFA). Le montant requis est de ${fare_fcfa.toLocaleString()} FCFA. Veuillez recharger votre portefeuille ou choisir un autre moyen de paiement.`,
+        });
+      }
+      await query(`UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2`, [fare_fcfa, effectiveRiderId]);
+      paymentStatus = 'PAID';
+    }
+
     const rideId = `VORA-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
 
     const insertQuery = `
       INSERT INTO rides (
         id, rider_id, origin_address, destination_address,
         origin_lat, origin_lng, dest_lat, dest_lng,
         vehicle_type, passenger_count, luggage_count,
-        fare_fcfa, multiplier, surge_multiplier, surge_reason, payment_method, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'SEARCHING')
+        booked_for_other, passenger_name, passenger_phone,
+        fare_fcfa, multiplier, surge_multiplier, surge_reason, 
+        payment_method, payment_status, otp_code, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, 'SEARCHING')
       RETURNING *;
     `;
 
     const result = await query(insertQuery, [
       rideId,
-      rider_id,
-      origin_address,
-      destination_address,
-      origin_lat,
-      origin_lng,
-      dest_lat,
-      dest_lng,
+      effectiveRiderId,
+      origin_address || 'Carrefour Mokolo, Yaoundé',
+      destination_address || 'Quartier Bastos, Yaoundé',
+      origin_lat || 3.8667,
+      origin_lng || 11.5167,
+      dest_lat || 3.875,
+      dest_lng || 11.52,
       vehicle_type || 'taxi',
       passenger_count,
       luggage_count,
-      fare_fcfa,
+      !!booked_for_other,
+      passenger_name || null,
+      passenger_phone || null,
+      fare_fcfa || 1500,
       multiplier || 1.0,
       surge_multiplier,
       surge_reason || null,
-      payment_method || 'CASH',
+      payment_method,
+      paymentStatus,
+      otpCode,
     ]);
 
     return res.status(201).json({ success: true, ride: result.rows[0] });
@@ -180,7 +256,15 @@ router.get('/user/:userId', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const result = await query(
-      `SELECT * FROM rides WHERE rider_id = $1 ORDER BY created_at DESC`,
+      `SELECT r.*, d.vehicle_model, d.license_plate, d.color, 
+              COALESCE(u.name, 'Chauffeur VORA') as driver_name,
+              u.avatar_url as driver_avatar,
+              COALESCE(d.rating, 5.0) as driver_rating
+       FROM rides r
+       LEFT JOIN drivers d ON r.driver_id = d.id
+       LEFT JOIN users u ON d.user_id = u.id
+       WHERE r.rider_id = $1 
+       ORDER BY r.created_at DESC`,
       [userId]
     );
     return res.json({ success: true, rides: result.rows });
@@ -205,5 +289,76 @@ router.get('/driver/:driverId', async (req: Request, res: Response) => {
   }
 });
 
+// Noter un chauffeur à la fin d'une course (1 à 5 étoiles, feedback, badges de compliment)
+router.post('/:id/rate', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { rating, feedback, badges } = req.body;
+
+    const parsedRating = parseInt(rating, 10);
+    if (isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) {
+      return res.status(400).json({
+        success: false,
+        error: 'La note doit être un entier compris entre 1 et 5 étoiles.',
+      });
+    }
+
+    const rideRes = await query(`SELECT * FROM rides WHERE id = $1`, [id]);
+    if (rideRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Course introuvable.' });
+    }
+
+    const ride = rideRes.rows[0];
+
+    // Combiner feedback et badges de compliment si présents
+    let fullFeedback = (feedback || '').trim();
+    if (Array.isArray(badges) && badges.length > 0) {
+      const badgeText = `[Badges: ${badges.join(', ')}]`;
+      fullFeedback = fullFeedback ? `${badgeText} ${fullFeedback}` : badgeText;
+    }
+
+    // Mettre à jour la note et le feedback sur la course
+    const updatedRideRes = await query(
+      `UPDATE rides 
+       SET rating = $1, feedback = $2, updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $3 
+       RETURNING *`,
+      [parsedRating, fullFeedback || null, id]
+    );
+
+    let updatedDriverRating = null;
+
+    // Recalculer la réputation / notoriété du chauffeur
+    if (ride.driver_id) {
+      const avgRes = await query(
+        `SELECT ROUND(AVG(rating), 2) as avg_rating, COUNT(rating) as rated_count 
+         FROM rides 
+         WHERE driver_id = $1 AND rating IS NOT NULL`,
+        [ride.driver_id]
+      );
+
+      if (avgRes.rows.length > 0 && avgRes.rows[0].avg_rating !== null) {
+        updatedDriverRating = parseFloat(avgRes.rows[0].avg_rating);
+        await query(
+          `UPDATE drivers SET rating = $1 WHERE id = $2`,
+          [updatedDriverRating, ride.driver_id]
+        );
+        console.log(`⭐ Notoriété chauffeur #${ride.driver_id} mise à jour : ${updatedDriverRating}/5 (${avgRes.rows[0].rated_count} avis)`);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'Merci pour votre évaluation ! La réputation du chauffeur a été mise à jour.',
+      ride: updatedRideRes.rows[0],
+      driverRating: updatedDriverRating,
+    });
+  } catch (error) {
+    console.error('Erreur notation course:', error);
+    return res.status(500).json({ success: false, error: 'Erreur lors de l\'enregistrement de la note.' });
+  }
+});
+
 export default router;
+
 

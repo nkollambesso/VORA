@@ -99,7 +99,7 @@ const GoogleTextInput = ({
             {aiMatch && (
               <TouchableOpacity
                 onPress={() => {
-                  const fullAddress = `${aiMatch.matchedLandmark} (${aiMatch.spatialRelation})`;
+                  const fullAddress = `${aiMatch.title}, ${aiMatch.subtitle}`;
                   setInputText(fullAddress);
                   clearSuggestions();
                   handlePress({
@@ -110,12 +110,15 @@ const GoogleTextInput = ({
                 }}
                 style={styles.aiItem}
               >
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={styles.aiTitle}>{aiMatch.title}</Text>
-                  <Text style={styles.aiDesc}>{aiMatch.subtitle}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingRight: 8 }}>
+                  <Image source={icons.point} style={{ width: 18, height: 18, marginRight: 10, tintColor: "#0284c7" }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.aiTitle}>{aiMatch.title}</Text>
+                    <Text style={styles.aiDesc}>{aiMatch.subtitle}</Text>
+                  </View>
                 </View>
                 <View style={styles.aiBadge}>
-                  <Text style={styles.aiBadgeText}>Précis</Text>
+                  <Text style={styles.aiBadgeText}>Repère</Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -288,33 +291,35 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 6,
     borderRadius: 12,
-    backgroundColor: "#f0f9ff",
-    borderWidth: 1.5,
-    borderColor: "#0284c7",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   aiTitle: {
-    fontWeight: "800",
+    fontWeight: "700",
     fontSize: 14,
-    color: "#0369a1",
+    color: "#0F172A",
   },
   aiDesc: {
     fontSize: 12,
-    color: "#0284c7",
-    fontWeight: "600",
-    marginTop: 3,
+    color: "#64748B",
+    fontWeight: "500",
+    marginTop: 2,
   },
   aiBadge: {
-    backgroundColor: "#0284c7",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+    backgroundColor: "#E0F2FE",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
   },
   aiBadgeText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#ffffff",
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#0284C7",
   },
 });

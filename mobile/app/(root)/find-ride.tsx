@@ -40,7 +40,11 @@ const FindRide = () => {
       setIsSearching(false);
       router.replace({
         pathname: "/(root)/confirm-ride",
-        params: { rideId: data.ride.id, otpCode: data.otpCode },
+        params: {
+          rideId: data.ride?.id || data.rideId,
+          otpCode: data.otpCode,
+          rideData: JSON.stringify(data.ride || {}),
+        },
       });
     });
 

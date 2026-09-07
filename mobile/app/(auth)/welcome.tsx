@@ -128,7 +128,7 @@ const OnboardingDriverCard = ({
 // Main Screen
 const Welcome = () => {
   const { width, height } = useWindowDimensions();
-  const flatRef = useRef<FlatList>(null);
+  const flatRef = useRef<any>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
   // Tablet/Desktop OR Landscape mode threshold

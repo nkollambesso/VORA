@@ -92,8 +92,10 @@ export function parseInformalCameroonianLocation(query: string): AILocationResul
   const finalLng = Number((bestLandmark.longitude + detectedRelation.lngOffset).toFixed(6));
 
   return {
-    title: `${bestLandmark.name} (${detectedRelation.rel.split(" ")[0]})`,
-    subtitle: `Point de repère identifié à ${bestLandmark.zone}`,
+    title: detectedRelation.rel.startsWith("Carrefour") 
+      ? bestLandmark.name 
+      : `${bestLandmark.name} (${detectedRelation.rel.split(" ")[0]})`,
+    subtitle: `${bestLandmark.zone}, ${bestLandmark.city}`,
     latitude: finalLat,
     longitude: finalLng,
     confidence: Math.min(98, 70 + highestScore * 3),
@@ -104,7 +106,7 @@ export function parseInformalCameroonianLocation(query: string): AILocationResul
 }
 
 /**
- * Traitement en arrière-plan via API LLM
+ * Traitement en arrière-plan via API LLM (enrichissement de repère)
  */
 const geminiApiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 
@@ -116,14 +118,15 @@ export async function parseWithGeminiAI(query: string): Promise<AILocationResult
   }
 
   try {
-    const prompt = `Tu es un système de géolocalisation pour Yaoundé et Douala.
-L'utilisateur a écrit: "${query}".
+    const prompt = `Tu es le moteur de recherche d'adresses et repères urbains pour les villes du Cameroun (Yaoundé, Douala, Bafoussam, Garoua, etc.).
+L'utilisateur recherche un lieu ou un repère : "${query}".
 
-Renvoie UNISQUEMENT un objet JSON valide (sans markdown):
+Renvoie STRICTEMENT un objet JSON valide (sans aucun formatage markdown, sans backticks, sans texte additionnel) identifiant le lieu physique réel :
 {
-  "landmark": "Nom du quartier ou repère principal le plus proche",
-  "spatialRelation": "derrière, en face de, à côté de, après, ou carrefour",
-  "confidence": 96
+  "landmark": "Nom exact du lieu physique ou quartier",
+  "zone": "Quartier ou commune",
+  "city": "Yaoundé ou Douala ou autre ville du Cameroun",
+  "spatialRelation": "derrière, en face de, à côté de, ou carrefour"
 }`;
 
     const response = await fetch(
@@ -145,14 +148,15 @@ Renvoie UNISQUEMENT un objet JSON valide (sans markdown):
       const parsed = JSON.parse(cleanJson);
 
       const cleanLandmark = cleanHumanText(parsed.landmark);
+      const cleanZone = cleanHumanText(parsed.zone);
+      const cleanCity = cleanHumanText(parsed.city) || "Yaoundé";
       const cleanRelation = cleanHumanText(parsed.spatialRelation);
 
       if (localResult) {
         return {
           ...localResult,
-          title: `${cleanLandmark || localResult.matchedLandmark} (${cleanRelation || "Secteur"})`,
-          subtitle: `${query} • Position estimée`,
-          confidence: parsed.confidence || 96,
+          title: cleanLandmark || localResult.title,
+          subtitle: `${cleanZone ? cleanZone + ", " : ""}${cleanCity}`,
         };
       }
     }

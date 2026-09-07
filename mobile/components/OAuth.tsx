@@ -30,8 +30,8 @@ const OAuth = ({ role = "PASSENGER" }: OAuthProps) => {
     // Google OAuth does NOT work in Expo Go — requires a custom dev build
     if (isExpoGo) {
       Alert.alert(
-        "⚠️ Expo Go — Google OAuth indisponible",
-        "La connexion Google ne fonctionne pas dans Expo Go.\n\nUtilisez email + mot de passe, ou faites un build de développement (expo run:android / expo run:ios).",
+        "Expo Go — Google OAuth indisponible",
+        "Pour des raisons techniques propres à Expo Go sur mobile, la connexion Google native est indisponible dans ce mode.\n\nVeuillez utiliser la connexion par Email & Mot de passe qui fonctionne parfaitement !",
         [{ text: "Compris", style: "default" }]
       );
       return;

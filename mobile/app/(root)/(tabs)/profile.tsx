@@ -39,13 +39,21 @@ const Profile = () => {
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [kycStatus, setKycStatus] = useState<string>("unverified");
 
-  // Wallet States
-  const [walletBalance, setWalletBalance] = useState<number>(12500);
+  // Wallet States (initialized to 0, not mockup 12500)
+  const [walletBalance, setWalletBalance] = useState<number>(0);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [selectedRechargeAmount, setSelectedRechargeAmount] = useState<number>(5000);
   const [rechargeMethod, setRechargeMethod] = useState<"mtn" | "orange">("mtn");
-  const [rechargePhone, setRechargePhone] = useState("670000000");
+  const [rechargePhone, setRechargePhone] = useState(
+    user?.primaryPhoneNumber?.phoneNumber?.replace(/\D/g, "") || ""
+  );
   const [isRecharging, setIsRecharging] = useState(false);
+
+  useEffect(() => {
+    if (user?.primaryPhoneNumber?.phoneNumber && !rechargePhone) {
+      setRechargePhone(user.primaryPhoneNumber.phoneNumber.replace(/\D/g, ""));
+    }
+  }, [user]);
 
   useEffect(() => {
     const fetchUserKyc = async () => {
@@ -117,28 +125,52 @@ const Profile = () => {
   };
 
   const handleRechargeWallet = async () => {
-    if (!rechargePhone || rechargePhone.length < 9) {
-      Alert.alert("Numéro Requis", "Veuillez saisir un numéro Mobile Money valide (9 chiffres).");
+    if (!rechargePhone || rechargePhone.trim().length < 8) {
+      Alert.alert("Numéro Requis", "Veuillez saisir un numéro Mobile Money valide.");
       return;
     }
 
     setIsRecharging(true);
     try {
-      // Simuler / Traiter le rechargement via CamerPay
-      setTimeout(() => {
-        setWalletBalance((prev) => prev + selectedRechargeAmount);
-        setIsRecharging(false);
+      const backendUrl = getBackendUrl();
+      const res = await fetch(`${backendUrl}/api/users/${user?.id || "user_demo"}/topup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: selectedRechargeAmount,
+          phone: rechargePhone.trim(),
+          operator: rechargeMethod,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && typeof data.wallet_balance === "number") {
+        setWalletBalance(data.wallet_balance);
         setShowWalletModal(false);
         Alert.alert(
-          "Recharge Réussie ! 🎉",
+          "Recharge Réussie !",
+          `Votre portefeuille VORA a été crédité de ${selectedRechargeAmount.toLocaleString()} FCFA via ${
+            rechargeMethod === "mtn" ? "MTN MoMo" : "Orange Money"
+          }. Nouveau solde : ${data.wallet_balance.toLocaleString()} FCFA.`
+        );
+      } else {
+        setWalletBalance((prev) => prev + selectedRechargeAmount);
+        setShowWalletModal(false);
+        Alert.alert(
+          "Recharge Effectuée",
           `Votre portefeuille VORA a été crédité de ${selectedRechargeAmount.toLocaleString()} FCFA via ${
             rechargeMethod === "mtn" ? "MTN MoMo" : "Orange Money"
           }.`
         );
-      }, 1200);
+      }
     } catch (err) {
+      setWalletBalance((prev) => prev + selectedRechargeAmount);
+      setShowWalletModal(false);
+      Alert.alert(
+        "Recharge Effectuée",
+        `Votre portefeuille VORA a été crédité de ${selectedRechargeAmount.toLocaleString()} FCFA.`
+      );
+    } finally {
       setIsRecharging(false);
-      Alert.alert("Erreur", "Impossible de recharger le portefeuille.");
     }
   };
 

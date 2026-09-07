@@ -88,6 +88,17 @@ export function calculateVoraFare(options: PricingOptions): PricingResult {
     surgeReason = 'Tarif de nuit (22h-05h)';
   }
 
+  // Règle spécifique MOTO : les tarifs doublent après 18h (jusqu'à 6h)
+  let motoNightMultiplier = 1.0;
+  if (vehicleType === 'moto' && (hours >= 18 || hours < 6)) {
+    motoNightMultiplier = 2.0;
+    if (!surgeReason) {
+      surgeReason = 'Tarif Nuit Moto (x2 après 18h)';
+    } else {
+      surgeReason += ' + Nuit Moto x2';
+    }
+  }
+
   // 4. Calcul Surge Zones à forte demande
   const isHighDemandZone = HIGH_DEMAND_ZONES.some(
     (zone) =>
@@ -106,7 +117,7 @@ export function calculateVoraFare(options: PricingOptions): PricingResult {
   }
 
   // Multiplicateur Surge combiné
-  const surgeMultiplier = parseFloat((timeSurge * zoneSurge).toFixed(2));
+  const surgeMultiplier = parseFloat((timeSurge * zoneSurge * motoNightMultiplier).toFixed(2));
 
   // 5. Coût de la distance
   const distanceFare = Math.round(distanceKm * pricePerKm);
@@ -155,4 +166,19 @@ export function calculateAllCategories(
       destinationAddress,
     })
   );
+}
+
+/**
+ * Valide les règles de capacité strictes MOTO (Bendskin) :
+ * - Max 1 passager si bagages >= 1
+ * - Max 2 passagers sans bagages
+ */
+export function validateMotoCapacity(passengerCount: number, luggageCount: number): string | null {
+  if (luggageCount >= 1 && passengerCount > 1) {
+    return "La MOTO (Bendskin) ne peut transporter qu'un seul passager lorsqu'il y a des bagages.";
+  }
+  if (passengerCount > 2) {
+    return "La MOTO (Bendskin) peut transporter au maximum 2 passagers sans bagages.";
+  }
+  return null;
 }

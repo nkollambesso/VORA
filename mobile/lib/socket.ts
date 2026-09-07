@@ -61,6 +61,12 @@ class VoraSocketService {
     }
   }
 
+  public pickupPassenger(rideId: string) {
+    if (this.socket?.connected) {
+      this.socket.emit("pickup-passenger", { rideId });
+    }
+  }
+
   public endRide(rideId: string) {
     if (this.socket?.connected) {
       this.socket.emit("declare-arrival", { rideId });

@@ -25,7 +25,23 @@ export async function GET(request: Request) {
   try {
     if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes("neon.tech")) {
       const sql = neon(`${process.env.DATABASE_URL}`);
-      const response = await sql`SELECT * FROM drivers`;
+      const response = await sql`
+        SELECT 
+          d.id,
+          COALESCE(d.rating, 4.90) as rating,
+          d.vehicle_type,
+          d.vehicle_model,
+          d.license_plate,
+          d.current_lat,
+          d.current_lng,
+          COALESCE(split_part(u.name, ' ', 1), 'Chauffeur') as first_name,
+          COALESCE(NULLIF(split_part(u.name, ' ', 2), ''), 'VORA') as last_name,
+          COALESCE(u.avatar_url, 'https://ucarecdn.com/dae9be8a-fc66-43c0-988b-b37e1f7d1788/-/preview/1000x1000/') as profile_image_url,
+          'https://ucarecdn.com/a2dc52b2-8bf7-4e19-9a70-388147d3e696/-/preview/465x466/' as car_image_url,
+          CASE WHEN d.vehicle_type = 'moto' THEN 1 ELSE 4 END as car_seats
+        FROM drivers d
+        LEFT JOIN users u ON d.user_id = u.id
+      `;
       if (Array.isArray(response) && response.length > 0) {
         return Response.json({ data: response });
       }

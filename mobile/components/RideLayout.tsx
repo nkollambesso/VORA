@@ -16,56 +16,69 @@ import {
 } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import Map from "@/components/Map";
+import Map, { MapProps } from "@/components/Map";
 import { icons } from "@/constants";
+
+const GestureHandlerRootViewAny = GestureHandlerRootView as any;
+const BottomSheetViewAny = BottomSheetView as any;
 
 const RideLayout = ({
   title,
   snapPoints,
   children,
+  mapProps,
 }: {
-  title: string;
+  title?: string;
   snapPoints?: string[];
   children: React.ReactNode;
+  mapProps?: MapProps;
 }) => {
-  const bottomSheetRef = useRef<BottomSheet>(null);
   const { width } = useWindowDimensions();
-  const isWide = width >= 768;
 
-  if (Platform.OS === "web") {
+  const isWeb = Platform.OS === "web";
+  const bottomSheetRef = useRef<BottomSheet>(null);
+
+  // Web fallback view: clean, responsive card layout
+  if (isWeb) {
     return (
       <View style={styles.webContainer}>
-        <View style={isWide ? styles.wideWrapper : styles.mobileWebWrapper}>
-          {/* Header */}
-          <View style={styles.webHeader}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-              <Image source={icons.backArrow} resizeMode="contain" style={styles.backIcon} />
-            </TouchableOpacity>
-            <Text style={styles.webHeaderTitle}>{title || "Retour"}</Text>
-          </View>
+        {/* Header */}
+        <View style={styles.webHeader}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Image
+              source={icons.backArrow}
+              resizeMode="contain"
+              style={styles.backIcon}
+            />
+          </TouchableOpacity>
+          <Text style={styles.webHeaderTitle}>{title || "Retour"}</Text>
+        </View>
 
-          {isWide ? (
-            /* 2-Column Desktop / Tablet Split View */
-            <View style={styles.wideRow}>
-              <View style={styles.wideMapCol}>
-                <Map />
+        {/* Responsive Body */}
+        <View style={styles.webBody}>
+          {width >= 768 ? (
+            // Tablet / Desktop: 2-column layout (Map left, Content right)
+            <View style={styles.splitRow}>
+              <View style={styles.splitMap}>
+                <Map {...mapProps} />
               </View>
               <ScrollView
-                style={styles.wideContentCol}
-                contentContainerStyle={{ padding: 24 }}
+                style={styles.splitContent}
+                contentContainerStyle={{ padding: 24, paddingBottom: 48 }}
               >
+                <Text style={styles.contentHeader}>{title || "Course VORA"}</Text>
                 {children}
               </ScrollView>
             </View>
           ) : (
-            /* Standard Mobile Web View */
+            // Mobile Web: Map on top (fixed height), Content scrolls below
             <>
-              <View style={styles.webMapContainer}>
-                <Map />
+              <View style={styles.mobileWebMap}>
+                <Map {...mapProps} />
               </View>
               <ScrollView
-                style={styles.webContentBox}
-                contentContainerStyle={{ padding: 20 }}
+                style={styles.mobileWebContent}
+                contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
               >
                 {children}
               </ScrollView>
@@ -77,7 +90,7 @@ const RideLayout = ({
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootViewAny style={{ flex: 1 }}>
       <View style={styles.nativeContainer}>
         <View style={styles.mapContainer}>
           <View style={styles.headerRow}>
@@ -93,8 +106,9 @@ const RideLayout = ({
             </Text>
           </View>
 
-          <Map />
+          <Map {...mapProps} />
         </View>
+
 
         <BottomSheet
           ref={bottomSheetRef}
@@ -102,9 +116,9 @@ const RideLayout = ({
           index={0}
         >
           {title === "Choose a Rider" ? (
-            <BottomSheetView style={{ flex: 1, padding: 20 }}>
+            <BottomSheetViewAny style={{ flex: 1, padding: 20 }}>
               {children}
-            </BottomSheetView>
+            </BottomSheetViewAny>
           ) : (
             <BottomSheetScrollView style={{ flex: 1, padding: 20 }}>
               {children}
@@ -112,7 +126,7 @@ const RideLayout = ({
           )}
         </BottomSheet>
       </View>
-    </GestureHandlerRootView>
+    </GestureHandlerRootViewAny>
   );
 };
 
