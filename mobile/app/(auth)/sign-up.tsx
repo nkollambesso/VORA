@@ -1,3 +1,4 @@
+import { getBackendUrl } from "@/lib/config";
 import { Link, router } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -86,7 +87,7 @@ const SignUp = () => {
       if (completeSignUp.status === "complete") {
         try {
           const backendUrl =
-            process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            getBackendUrl();
           await fetch(`${backendUrl}/api/users`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },

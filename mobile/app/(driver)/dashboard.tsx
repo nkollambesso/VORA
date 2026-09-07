@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { getBackendUrl } from "@/lib/config";
+
 import {
   ActivityIndicator,
   Alert,
@@ -69,7 +71,7 @@ export default function DriverDashboard() {
   const fetchDriver = async () => {
     try {
       const backendUrl =
-        process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+        getBackendUrl();
       const res = await fetch(
         `${backendUrl}/api/drivers/profile/${user?.id || "driver_demo"}`
       );
@@ -143,7 +145,7 @@ export default function DriverDashboard() {
         // Appel IA de vérification faciale
         setIsAnalyzingFace(true);
         try {
-          const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+          const backendUrl = getBackendUrl();
           const verifyRes = await fetch(`${backendUrl}/api/drivers/verify-face`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -216,9 +218,9 @@ export default function DriverDashboard() {
 
     setIsSubmitting(true);
     try {
-      const backendUrl =
-        process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+      const backendUrl = getBackendUrl();
       const userId = user?.id || "driver_demo";
+
 
       const res = await fetch(`${backendUrl}/api/drivers/register`, {
         method: "POST",
@@ -333,7 +335,7 @@ export default function DriverDashboard() {
     setIsOnline(value);
     try {
       const backendUrl =
-        process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+        getBackendUrl();
       await fetch(`${backendUrl}/api/drivers/toggle-online`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

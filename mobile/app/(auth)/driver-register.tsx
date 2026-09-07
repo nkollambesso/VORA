@@ -1,3 +1,4 @@
+import { getBackendUrl } from "@/lib/config";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -69,7 +70,7 @@ const DriverRegister = () => {
 
         setIsAnalyzingFace(true);
         try {
-          const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+          const backendUrl = getBackendUrl();
           const verifyRes = await fetch(`${backendUrl}/api/drivers/verify-face`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -134,7 +135,7 @@ const DriverRegister = () => {
     setLoading(true);
 
     try {
-      const backendUrl = (typeof process !== "undefined" && process.env.EXPO_PUBLIC_BACKEND_URL) || "http://localhost:5000";
+      const backendUrl = getBackendUrl();
       const response = await fetch(`${backendUrl}/api/drivers/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

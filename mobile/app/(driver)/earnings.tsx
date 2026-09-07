@@ -1,3 +1,4 @@
+import { getBackendUrl } from "@/lib/config";
 import React, { useEffect, useState } from "react";
 import {
   ScrollView,
@@ -26,7 +27,7 @@ export default function DriverEarnings() {
     const fetchEarnings = async () => {
       try {
         const backendUrl =
-          process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+          getBackendUrl();
         const userId = user?.id || "driver_demo";
         const res = await fetch(`${backendUrl}/api/drivers/earnings/${userId}`);
         const data = await res.json();

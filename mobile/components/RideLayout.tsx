@@ -22,6 +22,14 @@ import { icons } from "@/constants";
 const GestureHandlerRootViewAny = GestureHandlerRootView as any;
 const BottomSheetViewAny = BottomSheetView as any;
 
+const handleBack = () => {
+  if (router.canGoBack()) {
+    router.back();
+  } else {
+    router.replace("/(root)/(tabs)/home" as any);
+  }
+};
+
 const RideLayout = ({
   title,
   snapPoints,
@@ -40,11 +48,13 @@ const RideLayout = ({
 
   // Web fallback view: clean, responsive card layout
   if (isWeb) {
+    const isWide = width >= 768;
+
     return (
       <View style={styles.webContainer}>
         {/* Header */}
         <View style={styles.webHeader}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
             <Image
               source={icons.backArrow}
               resizeMode="contain"
@@ -55,36 +65,37 @@ const RideLayout = ({
         </View>
 
         {/* Responsive Body */}
-        <View style={styles.webBody}>
-          {width >= 768 ? (
-            // Tablet / Desktop: 2-column layout (Map left, Content right)
-            <View style={styles.splitRow}>
-              <View style={styles.splitMap}>
-                <Map {...mapProps} />
-              </View>
-              <ScrollView
-                style={styles.splitContent}
-                contentContainerStyle={{ padding: 24, paddingBottom: 48 }}
-              >
-                <Text style={styles.contentHeader}>{title || "Course VORA"}</Text>
-                {children}
-              </ScrollView>
+        {isWide ? (
+          // Tablet / Desktop: 2-column layout (Map left, Content right)
+          <View style={styles.splitRow}>
+            <View style={styles.splitMap}>
+              <Map {...mapProps} />
             </View>
-          ) : (
-            // Mobile Web: Map on top (fixed height), Content scrolls below
-            <>
-              <View style={styles.mobileWebMap}>
-                <Map {...mapProps} />
-              </View>
-              <ScrollView
-                style={styles.mobileWebContent}
-                contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
-              >
-                {children}
-              </ScrollView>
-            </>
-          )}
-        </View>
+            <ScrollView
+              style={styles.splitContent}
+              contentContainerStyle={{ padding: 24, paddingBottom: 80 }}
+              showsVerticalScrollIndicator={true}
+            >
+              <Text style={styles.contentHeader}>{title || "Course VORA"}</Text>
+              {children}
+            </ScrollView>
+          </View>
+        ) : (
+          // Mobile Web: Map fixed height on top, content scrolls below
+          <View style={styles.mobileWebBody}>
+            <View style={styles.mobileWebMap}>
+              <Map {...mapProps} />
+            </View>
+            <ScrollView
+              style={styles.mobileWebContent}
+              contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
+              showsVerticalScrollIndicator={true}
+              bounces={false}
+            >
+              {children}
+            </ScrollView>
+          </View>
+        )}
       </View>
     );
   }
@@ -94,7 +105,7 @@ const RideLayout = ({
       <View style={styles.nativeContainer}>
         <View style={styles.mapContainer}>
           <View style={styles.headerRow}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
               <Image
                 source={icons.backArrow}
                 resizeMode="contain"
@@ -136,18 +147,10 @@ const styles = StyleSheet.create({
   webContainer: {
     flex: 1,
     backgroundColor: "#F1F5F9",
-  },
-  mobileWebWrapper: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-  },
-  wideWrapper: {
-    flex: 1,
-    width: "100%",
-    maxWidth: 1200,
-    alignSelf: "center",
-    backgroundColor: "#ffffff",
-    boxShadow: "0px 10px 30px rgba(0, 0, 0, 0.06)",
+    display: "flex" as any,
+    flexDirection: "column",
+    height: "100%" as any,
+    overflow: "hidden" as any,
   },
   webHeader: {
     flexDirection: "row",
@@ -159,32 +162,49 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#e2e8f0",
     gap: 14,
+    flexShrink: 0,
   },
   webHeaderTitle: {
     fontSize: 20,
     fontWeight: "800",
     color: "#0f172a",
   },
-  wideRow: {
+  // Desktop/Tablet split layout
+  splitRow: {
     flex: 1,
     flexDirection: "row",
+    overflow: "hidden" as any,
   },
-  wideMapCol: {
-    flex: 1.1,
+  splitMap: {
+    flex: 1.2,
     backgroundColor: "#e2e8f0",
   },
-  wideContentCol: {
-    flex: 0.9,
+  splitContent: {
+    flex: 0.8,
     backgroundColor: "#ffffff",
   },
-  webMapContainer: {
-    height: 260,
+  contentHeader: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#0f172a",
+    marginBottom: 16,
+  },
+  // Mobile web stacked layout
+  mobileWebBody: {
+    flex: 1,
+    flexDirection: "column",
+    overflow: "hidden" as any,
+  },
+  mobileWebMap: {
+    height: 240,
+    flexShrink: 0,
     backgroundColor: "#e2e8f0",
   },
-  webContentBox: {
+  mobileWebContent: {
     flex: 1,
     backgroundColor: "#ffffff",
   },
+  // Native styles
   nativeContainer: {
     flex: 1,
     backgroundColor: "#ffffff",
@@ -224,4 +244,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#0f172a",
   },
+  // unused legacy stubs kept for safety
+  mobileWebWrapper: { flex: 1, backgroundColor: "#ffffff" },
+  wideWrapper: { flex: 1 },
+  wideRow: { flex: 1, flexDirection: "row" },
+  wideMapCol: { flex: 1.1, backgroundColor: "#e2e8f0" },
+  wideContentCol: { flex: 0.9, backgroundColor: "#ffffff" },
+  webMapContainer: { height: 260, backgroundColor: "#e2e8f0" },
+  webContentBox: { flex: 1, backgroundColor: "#ffffff" },
+  webBody: { flex: 1 },
 });

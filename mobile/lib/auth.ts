@@ -1,3 +1,4 @@
+import { getBackendUrl } from "@/lib/config";
 import * as Linking from "expo-linking";
 import * as SecureStore from "expo-secure-store";
 
@@ -50,7 +51,7 @@ export const googleOAuth = async (startOAuthFlow: any, role: string = "PASSENGER
         if (signUp?.createdUserId) {
           try {
             const backendUrl =
-              process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+              getBackendUrl();
             await fetch(`${backendUrl}/api/users`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },

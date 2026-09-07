@@ -1,3 +1,4 @@
+import { getBackendUrl } from "@/lib/config";
 export interface PaymentRequest {
   amount: number; // FCFA
   phone: string; // Numéro Mobile Money (MTN / Orange)
@@ -37,7 +38,7 @@ export async function processCamerPayPayment(
   }
 
   try {
-    const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+    const backendUrl = getBackendUrl();
     const response = await fetch(`${backendUrl}/api/camerpay/pay`, {
       method: "POST",
       headers: {
@@ -62,7 +63,7 @@ export async function processCamerPayPayment(
  */
 export async function fetchCamerPayMode(): Promise<{ isSimulation: boolean }> {
   try {
-    const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000";
+    const backendUrl = getBackendUrl();
     const res = await fetch(`${backendUrl}/api/camerpay/mode`);
     const data = await res.json();
     return { isSimulation: data.isSimulation ?? true };

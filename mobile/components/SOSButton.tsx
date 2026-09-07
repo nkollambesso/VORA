@@ -1,3 +1,4 @@
+import { getBackendUrl } from "@/lib/config";
 import React, { useState } from "react";
 import { Alert, Text, TouchableOpacity, View } from "react-native";
 import * as Location from "expo-location";
@@ -33,7 +34,7 @@ export const SOSButton = () => {
               const userId = user?.id || "guest_user";
               voraSocket.sendSOS(userId, "PASSENGER", lat, lng);
 
-              const backendUrl = (typeof process !== "undefined" && process.env.EXPO_PUBLIC_BACKEND_URL) || "http://localhost:5000";
+              const backendUrl = getBackendUrl();
               await fetch(`${backendUrl}/api/sos/trigger`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

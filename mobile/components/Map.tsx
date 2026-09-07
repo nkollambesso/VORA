@@ -11,6 +11,8 @@ export interface MapProps {
   destinationLongitude?: number | null;
   driverLatitude?: number | null;
   driverLongitude?: number | null;
+  userAddress?: string | null;
+  destinationAddress?: string | null;
   vehicleType?: "moto" | "taxi" | "confort";
   zoom?: number;
   routeMode?: "pickup" | "destination" | "full";
@@ -24,10 +26,13 @@ const MapWeb = ({
   destinationLongitude,
   driverLatitude,
   driverLongitude,
+  userAddress,
+  destinationAddress,
   vehicleType = "taxi",
-  zoom = 15, // Zoom 15 par défaut pour distinguer nettement les quartiers camerounais
+  zoom = 15,
   routeMode = "full",
 }: MapProps) => {
+  const store = useLocationStore();
   // Default coordinates to Cameroon (Yaoundé / Bastos)
   const pLat = userLatitude ?? 3.8667;
   const pLng = userLongitude ?? 11.5167;
@@ -35,6 +40,10 @@ const MapWeb = ({
   const dLng = destinationLongitude;
   const drLat = driverLatitude;
   const drLng = driverLongitude;
+
+  // Resolve display names: use passed props, then store, then fallback
+  const pickupLabel = (userAddress || store.userAddress || "Ma position").replace(/'/g, "\\'");
+  const destLabel = (destinationAddress || store.destinationAddress || "Destination").replace(/'/g, "\\'");
 
   // Build interactive Leaflet HTML inside srcDoc
   const leafletHtml = `
@@ -130,11 +139,11 @@ const MapWeb = ({
       var pickupSvg = '<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"white\"><circle cx=\"12\" cy=\"12\" r=\"7\"/></svg>';
       var pickupIcon = L.divIcon({
         className: 'custom-div-icon',
-        html: '<div style=\"position:relative;\"><div class=\"pickup-pin\">' + pickupSvg + '</div><div class=\"badge-label\">Prise en charge</div></div>',
+        html: '<div style="position:relative;"><div class="pickup-pin">' + pickupSvg + '</div><div class="badge-label">${pickupLabel}</div></div>',
         iconSize: [32, 32],
         iconAnchor: [16, 16]
       });
-      L.marker([${pLat}, ${pLng}], { icon: pickupIcon }).addTo(map).bindPopup('<b>Point de Départ</b>');
+      L.marker([${pLat}, ${pLng}], { icon: pickupIcon }).addTo(map).bindPopup('<b>${pickupLabel}</b>');
       points.push([${pLat}, ${pLng}]);
 
       // 2. Marqueur Destination finale (si fournie)
@@ -142,11 +151,11 @@ const MapWeb = ({
       var destSvg = '<svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"white\"><path d=\"M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z\"/></svg>';
       var destIcon = L.divIcon({
         className: 'custom-div-icon',
-        html: '<div style=\"position:relative;\"><div class=\"dest-pin\">' + destSvg + '</div><div class=\"badge-label\">Destination</div></div>',
+        html: '<div style="position:relative;"><div class="dest-pin">' + destSvg + '</div><div class="badge-label">${destLabel}</div></div>',
         iconSize: [32, 32],
         iconAnchor: [16, 16]
       });
-      L.marker([${dLat}, ${dLng}], { icon: destIcon }).addTo(map).bindPopup('<b>Destination Finale</b>');
+      L.marker([${dLat}, ${dLng}], { icon: destIcon }).addTo(map).bindPopup('<b>${destLabel}</b>');
       points.push([${dLat}, ${dLng}]);
       ` : ''}
 
