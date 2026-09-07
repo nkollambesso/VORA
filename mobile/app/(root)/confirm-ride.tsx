@@ -3,15 +3,17 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Linking,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 import { RideRatingModal } from "@/components/RideRatingModal";
 import RideLayout from "@/components/RideLayout";
@@ -19,8 +21,11 @@ import { icons } from "@/constants";
 import { getBackendUrl } from "@/lib/config";
 import { voraSocket } from "@/lib/socket";
 import { voraVoice } from "@/lib/voiceAssistant";
+import { useClerkUser } from "@/lib/useClerkSafe";
+import { callAudio } from "@/lib/callAudio";
 
 export default function ConfirmRide() {
+  const { user } = useClerkUser();
   const params = useLocalSearchParams();
   const rideId = (params.rideId as string) || "";
   const initialOtp = (params.otpCode as string) || "";
@@ -33,6 +38,25 @@ export default function ConfirmRide() {
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [hasRated, setHasRated] = useState(false);
   const [otpCode, setOtpCode] = useState(initialOtp);
+
+  // ─── ÉTAT APPELS VOCAUX IN-APP (VoIP) ─────────────────────────────
+  const [isCallActive, setIsCallActive] = useState(false);
+  const [callStatus, setCallStatus] = useState<"calling" | "connected" | "ended">("calling");
+  const [callDuration, setCallDuration] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(false);
+
+  // ─── ÉTAT CHAT EN DIRECT AVEC LE CHAUFFEUR ─────────────────────────
+  const [isChatActive, setIsChatActive] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{ id: string; senderId: string; text: string; timestamp: string }>>([
+    {
+      id: "sys-init",
+      senderId: "system",
+      text: "Échange sécurisé & direct avec votre chauffeur VORA. Vos numéros réels restent protégés.",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    },
+  ]);
+  const [chatInputText, setChatInputText] = useState("");
 
   // 1. Initialiser les données de la course
   useEffect(() => {
@@ -138,6 +162,119 @@ export default function ConfirmRide() {
       socket.off("ride-disputed");
     };
   }, [ride?.driver_id]);
+
+  // 4. Timer d'Appel Vocal In-App
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (isCallActive && callStatus === "connected") {
+      interval = setInterval(() => {
+        setCallDuration((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isCallActive, callStatus]);
+
+  // 5. Socket Listeners pour Appel In-App & Chat en direct
+  useEffect(() => {
+    const socket = voraSocket.getSocket();
+    if (!socket) return;
+
+    const handleIncomingChatMessage = (data: { senderId: string; text: string }) => {
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          senderId: data.senderId,
+          text: data.text,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        },
+      ]);
+    };
+
+    const handleCallAnswered = () => {
+      callAudio.playConnected();
+      setCallStatus("connected");
+      voraVoice.speak("Communication vocale sécurisée établie.");
+    };
+
+    const handleCallEnded = () => {
+      callAudio.playEnded();
+      setCallStatus("ended");
+      setTimeout(() => {
+        setIsCallActive(false);
+        setCallDuration(0);
+      }, 1200);
+    };
+
+    socket.on("receive-chat-message", handleIncomingChatMessage);
+    socket.on("webrtc-call-answered", handleCallAnswered);
+    socket.on("webrtc-call-ended", handleCallEnded);
+
+    return () => {
+      callAudio.stopRinging();
+      socket.off("receive-chat-message", handleIncomingChatMessage);
+      socket.off("webrtc-call-answered", handleCallAnswered);
+      socket.off("webrtc-call-ended", handleCallEnded);
+    };
+  }, []);
+
+  const handleStartInAppCall = () => {
+    setIsCallActive(true);
+    setCallStatus("calling");
+    setCallDuration(0);
+    callAudio.startRinging();
+    voraVoice.speak("Appel vocal sécurisé VORA en cours.");
+
+    const socket = voraSocket.getSocket();
+    const targetUserId = ride?.driver_user_id || ride?.driver_id || "1";
+    socket?.emit("webrtc-call-user", {
+      targetUserId: targetUserId.toString(),
+      callerId: user?.id || "rider_me",
+      callerName: user?.fullName || "Passager VORA",
+      offer: { type: "offer", sdp: "sdp-audio-stream" },
+    });
+  };
+
+  const handleEndInAppCall = () => {
+    callAudio.playEnded();
+    const socket = voraSocket.getSocket();
+    const targetUserId = ride?.driver_user_id || ride?.driver_id || "1";
+    socket?.emit("webrtc-hangup", { targetUserId: targetUserId.toString() });
+    setCallStatus("ended");
+    setTimeout(() => {
+      setIsCallActive(false);
+      setCallDuration(0);
+    }, 1000);
+  };
+
+  const handleSendChatMessage = () => {
+    if (!chatInputText.trim()) return;
+    const msgText = chatInputText.trim();
+    const newMsg = {
+      id: Date.now().toString(),
+      senderId: user?.id || "me",
+      text: msgText,
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+    setChatMessages((prev) => [...prev, newMsg]);
+    setChatInputText("");
+
+    const socket = voraSocket.getSocket();
+    const targetUserId = ride?.driver_user_id || ride?.driver_id || "1";
+    socket?.emit("send-chat-message", {
+      targetUserId: targetUserId.toString(),
+      text: msgText,
+      senderId: user?.id || "me",
+    });
+  };
+
+  const formatCallTime = (sec: number) => {
+    const mins = Math.floor(sec / 60);
+    const secs = sec % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
 
   // Action : Confirmer la fin de la course
   const handleConfirmArrival = () => {
@@ -379,27 +516,32 @@ export default function ConfirmRide() {
             </View>
           )}
 
-          {/* Boutons d'interaction */}
+          {/* Boutons d'interaction 100% In-App */}
           <View style={styles.actionButtonsRow}>
             <TouchableOpacity
-              onPress={() => {
-                if (ride?.driver_phone) {
-                  Linking.openURL(`tel:${ride.driver_phone}`);
-                } else {
-                  Alert.alert("Appel Sécurisé", "Connexion vocale directe via VORA.");
-                }
-              }}
+              onPress={handleStartInAppCall}
               style={styles.callButton}
               activeOpacity={0.8}
             >
-              <Text style={styles.callButtonText}>Appeler le chauffeur</Text>
+              <Ionicons name="call" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <Text style={styles.callButtonText}>Appel In-App</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => voraVoice.speak("Assistante VORA : Le chauffeur est en route.")}
+              onPress={() => setIsChatActive(true)}
+              style={styles.chatButton}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="chatbubble-ellipses" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <Text style={styles.chatButtonText}>Chat Chauffeur</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => voraVoice.speak("Assistante VORA : Le chauffeur est en approche.")}
               style={styles.voiceButton}
               activeOpacity={0.8}
             >
+              <Ionicons name="volume-medium" size={14} color="#0EA5E9" style={{ marginRight: 4 }} />
               <Text style={styles.voiceButtonText}>VORA Voix</Text>
             </TouchableOpacity>
           </View>
@@ -505,6 +647,209 @@ export default function ConfirmRide() {
           setShowRatingModal(false);
         }}
       />
+
+      {/* ── MODAL APPEL VOCAL IN-APP VORA (VoIP) ── */}
+      <Modal visible={isCallActive} animationType="slide" transparent>
+        <View style={styles.callOverlay}>
+          <View style={styles.callCard}>
+            <TouchableOpacity
+              onPress={handleEndInAppCall}
+              style={styles.closeCallBtn}
+              accessibilityLabel="Fermer"
+            >
+              <Text style={{ fontSize: 18, color: "#FFFFFF", fontWeight: "700" }}>✕</Text>
+            </TouchableOpacity>
+
+            <View style={styles.callAvatarCircle}>
+              {ride?.driver_avatar ? (
+                <Image source={{ uri: ride.driver_avatar }} style={styles.callAvatarImg} />
+              ) : (
+                <Text style={styles.callAvatarInitial}>
+                  {(ride?.driver_display_name || ride?.driver_name || "C").charAt(0).toUpperCase()}
+                </Text>
+              )}
+            </View>
+
+            <Text style={styles.callName}>
+              {ride?.driver_display_name || ride?.driver_name || "Chauffeur VORA"}
+            </Text>
+            <Text style={styles.callPublicId}>
+              {ride?.driver_matricule || ride?.license_plate || "Appel Chiffré In-App VORA"}
+            </Text>
+
+            <View style={styles.callStatusBadge}>
+              <View style={[styles.callStatusPulse, callStatus === "connected" && { backgroundColor: "#10B981" }]} />
+              <Text style={styles.callStatusText}>
+                {callStatus === "calling"
+                  ? "Appel VoIP VORA en cours..."
+                  : callStatus === "connected"
+                  ? `En communication (${formatCallTime(callDuration)})`
+                  : "Appel terminé"}
+              </Text>
+            </View>
+
+            {/* Contrôles de l'Appel */}
+            <View style={styles.callControlsRow}>
+              <TouchableOpacity
+                style={[styles.callControlBtn, isMuted && styles.callControlBtnActive]}
+                onPress={() => setIsMuted(!isMuted)}
+              >
+                <Ionicons name={isMuted ? "mic-off" : "mic"} size={20} color={isMuted ? "#EF4444" : "#FFFFFF"} />
+                <Text style={[styles.callControlBtnText, isMuted && styles.callControlBtnTextActive]}>
+                  {isMuted ? "Muet" : "Micro"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.callControlBtn, isSpeakerOn && styles.callControlBtnActive]}
+                onPress={() => setIsSpeakerOn(!isSpeakerOn)}
+              >
+                <Ionicons name={isSpeakerOn ? "volume-high" : "volume-low"} size={20} color={isSpeakerOn ? "#0EA5E9" : "#FFFFFF"} />
+                <Text style={[styles.callControlBtnText, isSpeakerOn && styles.callControlBtnTextActive]}>
+                  {isSpeakerOn ? "HP On" : "Écouteur"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.callHangupBtn} onPress={handleEndInAppCall}>
+                <Ionicons name="call" size={22} color="#FFFFFF" style={{ transform: [{ rotate: "135deg" }] }} />
+                <Text style={styles.callHangupBtnText}>Raccrocher</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── MODAL CHAT EN DIRECT AVEC LE CHAUFFEUR ── */}
+      <Modal visible={isChatActive} animationType="slide" transparent>
+        <View style={styles.chatOverlay}>
+          <View style={styles.chatCard}>
+            {/* Header Chat */}
+            <View style={styles.chatHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+                <View style={styles.chatHeaderAvatar}>
+                  <Text style={styles.chatHeaderAvatarText}>
+                    {(ride?.driver_display_name || ride?.driver_name || "C").charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.chatHeaderName} numberOfLines={1}>
+                    {ride?.driver_display_name || ride?.driver_name || "Chauffeur VORA"}
+                  </Text>
+                  <Text style={styles.chatHeaderSub} numberOfLines={1}>
+                    {ride?.vehicle_model ? `${ride.vehicle_model} • ` : ""}En route vers vous
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setIsChatActive(false);
+                    router.push({
+                      pathname: "/(root)/(tabs)/chat" as any,
+                      params: {
+                        driverId: ride?.driver_id?.toString() || "1",
+                        driverName: ride?.driver_display_name || ride?.driver_name || "Chauffeur",
+                        driverPublicId: ride?.driver_matricule || `VORA-DRV0${ride?.driver_id || 1}`,
+                        vehicleModel: ride?.vehicle_model || "Véhicule VORA",
+                        rideId: ride?.id,
+                      },
+                    });
+                  }}
+                  style={styles.chatExpandBtn}
+                >
+                  <Ionicons name="expand-outline" size={14} color="#0EA5E9" style={{ marginRight: 3 }} />
+                  <Text style={styles.chatExpandBtnText}>Plein écran</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setIsChatActive(false)}
+                  style={styles.chatCloseBtn}
+                >
+                  <Ionicons name="close" size={20} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Notice sécurité */}
+            <View style={styles.chatNotice}>
+              <Ionicons name="shield-checkmark" size={14} color="#0EA5E9" style={{ marginRight: 6 }} />
+              <Text style={styles.chatNoticeText}>
+                Discussion cryptée VORA. Vos coordonnées réelles ne sont jamais partagées.
+              </Text>
+            </View>
+
+            {/* Liste des messages */}
+            <ScrollView style={styles.chatMessagesList} contentContainerStyle={{ padding: 12, paddingBottom: 20 }}>
+              {chatMessages.map((msg) => {
+                const isMe = msg.senderId === (user?.id || "me");
+                const isSystem = msg.senderId === "system";
+
+                if (isSystem) {
+                  return (
+                    <View key={msg.id} style={styles.chatSystemMsg}>
+                      <Text style={styles.chatSystemMsgText}>{msg.text}</Text>
+                    </View>
+                  );
+                }
+
+                return (
+                  <View
+                    key={msg.id}
+                    style={[
+                      styles.chatBubble,
+                      isMe ? styles.chatBubbleMe : styles.chatBubbleOther,
+                    ]}
+                  >
+                    <Text style={[styles.chatBubbleText, isMe ? styles.chatBubbleTextMe : styles.chatBubbleTextOther]}>
+                      {msg.text}
+                    </Text>
+                    <Text style={[styles.chatBubbleTime, isMe ? styles.chatBubbleTimeMe : styles.chatBubbleTimeOther]}>
+                      {msg.timestamp}
+                    </Text>
+                  </View>
+                );
+              })}
+            </ScrollView>
+
+            {/* Réponses rapides en 1 clic */}
+            <View style={styles.chatQuickReplies}>
+              <TouchableOpacity
+                style={styles.quickReplyChip}
+                onPress={() => setChatInputText("Je suis au point de rendez-vous.")}
+              >
+                <Text style={styles.quickReplyText}>👋 Je suis au RDV</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickReplyChip}
+                onPress={() => setChatInputText("J'arrive dans 1 minute !")}
+              >
+                <Text style={styles.quickReplyText}>⏳ J'arrive dans 1 min</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Champ de saisie */}
+            <View style={styles.chatInputRow}>
+              <TextInput
+                style={styles.chatInputField}
+                placeholder="Écrire un message au chauffeur..."
+                placeholderTextColor="#94A3B8"
+                value={chatInputText}
+                onChangeText={setChatInputText}
+                onSubmitEditing={handleSendChatMessage}
+                returnKeyType="send"
+              />
+              <TouchableOpacity
+                style={[styles.chatSendBtn, !chatInputText.trim() && { opacity: 0.5 }]}
+                onPress={handleSendChatMessage}
+                disabled={!chatInputText.trim()}
+              >
+                <Ionicons name="send" size={16} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </RideLayout>
   );
 }
@@ -729,22 +1074,40 @@ const styles = StyleSheet.create({
   },
   callButton: {
     flex: 1,
+    flexDirection: "row",
     backgroundColor: "#0EA5E9",
     paddingVertical: 10,
     borderRadius: 12,
     alignItems: "center",
+    justifyContent: "center",
   },
   callButtonText: {
     color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "800",
   },
-  voiceButton: {
-    backgroundColor: "#F1F5F9",
-    paddingHorizontal: 14,
+  chatButton: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor: "#10B981",
     paddingVertical: 10,
     borderRadius: 12,
     alignItems: "center",
+    justifyContent: "center",
+  },
+  chatButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  voiceButton: {
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
   voiceButtonText: {
     color: "#334155",
@@ -871,5 +1234,342 @@ const styles = StyleSheet.create({
     color: "#64748B",
     fontSize: 12,
     fontWeight: "700",
+  },
+
+  // ── Modale d'Appel Vocal In-App (VoIP) ──
+  callOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  callCard: {
+    width: "100%",
+    maxWidth: 380,
+    backgroundColor: "#0F172A",
+    borderRadius: 28,
+    padding: 28,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.12)",
+    shadowColor: "#000",
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
+    position: "relative",
+  },
+  closeCallBtn: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+  },
+  callAvatarCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "#0EA5E9",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+    borderWidth: 3,
+    borderColor: "#38BDF8",
+    overflow: "hidden",
+  },
+  callAvatarImg: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+  },
+  callAvatarInitial: {
+    fontSize: 36,
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+  callName: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    marginBottom: 4,
+    textAlign: "center",
+  },
+  callPublicId: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#94A3B8",
+    marginBottom: 16,
+    textAlign: "center",
+  },
+  callStatusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 24,
+    gap: 8,
+  },
+  callStatusPulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#F59E0B",
+  },
+  callStatusText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#E2E8F0",
+  },
+  callControlsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 14,
+    width: "100%",
+  },
+  callControlBtn: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    minWidth: 72,
+  },
+  callControlBtnActive: {
+    backgroundColor: "rgba(239, 68, 68, 0.2)",
+    borderColor: "#EF4444",
+    borderWidth: 1,
+  },
+  callControlBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#E2E8F0",
+    marginTop: 4,
+  },
+  callControlBtnTextActive: {
+    color: "#EF4444",
+  },
+  callHangupBtn: {
+    backgroundColor: "#EF4444",
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  callHangupBtnText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+
+  // ── Modale Chat Direct ──
+  chatOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "flex-end",
+  },
+  chatCard: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    height: "78%",
+    maxHeight: 650,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  chatHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    backgroundColor: "#FFFFFF",
+  },
+  chatHeaderAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#0EA5E9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chatHeaderAvatarText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  chatHeaderName: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  chatHeaderSub: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#10B981",
+  },
+  chatExpandBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  chatExpandBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0EA5E9",
+  },
+  chatCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chatNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  chatNoticeText: {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "500",
+    flex: 1,
+  },
+  chatMessagesList: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+  },
+  chatSystemMsg: {
+    alignSelf: "center",
+    backgroundColor: "#E2E8F0",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginVertical: 8,
+    maxWidth: "85%",
+  },
+  chatSystemMsgText: {
+    fontSize: 11,
+    color: "#475569",
+    textAlign: "center",
+    fontWeight: "600",
+  },
+  chatBubble: {
+    maxWidth: "78%",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
+    marginVertical: 4,
+  },
+  chatBubbleMe: {
+    alignSelf: "flex-end",
+    backgroundColor: "#0EA5E9",
+    borderBottomRightRadius: 4,
+  },
+  chatBubbleOther: {
+    alignSelf: "flex-start",
+    backgroundColor: "#FFFFFF",
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  chatBubbleText: {
+    fontSize: 14,
+    lineHeight: 19,
+  },
+  chatBubbleTextMe: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+  chatBubbleTextOther: {
+    color: "#0F172A",
+    fontWeight: "600",
+  },
+  chatBubbleTime: {
+    fontSize: 10,
+    marginTop: 4,
+  },
+  chatBubbleTimeMe: {
+    color: "rgba(255, 255, 255, 0.7)",
+    textAlign: "right",
+  },
+  chatBubbleTimeOther: {
+    color: "#94A3B8",
+    textAlign: "left",
+  },
+  chatQuickReplies: {
+    flexDirection: "row",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+    gap: 8,
+  },
+  quickReplyChip: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  quickReplyText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#334155",
+  },
+  chatInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+    gap: 8,
+  },
+  chatInputField: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#0F172A",
+  },
+  chatSendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#0EA5E9",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

@@ -197,14 +197,45 @@ npm run dev
 # Serveur actif sur http://localhost:5000 (WebSocket & API REST)
 ```
 
-### 2. Démarrage du Frontend (Web & Mobile Expo)
+### 2. Démarrage du Frontend avec Tunnel HTTPS (FORTEMENT RECOMMANDÉ)
+
+> [!IMPORTANT]
+> **Pourquoi le Tunnel HTTPS est indispensable en local :**
+> - **Permissions Navigateur Sécurisées** : Les fonctionnalités modernes de l'application (synthèse et reconnaissance vocale Web Speech, sons et sonneries d'appel in-app Web Audio API, géolocalisation GPS en direct, WebRTC / microphone et Service Worker PWA) exigent impérativement un **contexte sécurisé HTTPS** (`Secure Context`) pour fonctionner sur les smartphones et navigateurs distants.
+> - **Authentification Clerk & OAuth Google** : Clerk et Google exigent des origines sécurisées HTTPS ou localhost strict.
+> - **Installation PWA fluide** : L'installation de l'application sur l'écran d'accueil d'un smartphone (Android Chrome ou iOS Safari) requiert une connexion HTTPS certifiée.
+
+Pour démarrer le frontend avec un tunnel HTTPS public automatique (via ngrok) :
 
 ```bash
 cd mobile
 npm install --legacy-peer-deps
-npx expo start --web --port 8081
-# Application web accessible sur http://localhost:8081
+
+# Lancement avec tunnel HTTPS sécurisé
+npx expo start --web --tunnel --port 8081
 ```
+
+> **Conseil** : Dès le lancement, Expo affiche l'URL publique HTTPS (ex: `https://xxxx.exp.direct`). Ouvrez cette URL sur votre ordinateur ou sur n'importe quel smartphone pour tester toutes les fonctionnalités dans des conditions réelles de production.
+>
+> Si vous souhaitez lancer uniquement sur votre machine en local sans tunnel :
+> ```bash
+> npx expo start --web --port 8081
+> ```
+
+---
+
+### 3. Cadre Responsive iPhone XR sur Ordinateur & Mobile Natif
+
+- **Sur Ordinateur de Bureau (Desktop / Laptop)** : L'application s'affiche automatiquement au format élégant **iPhone XR** (dimensions 414 × 896 pt, bordures courbées premium, encoche notch supérieure, fente haut-parleur et ombre portée réaliste) pour une expérience de démonstration mobile parfaite.
+- **Sur Smartphone (Écran ≤ 500px)** : L'application occupe **100% de l'écran en plein écran natif**, optimisé pour l'utilisation tactile et la PWA installée sans bordures superflues.
+
+---
+
+### 4. Appels In-App & Chat Direct Chauffeur-Passager (VoIP + Sonnerie)
+
+- **100% In-App (Aucune redirection externe)** : Plus de redirection vers l'application téléphonique native de l'OS (`tel:...`). Tout le flux d'appel et de discussion s'effectue directement dans l'application VORA.
+- **Sonnerie In-App Polyphonique Mélodieuse** : Une sonnerie VoIP moderne et fluide synthétisée dynamiquement via l'API Web Audio (aucun fichier audio lourd à télécharger, latence zéro, accords harmoniques F#4/A4/C#5/E5 avec carillon de décrochage et bip de fin d'appel).
+- **Messagerie Instantanée Sécurisée** : Chat bidirectionnel en direct avec horodatage et anonymisation complète des numéros réels.
 
 ---
 

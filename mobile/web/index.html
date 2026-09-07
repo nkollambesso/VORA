@@ -93,30 +93,75 @@
         font-weight: 800;
       }
 
-      /* ── App container ────────────────────────────────────────── */
-      #root {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        width: 100%;
-        /* Phone frame sur desktop */
-        max-width: 430px;
-        margin: 0 auto;
-        box-shadow: 0 0 60px rgba(0, 0, 0, 0.25);
-        overflow: hidden;
-        position: relative;
-        background: #ffffff;
-        font-family: "Plus Jakarta Sans", "Jakarta", system-ui, sans-serif;
+      /* ── iPhone XR Frame on Desktop ──────────────────────────── */
+      @media (min-width: 501px) {
+        body {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: radial-gradient(circle at 50% 25%, #1e293b 0%, #0f172a 60%, #020617 100%);
+        }
+
+        #root {
+          width: 414px !important;
+          height: 896px !important;
+          max-height: 94vh !important;
+          border-radius: 48px !important;
+          border: 12px solid #1e293b !important;
+          box-shadow: 
+            0 25px 70px -10px rgba(0, 0, 0, 0.75),
+            0 0 0 1px rgba(255, 255, 255, 0.12),
+            0 0 40px rgba(14, 165, 233, 0.15) !important;
+          overflow: hidden !important;
+          position: relative !important;
+          background: #ffffff !important;
+          margin: auto !important;
+          display: flex !important;
+          flex-direction: column !important;
+        }
+
+        #root::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 170px;
+          height: 28px;
+          background: #1e293b;
+          border-bottom-left-radius: 18px;
+          border-bottom-right-radius: 18px;
+          z-index: 99999;
+          pointer-events: none;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        #root::after {
+          content: "";
+          position: absolute;
+          top: 8px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 50px;
+          height: 4px;
+          background: #334155;
+          border-radius: 4px;
+          z-index: 100000;
+          pointer-events: none;
+        }
       }
 
-      @media (max-width: 480px) {
+      @media (max-width: 500px) {
         html,
         body {
           background-color: #ffffff;
         }
         #root {
-          max-width: 100%;
-          box-shadow: none;
+          width: 100% !important;
+          height: 100% !important;
+          border: none !important;
+          border-radius: 0 !important;
+          box-shadow: none !important;
         }
       }
 

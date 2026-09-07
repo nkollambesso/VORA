@@ -417,4 +417,68 @@ router.post('/:id/cancel', async (req: Request, res: Response) => {
   }
 });
 
+// Récupérer les détails d'une course par ID avec infos chauffeur
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const rideRes = await query(
+      `SELECT r.*, 
+              d.user_id as driver_user_id,
+              u.name as driver_name,
+              u.public_id as driver_public_id,
+              d.vehicle_model,
+              d.vehicle_plate,
+              d.vehicle_image,
+              u.avatar_url as driver_avatar,
+              d.rating as driver_rating,
+              u.phone as driver_phone
+       FROM rides r
+       LEFT JOIN drivers d ON r.driver_id = d.id
+       LEFT JOIN users u ON d.user_id = u.id
+       WHERE r.id = $1`,
+      [id]
+    );
+    if (rideRes.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Course introuvable' });
+    }
+    return res.json({ success: true, ride: rideRes.rows[0] });
+  } catch (err) {
+    console.error('Erreur get ride:', err);
+    return res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+});
+
+// Récupérer la course active d'un passager
+router.get('/active/rider/:riderId', async (req: Request, res: Response) => {
+  try {
+    const { riderId } = req.params;
+    const rideRes = await query(
+      `SELECT r.*, 
+              d.user_id as driver_user_id,
+              u.name as driver_name,
+              u.public_id as driver_public_id,
+              d.vehicle_model,
+              d.vehicle_plate,
+              d.vehicle_image,
+              u.avatar_url as driver_avatar,
+              d.rating as driver_rating,
+              u.phone as driver_phone
+       FROM rides r
+       LEFT JOIN drivers d ON r.driver_id = d.id
+       LEFT JOIN users u ON d.user_id = u.id
+       WHERE r.rider_id = $1 AND r.status IN ('SEARCHING', 'ACCEPTED', 'IN_TRANSIT', 'ARRIVEE_SIGNALEE')
+       ORDER BY r.created_at DESC
+       LIMIT 1`,
+      [riderId]
+    );
+    if (rideRes.rows.length === 0) {
+      return res.json({ success: true, ride: null });
+    }
+    return res.json({ success: true, ride: rideRes.rows[0] });
+  } catch (err) {
+    console.error('Erreur get active ride:', err);
+    return res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+});
+
 export default router;

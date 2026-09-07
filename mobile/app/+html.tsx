@@ -59,13 +59,50 @@ export default function Root({ children }: { children: React.ReactNode }) {
 }
 
 const responsiveBackground = `
-html, body, #root {
+html, body {
   height: 100%;
-  width: 100%;
   margin: 0;
   padding: 0;
-  background-color: #ffffff !important;
 }
-body {
-  background-color: #ffffff !important;
+
+@media (min-width: 501px) {
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 25%, #1e293b 0%, #0f172a 60%, #020617 100%) !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+  }
+  #root {
+    width: 414px !important;
+    height: 896px !important;
+    max-height: 94vh !important;
+    border-radius: 48px !important;
+    border: 12px solid #1e293b !important;
+    box-shadow: 
+      0 25px 70px -10px rgba(0, 0, 0, 0.75),
+      0 0 0 1px rgba(255, 255, 255, 0.12),
+      0 0 40px rgba(14, 165, 233, 0.15) !important;
+    overflow: hidden !important;
+    position: relative !important;
+    background-color: #ffffff !important;
+    margin: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+}
+
+@media (max-width: 500px) {
+  html, body {
+    background-color: #ffffff !important;
+  }
+  #root {
+    height: 100% !important;
+    width: 100% !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background-color: #ffffff !important;
+  }
 }`;

@@ -11,11 +11,13 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { voraSocket } from "@/lib/socket";
 import { useClerkUser } from "@/lib/useClerkSafe";
 import { useDriverStore } from "@/store";
 import { Ionicons } from "@expo/vector-icons";
+import { getBackendUrl } from "@/lib/config";
+import { callAudio } from "@/lib/callAudio";
 
 interface Message {
   id: string;
@@ -26,6 +28,7 @@ interface Message {
 
 export default function Chat() {
   const { user } = useClerkUser();
+  const params = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
 
@@ -44,6 +47,31 @@ export default function Chat() {
   const [callDuration, setCallDuration] = useState(0);
 
   useEffect(() => {
+    // 1. Si transmis via query params (ex: redirection depuis confirm-ride)
+    if (params.driverId || params.driverName) {
+      const dName = (params.driverName as string) || "Chauffeur VORA";
+      setActiveDriver({
+        id: (params.driverId as string) || "1",
+        public_id: (params.driverPublicId as string) || `VORA-DRV0${params.driverId || "1"}`,
+        name: dName,
+        vehicle_model: (params.vehicleModel as string) || "Véhicule VORA",
+      });
+      setMessages([
+        {
+          id: "sys-init",
+          senderId: "system",
+          text: `Discussion sécurisée avec votre chauffeur ${dName}. Vos numéros réels ne sont jamais partagés.`,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        },
+      ]);
+      if (params.autoCall === "true") {
+        setIsCallActive(true);
+        setCallStatus("calling");
+      }
+      return;
+    }
+
+    // 2. Si un chauffeur est sélectionné dans le store
     if (assignedDriver) {
       setActiveDriver({
         id: assignedDriver.id.toString(),
@@ -59,11 +87,47 @@ export default function Chat() {
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         },
       ]);
+      return;
+    }
+
+    // 3. Chercher la course active du passager auprès du backend
+    if (user?.id) {
+      const fetchActiveRide = async () => {
+        try {
+          const backendUrl = getBackendUrl();
+          const res = await fetch(`${backendUrl}/api/rides/active/rider/${user.id}`);
+          const data = await res.json();
+          if (data.success && data.ride) {
+            const r = data.ride;
+            const dName = r.driver_name || "Chauffeur VORA";
+            setActiveDriver({
+              id: (r.driver_user_id || r.driver_id || 1).toString(),
+              public_id: r.driver_public_id || `VORA-DRV0${r.driver_id || 1}`,
+              name: dName,
+              vehicle_model: r.vehicle_model || "Véhicule VORA",
+            });
+            setMessages([
+              {
+                id: "sys-init",
+                senderId: "system",
+                text: `Discussion sécurisée avec votre chauffeur ${dName} (Course ${r.id}). Vos numéros réels ne sont jamais partagés.`,
+                timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              },
+            ]);
+            return;
+          }
+        } catch (err) {
+          console.warn("Erreur chargement course active dans chat:", err);
+        }
+        setActiveDriver(null);
+        setMessages([]);
+      };
+      fetchActiveRide();
     } else {
       setActiveDriver(null);
       setMessages([]);
     }
-  }, [assignedDriver]);
+  }, [assignedDriver, params.driverId, params.driverName, user?.id]);
 
   // Timer d'appel
   useEffect(() => {
@@ -100,13 +164,16 @@ export default function Chat() {
     socket.on("webrtc-incoming-call", () => {
       setIsCallActive(true);
       setCallStatus("calling");
+      callAudio.startRinging();
     });
 
     socket.on("webrtc-call-answered", () => {
+      callAudio.playConnected();
       setCallStatus("connected");
     });
 
     socket.on("webrtc-call-ended", () => {
+      callAudio.playEnded();
       setCallStatus("ended");
       setTimeout(() => {
         setIsCallActive(false);
@@ -115,6 +182,7 @@ export default function Chat() {
     });
 
     return () => {
+      callAudio.stopRinging();
       socket.off("receive-chat-message", handleIncomingMessage);
       socket.off("webrtc-incoming-call");
       socket.off("webrtc-call-answered");
@@ -149,6 +217,7 @@ export default function Chat() {
     setIsCallActive(true);
     setCallStatus("calling");
     setCallDuration(0);
+    callAudio.startRinging();
 
     const socket = voraSocket.getSocket();
     socket?.emit("webrtc-call-user", {
@@ -160,6 +229,7 @@ export default function Chat() {
   };
 
   const handleEndCall = () => {
+    callAudio.playEnded();
     const socket = voraSocket.getSocket();
     if (activeDriver) {
       socket?.emit("webrtc-hangup", { targetUserId: activeDriver.id });
