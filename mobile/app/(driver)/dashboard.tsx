@@ -430,29 +430,27 @@ export default function DriverDashboard() {
       {/* Header Sky Blue Glass */}
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
-          <TouchableOpacity
-            onPress={() => router.replace("/(root)/(tabs)/profile")}
-            style={styles.backModeBtn}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.backModeBtnText}>← Mode Passager</Text>
-          </TouchableOpacity>
+          <View style={styles.driverRoleBadge}>
+            <Text style={styles.driverRoleBadgeText}>CHAUFFEUR ACTIF</Text>
+          </View>
 
-          <TouchableOpacity
-            onPress={() => router.push("/(driver)/earnings" as any)}
-            style={styles.earningsBtn}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.earningsBtnText}>Revenus</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+            <TouchableOpacity
+              onPress={() => router.push("/(driver)/earnings" as any)}
+              style={styles.earningsBtn}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.earningsBtnText}>Revenus</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={handleSignOut}
-            style={[styles.earningsBtn, { backgroundColor: "rgba(239,68,68,0.15)", borderColor: "rgba(239,68,68,0.4)" }]}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.earningsBtnText, { color: "#fca5a5" }]}>Se déconnecter</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleSignOut}
+              style={[styles.earningsBtn, { backgroundColor: "rgba(239,68,68,0.15)", borderColor: "rgba(239,68,68,0.4)" }]}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.earningsBtnText, { color: "#fca5a5" }]}>Se déconnecter</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.headerTextGroup}>
@@ -988,18 +986,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 16,
   },
-  backModeBtn: {
-    backgroundColor: "rgba(255, 255, 255, 0.18)",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
+  driverRoleBadge: {
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.3)",
+    borderColor: "rgba(255, 255, 255, 0.35)",
   },
-  backModeBtnText: {
+  driverRoleBadgeText: {
     color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.8,
   },
   headerTextGroup: {
     marginTop: 4,
