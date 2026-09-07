@@ -19,19 +19,20 @@ const InputField = ({
   inputStyle,
   iconStyle,
   className,
+  error,
   ...props
-}: InputFieldProps) => {
+}: InputFieldProps & { error?: string }) => {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.wrapper}>
         <Text style={styles.label}>{label}</Text>
-        <View style={styles.inputRow}>
+        <View style={[styles.inputRow, !!error && styles.inputRowError]}>
           {icon && (
             <Image
               source={icon}
-              style={styles.icon}
+              style={[styles.icon, !!error && styles.iconError]}
               resizeMode="contain"
             />
           )}
@@ -42,6 +43,7 @@ const InputField = ({
             {...props}
           />
         </View>
+        {!!error && <Text style={styles.errorText}>{error}</Text>}
       </View>
     </KeyboardAvoidingView>
   );
@@ -86,4 +88,18 @@ const styles = StyleSheet.create({
     fontFamily: "Jakarta-Medium",
     outlineStyle: "none", // web only
   } as any,
+  inputRowError: {
+    borderColor: "#ef4444",
+    backgroundColor: "#fef2f2",
+  },
+  iconError: {
+    tintColor: "#ef4444",
+  },
+  errorText: {
+    fontSize: 12,
+    color: "#ef4444",
+    marginTop: 4,
+    marginLeft: 4,
+    fontFamily: "Jakarta-Medium",
+  },
 });

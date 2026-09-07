@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 
+import { Ionicons } from "@expo/vector-icons";
 import CustomButton from "@/components/CustomButton";
 import InputField from "@/components/InputField";
 import OAuth from "@/components/OAuth";
@@ -66,17 +67,30 @@ const SignIn = () => {
 
   const [role, setRole] = useState<"PASSENGER" | "DRIVER">("PASSENGER");
   const [form, setForm] = useState({ email: "", password: "" });
+  const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({});
   const [submitting, setSubmitting] = useState(false);
 
   const onSignInPress = useCallback(async () => {
     const emailTrimmed = form.email.trim();
     const passwordTrimmed = form.password;
 
-    if (!emailTrimmed || !passwordTrimmed) {
-      Alert.alert("Champs requis", "Veuillez entrer votre adresse email et votre mot de passe.");
+    const newErrors: { email?: string; password?: string; general?: string } = {};
+    if (!emailTrimmed) {
+      newErrors.email = "Veuillez entrer votre adresse email.";
+    } else if (!emailTrimmed.includes("@") || !emailTrimmed.includes(".")) {
+      newErrors.email = "Veuillez entrer un email valide (ex: contact@domaine.cm).";
+    }
+    if (!passwordTrimmed) {
+      newErrors.password = "Veuillez entrer votre mot de passe.";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      Alert.alert("Champs incomplets", "Veuillez corriger les champs indiqués en rouge avant de vous connecter.");
       return;
     }
 
+    setErrors({});
     setSubmitting(true);
 
     // 1. Check if entered credentials match system administrator (only if not Chauffeur role)
@@ -91,10 +105,9 @@ const SignIn = () => {
         if (adminResult.isAdmin) {
           // Admin email recognized but password was incorrect
           setSubmitting(false);
-          Alert.alert(
-            "Accès Administrateur",
-            adminResult.error || "Mot de passe administrateur incorrect."
-          );
+          const errMsg = adminResult.error || "Mot de passe administrateur incorrect.";
+          setErrors({ general: errMsg });
+          Alert.alert("Accès Administrateur", errMsg);
           return;
         }
       } catch (e) {
@@ -104,6 +117,7 @@ const SignIn = () => {
 
     if (!isLoaded || !signIn) {
       setSubmitting(false);
+      setErrors({ general: "Le service d'authentification n'est pas encore prêt." });
       Alert.alert("Service indisponible", "Le service d'authentification n'est pas encore prêt.");
       return;
     }
@@ -148,14 +162,18 @@ const SignIn = () => {
         await setActive({ session: attempt.createdSessionId });
         router.replace(targetRoute as any);
       } else {
-        Alert.alert("Erreur de connexion", "Connexion non finalisée. Statut: " + attempt.status);
+        const msg = "Connexion non finalisée. Statut: " + attempt.status;
+        setErrors({ general: msg });
+        Alert.alert("Erreur de connexion", msg);
       }
     } catch (err: any) {
       console.error("Sign in error:", err);
-      Alert.alert(
-        "Échec de connexion",
-        err?.errors?.[0]?.longMessage || err?.message || "Identifiants incorrects. Veuillez vérifier votre email et mot de passe."
-      );
+      const errMsg =
+        err?.errors?.[0]?.longMessage ||
+        err?.message ||
+        "Identifiants incorrects. Veuillez vérifier votre email et mot de passe.";
+      setErrors({ general: errMsg });
+      Alert.alert("Échec de connexion", errMsg);
     } finally {
       setSubmitting(false);
     }
@@ -241,6 +259,13 @@ const SignIn = () => {
               </TouchableOpacity>
             </View>
 
+            {!!errors.general && (
+              <View style={styles.generalErrorBanner}>
+                <Ionicons name="alert-circle" size={20} color="#dc2626" style={{ marginRight: 8 }} />
+                <Text style={styles.generalErrorText}>{errors.general}</Text>
+              </View>
+            )}
+
             <InputField
               label="Email"
               placeholder="Votre adresse email"
@@ -248,7 +273,13 @@ const SignIn = () => {
               textContentType="emailAddress"
               autoCapitalize="none"
               value={form.email}
-              onChangeText={(v) => setForm({ ...form, email: v })}
+              error={errors.email}
+              onChangeText={(v) => {
+                setForm({ ...form, email: v });
+                if (errors.email || errors.general) {
+                  setErrors({ ...errors, email: undefined, general: undefined });
+                }
+              }}
             />
             <InputField
               label="Mot de passe"
@@ -257,7 +288,13 @@ const SignIn = () => {
               secureTextEntry
               textContentType="password"
               value={form.password}
-              onChangeText={(v) => setForm({ ...form, password: v })}
+              error={errors.password}
+              onChangeText={(v) => {
+                setForm({ ...form, password: v });
+                if (errors.password || errors.general) {
+                  setErrors({ ...errors, password: undefined, general: undefined });
+                }
+              }}
             />
 
             {/* Clerk Captcha container for Bot Protection on Web */}
@@ -293,6 +330,24 @@ export default SignIn;
 const PRIMARY = "#0EA5E9";
 
 const styles = StyleSheet.create({
+  generalErrorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    borderColor: "#F87171",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  generalErrorText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#B91C1C",
+    fontWeight: "600",
+    fontFamily: "Jakarta-SemiBold",
+  },
   sessionBanner: {
     flexDirection: "row",
     alignItems: "center",

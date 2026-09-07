@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useClerkUser } from "@/lib/useClerkSafe";
 
@@ -68,6 +69,7 @@ const BookRide = () => {
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "MTN_MOMO" | "ORANGE_MONEY" | "WALLET">("CASH");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isBooking, setIsBooking] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // ====== RÉSERVATION POUR AUTRUI ======
   const [bookedForOther, setBookedForOther] = useState(false);
@@ -83,7 +85,9 @@ const BookRide = () => {
   const validateInputs = (): boolean => {
     // 1. Vérification destination renseignée
     if (!destinationAddress || (!destinationLatitude && !destinationLongitude)) {
-      Alert.alert("Destination Requise", "Veuillez saisir une destination avant de confirmer la course.");
+      const msg = "Veuillez saisir une destination avant de confirmer la course.";
+      setFormError(msg);
+      Alert.alert("Destination Requise", msg);
       return false;
     }
 
@@ -97,7 +101,9 @@ const BookRide = () => {
       destinationAddress || ""
     );
     if (!geoCheck.isValid) {
-      Alert.alert("Zone Non Desservie", geoCheck.error || "Le trajet dépasse le périmètre urbain desservi.");
+      const msg = geoCheck.error || "Le trajet dépasse le périmètre urbain desservi.";
+      setFormError(msg);
+      Alert.alert("Zone Non Desservie", msg);
       return false;
     }
 
@@ -105,6 +111,7 @@ const BookRide = () => {
     if (selectedVehicleType === "moto") {
       const motoError = validateMotoCapacity(passengerCount, luggageCount);
       if (motoError) {
+        setFormError(motoError);
         Alert.alert("Capacité Moto Dépassée", motoError);
         return false;
       }
@@ -112,28 +119,29 @@ const BookRide = () => {
 
     // 4. Paiement Mobile Money : numéro requis
     if (paymentMethod !== "CASH" && paymentMethod !== "WALLET" && (!phoneNumber || !validateCameroonPhone(phoneNumber))) {
-      Alert.alert(
-        "Numéro Invalide",
-        "Veuillez entrer un numéro de téléphone Mobile Money camerounais valide (ex: 677 123 456)."
-      );
+      const msg = "Veuillez entrer un numéro de téléphone Mobile Money camerounais valide (ex: 677 123 456).";
+      setFormError(msg);
+      Alert.alert("Numéro Invalide", msg);
       return false;
     }
 
     // 5. Validation champs "Pour Autrui"
     if (bookedForOther) {
       if (!passengerName.trim() || passengerName.trim().length < 2) {
-        Alert.alert("Nom Requis", "Veuillez entrer le nom complet de la personne à transporter (minimum 2 caractères).");
+        const msg = "Veuillez entrer le nom complet de la personne à transporter (minimum 2 caractères).";
+        setFormError(msg);
+        Alert.alert("Nom Requis", msg);
         return false;
       }
       if (!passengerPhone || !validateCameroonPhone(passengerPhone)) {
-        Alert.alert(
-          "Téléphone Invalide",
-          "Veuillez entrer un numéro de téléphone camerounais valide pour le passager (ex: 677 123 456)."
-        );
+        const msg = "Veuillez entrer un numéro de téléphone camerounais valide pour le passager (ex: 677 123 456).";
+        setFormError(msg);
+        Alert.alert("Téléphone Invalide", msg);
         return false;
       }
     }
 
+    setFormError(null);
     return true;
   };
 
@@ -185,11 +193,15 @@ const BookRide = () => {
           params: { rideId: data.ride.id, rideData: JSON.stringify(data.ride) },
         });
       } else {
-        Alert.alert("Erreur", data.error || "Impossible de réserver la course.");
+        const msg = data.error || "Impossible de réserver la course.";
+        setFormError(msg);
+        Alert.alert("Erreur", msg);
       }
     } catch (err) {
       console.error("Erreur réservation course:", err);
-      Alert.alert("Erreur réseau", "Impossible de joindre le serveur VORA. Veuillez réessayer.");
+      const msg = "Impossible de joindre le serveur VORA. Veuillez réessayer.";
+      setFormError(msg);
+      Alert.alert("Erreur réseau", msg);
     } finally {
       setIsBooking(false);
     }
@@ -305,6 +317,14 @@ const BookRide = () => {
             phoneNumber={phoneNumber}
             onPhoneChange={setPhoneNumber}
           />
+
+          {/* Error Banner */}
+          {!!formError && (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle" size={18} color="#DC2626" style={{ marginRight: 8 }} />
+              <Text style={styles.errorBannerText}>{formError}</Text>
+            </View>
+          )}
 
           {/* Bouton de Confirmation Finale */}
           <TouchableOpacity
@@ -456,5 +476,23 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "800",
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 14,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#B91C1C",
+    fontWeight: "600",
+    fontFamily: "Jakarta-SemiBold",
   },
 });

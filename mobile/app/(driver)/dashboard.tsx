@@ -67,6 +67,7 @@ export default function DriverDashboard() {
   const [faceAnalysisResult, setFaceAnalysisResult] = useState<{ isPerson: boolean; message: string } | null>(null);
   const [contractAccepted, setContractAccepted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [registrationError, setRegistrationError] = useState<string | null>(null);
 
   // Charger le profil chauffeur
   const fetchDriver = async () => {
@@ -201,48 +202,35 @@ export default function DriverDashboard() {
 
   // Submit enregistrement véhicule & contrat
   const handleRegisterDriver = async () => {
+    setRegistrationError(null);
+
     if (!vehicleModel.trim() || !licensePlate.trim() || !vehicleColor.trim()) {
-      Alert.alert("Champs incomplets", "Veuillez remplir le modèle du véhicule, la plaque et la couleur.");
+      setRegistrationError("Veuillez remplir le modèle du véhicule, la plaque et la couleur.");
       return;
     }
 
     if (!vehicleImage) {
-      Alert.alert(
-        "Photo du véhicule obligatoire",
-        "Veuillez charger une photo de votre véhicule afin que vos passagers puissent le reconnaître facilement lors de la prise en charge."
-      );
+      setRegistrationError("Veuillez charger une photo de votre véhicule afin que vos passagers puissent le reconnaître facilement.");
       return;
     }
 
     if (!vehicleDocuments) {
-      Alert.alert(
-        "Papiers du véhicule obligatoires",
-        "Veuillez ajouter une photo nette de votre carte grise, attestation d'assurance ou permis de conduire."
-      );
+      setRegistrationError("Veuillez ajouter une photo nette de votre carte grise, attestation d'assurance ou permis de conduire.");
       return;
     }
 
     if (!driverAvatar) {
-      Alert.alert(
-        "Photo de profil obligatoire",
-        "Une photo de votre visage est strictement obligatoire pour la sécurité de la plateforme VORA."
-      );
+      setRegistrationError("Une photo de votre visage est strictement obligatoire pour la sécurité de la plateforme VORA.");
       return;
     }
 
     if (faceAnalysisResult && !faceAnalysisResult.isPerson) {
-      Alert.alert(
-        "Validation Faciale Rejetée",
-        faceAnalysisResult.message || "La photo de profil fournie ne correspond pas à un visage humain. Veuillez charger un selfie valide."
-      );
+      setRegistrationError(faceAnalysisResult.message || "La photo de profil fournie ne correspond pas à un visage humain. Veuillez charger un selfie valide.");
       return;
     }
 
     if (!contractAccepted) {
-      Alert.alert(
-        "Acceptation du contrat requise",
-        "Vous devez cocher et accepter les termes du Contrat de Partenariat Chauffeur VORA pour finaliser votre inscription."
-      );
+      setRegistrationError("Vous devez accepter les termes du Contrat de Partenariat Chauffeur VORA pour finaliser votre inscription.");
       return;
     }
 
@@ -250,7 +238,6 @@ export default function DriverDashboard() {
     try {
       const backendUrl = getBackendUrl();
       const userId = user?.id || "driver_demo";
-
 
       const res = await fetch(`${backendUrl}/api/drivers/register`, {
         method: "POST",
@@ -270,18 +257,19 @@ export default function DriverDashboard() {
       const data = await res.json();
       if (data.success) {
         setDriverProfile(data.driver);
+        setRegistrationError(null);
         setIsRegisterModalOpen(false);
         Alert.alert(
           "Inscription Chauffeur Reussie",
-          `Votre véhicule ${data.driver.vehicle_model} (${data.driver.license_plate}) et votre photo validée par IA ont été enregistrés avec succès !`
+          `Votre véhicule ${data.driver.vehicle_model} (${data.driver.license_plate}) a été enregistré avec succès !`
         );
         fetchDriver();
       } else {
-        Alert.alert("Erreur", data.error || "Impossible d'enregistrer le véhicule.");
+        setRegistrationError(data.error || "Impossible d'enregistrer le véhicule. Réessayez.");
       }
     } catch (err) {
       console.error("Erreur enregistrement chauffeur:", err);
-      Alert.alert("Erreur", "Problème de connexion au serveur backend VORA.");
+      setRegistrationError("Problème de connexion au serveur VORA. Vérifiez votre connexion internet.");
     } finally {
       setIsSubmitting(false);
     }
@@ -801,6 +789,22 @@ export default function DriverDashboard() {
                 </Text>
               </TouchableOpacity>
             </ScrollView>
+
+            {registrationError && (
+              <View style={{
+                backgroundColor: "rgba(239,68,68,0.12)",
+                borderWidth: 1,
+                borderColor: "rgba(239,68,68,0.35)",
+                borderRadius: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                marginTop: 12,
+              }}>
+                <Text style={{ color: "#fca5a5", fontSize: 13, fontWeight: "600", lineHeight: 18 }}>
+                  {registrationError}
+                </Text>
+              </View>
+            )}
 
             <View style={styles.modalActionRow}>
               {driverProfile && (

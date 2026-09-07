@@ -73,6 +73,8 @@ const Profile = () => {
     user?.primaryPhoneNumber?.phoneNumber?.replace(/\D/g, "") || ""
   );
   const [isRecharging, setIsRecharging] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
+  const [feedbackBanner, setFeedbackBanner] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
     if (user?.primaryPhoneNumber?.phoneNumber && !rechargePhone) {
@@ -155,15 +157,18 @@ const Profile = () => {
       : selectedRechargeAmount;
 
     if (!finalAmount || isNaN(finalAmount) || finalAmount < 100) {
+      setWalletError("Veuillez saisir ou choisir un montant d'au moins 100 FCFA.");
       Alert.alert("Montant Invalide", "Veuillez saisir ou choisir un montant d'au moins 100 FCFA.");
       return;
     }
 
     if (!rechargePhone || rechargePhone.trim().length < 8) {
+      setWalletError("Veuillez saisir un numéro Mobile Money valide (ex: 677 00 00 00).");
       Alert.alert("Numéro Requis", "Veuillez saisir un numéro Mobile Money valide.");
       return;
     }
 
+    setWalletError(null);
     setIsRecharging(true);
     try {
       const backendUrl = getBackendUrl();
@@ -181,6 +186,12 @@ const Profile = () => {
         setWalletBalance(data.wallet_balance);
         setShowWalletModal(false);
         setCustomAmountText("");
+        setFeedbackBanner({
+          type: "success",
+          message: `Recharge réussie ! Votre portefeuille a été crédité de ${finalAmount.toLocaleString()} FCFA via ${
+            rechargeMethod === "mtn" ? "MTN MoMo" : "Orange Money"
+          }.`,
+        });
         Alert.alert(
           "Recharge Réussie !",
           `Votre portefeuille VORA a été crédité de ${finalAmount.toLocaleString()} FCFA via ${
@@ -191,6 +202,10 @@ const Profile = () => {
         setWalletBalance((prev) => prev + finalAmount);
         setShowWalletModal(false);
         setCustomAmountText("");
+        setFeedbackBanner({
+          type: "success",
+          message: `Recharge effectuée : +${finalAmount.toLocaleString()} FCFA crédités sur votre portefeuille VORA.`,
+        });
         Alert.alert(
           "Recharge Effectuée",
           `Votre portefeuille VORA a été crédité de ${finalAmount.toLocaleString()} FCFA via ${
@@ -202,6 +217,10 @@ const Profile = () => {
       setWalletBalance((prev) => prev + finalAmount);
       setShowWalletModal(false);
       setCustomAmountText("");
+      setFeedbackBanner({
+        type: "success",
+        message: `Recharge effectuée : +${finalAmount.toLocaleString()} FCFA crédités sur votre portefeuille VORA.`,
+      });
       Alert.alert(
         "Recharge Effectuée",
         `Votre portefeuille VORA a été crédité de ${finalAmount.toLocaleString()} FCFA.`
@@ -220,6 +239,10 @@ const Profile = () => {
   const handleSelectAvatar = (url: string) => {
     setSelectedAvatar(url);
     setShowAvatarModal(false);
+    setFeedbackBanner({
+      type: "success",
+      message: "Photo de profil VORA mise à jour avec succès !",
+    });
     Alert.alert("Photo mise à jour", "Votre photo de profil VORA a été modifiée.");
   };
 
@@ -244,6 +267,34 @@ const Profile = () => {
             <Text style={styles.supportBadgeText}>Assistance 24/7</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Global Feedback Banner */}
+        {!!feedbackBanner && (
+          <View
+            style={[
+              styles.topBanner,
+              feedbackBanner.type === "error" ? styles.topBannerError : styles.topBannerSuccess,
+            ]}
+          >
+            <Ionicons
+              name={feedbackBanner.type === "error" ? "alert-circle" : "checkmark-circle"}
+              size={20}
+              color={feedbackBanner.type === "error" ? "#DC2626" : "#16A34A"}
+              style={{ marginRight: 8 }}
+            />
+            <Text
+              style={[
+                styles.topBannerText,
+                feedbackBanner.type === "error" ? styles.topBannerTextError : styles.topBannerTextSuccess,
+              ]}
+            >
+              {feedbackBanner.message}
+            </Text>
+            <TouchableOpacity onPress={() => setFeedbackBanner(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={18} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Avatar with edit overlay button */}
         <View style={styles.avatarWrapper}>
@@ -477,6 +528,13 @@ const Profile = () => {
               Choisissez un montant et votre mode de paiement Mobile Money :
             </Text>
 
+            {!!walletError && (
+              <View style={styles.modalErrorBanner}>
+                <Ionicons name="alert-circle" size={16} color="#DC2626" style={{ marginRight: 6 }} />
+                <Text style={styles.modalErrorText}>{walletError}</Text>
+              </View>
+            )}
+
             {/* Montants rapides */}
             <Text style={styles.modalFieldLabel}>Montants prédéfinis :</Text>
             <View style={styles.amountsGrid}>
@@ -515,6 +573,7 @@ const Profile = () => {
               onChangeText={(text) => {
                 const cleaned = text.replace(/\D/g, "");
                 setCustomAmountText(cleaned);
+                if (walletError) setWalletError(null);
                 if (cleaned) {
                   setSelectedRechargeAmount(parseInt(cleaned, 10));
                 }
@@ -553,7 +612,10 @@ const Profile = () => {
               placeholderTextColor="#94A3B8"
               keyboardType="phone-pad"
               value={rechargePhone}
-              onChangeText={setRechargePhone}
+              onChangeText={(v) => {
+                setRechargePhone(v);
+                if (walletError) setWalletError(null);
+              }}
               maxLength={9}
             />
 
@@ -1122,5 +1184,52 @@ const styles = StyleSheet.create({
     color: "#DC2626",
     fontSize: 15,
     fontWeight: "700",
+  },
+  topBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  topBannerSuccess: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#86EFAC",
+  },
+  topBannerError: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FCA5A5",
+  },
+  topBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+    fontFamily: "Jakarta-SemiBold",
+  },
+  topBannerTextSuccess: {
+    color: "#15803D",
+  },
+  topBannerTextError: {
+    color: "#B91C1C",
+  },
+  modalErrorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  modalErrorText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#B91C1C",
+    fontWeight: "600",
+    fontFamily: "Jakarta-Medium",
   },
 });

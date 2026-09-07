@@ -4,10 +4,36 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import "react-native-reanimated";
-import { LogBox, Platform, View, StyleSheet } from "react-native";
+import { LogBox, Platform, View, StyleSheet, Alert } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { tokenCache } from "@/lib/auth";
+
+// Polyfill react-native-web Alert.alert (which is a complete no-op by default in react-native-web)
+if (Platform.OS === "web") {
+  Alert.alert = (
+    title?: string,
+    message?: string,
+    buttons?: Array<{ text?: string; onPress?: () => void; style?: string }>
+  ) => {
+    const fullText = [title, message].filter(Boolean).join("\n\n");
+    if (buttons && buttons.length > 1) {
+      const cancelBtn = buttons.find((b) => b.style === "cancel") || buttons[1];
+      const confirmBtn = buttons.find((b) => b.style !== "cancel") || buttons[0];
+      const confirmed = typeof window !== "undefined" ? window.confirm(fullText) : true;
+      if (confirmed) {
+        confirmBtn?.onPress?.();
+      } else {
+        cancelBtn?.onPress?.();
+      }
+    } else {
+      if (typeof window !== "undefined") {
+        window.alert(fullText);
+      }
+      buttons?.[0]?.onPress?.();
+    }
+  };
+}
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync().catch(() => {});

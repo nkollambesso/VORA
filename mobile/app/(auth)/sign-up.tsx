@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { ReactNativeModal } from "react-native-modal";
+import { Ionicons } from "@expo/vector-icons";
 
 import CustomButton from "@/components/CustomButton";
 import InputField from "@/components/InputField";
@@ -41,6 +42,7 @@ const SignUp = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [role, setRole] = useState<"PASSENGER" | "DRIVER">("PASSENGER");
   const [form, setForm] = useState({ name: "", email: "", password: "", gender: "MALE" });
+  const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string; general?: string }>({});
   const [verification, setVerification] = useState({
     state: "default",
     error: "",
@@ -48,33 +50,63 @@ const SignUp = () => {
   });
 
   const onSignUpPress = async () => {
-    if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
-      Alert.alert("Champs requis", "Veuillez remplir votre nom, email et mot de passe.");
+    const nameTrimmed = form.name.trim();
+    const emailTrimmed = form.email.trim();
+    const passwordTrimmed = form.password;
+
+    const newErrors: { name?: string; email?: string; password?: string; general?: string } = {};
+
+    if (!nameTrimmed) {
+      newErrors.name = "Veuillez entrer votre nom complet.";
+    } else if (nameTrimmed.length < 2) {
+      newErrors.name = "Le nom doit comporter au moins 2 caractères.";
+    }
+
+    if (!emailTrimmed) {
+      newErrors.email = "Veuillez entrer votre adresse email.";
+    } else if (!emailTrimmed.includes("@") || !emailTrimmed.includes(".")) {
+      newErrors.email = "Veuillez entrer un email valide (ex: nom@domaine.cm).";
+    }
+
+    if (!passwordTrimmed) {
+      newErrors.password = "Veuillez choisir un mot de passe.";
+    } else if (passwordTrimmed.length < 6) {
+      newErrors.password = "Le mot de passe doit comporter au moins 6 caractères.";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      Alert.alert("Champs incomplets", "Veuillez corriger les champs indiqués en rouge pour continuer.");
       return;
     }
 
+    setErrors({});
+
     if (!isLoaded || !signUp) {
+      setErrors({ general: "Le service d'authentification n'est pas encore prêt." });
       Alert.alert("Service indisponible", "Le service d'authentification n'est pas encore prêt.");
       return;
     }
     try {
-      const nameParts = form.name.trim().split(" ");
-      const firstName = nameParts[0] || form.name.trim();
+      const nameParts = nameTrimmed.split(" ");
+      const firstName = nameParts[0] || nameTrimmed;
       const lastName = nameParts.slice(1).join(" ") || " ";
 
       await signUp.create({
-        emailAddress: form.email.trim(),
-        password: form.password,
+        emailAddress: emailTrimmed,
+        password: passwordTrimmed,
         firstName,
         lastName,
       });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setVerification({ ...verification, state: "pending" });
     } catch (err: any) {
-      Alert.alert(
-        "Erreur d'inscription",
-        err.errors?.[0]?.longMessage || err.message || "Échec d'inscription. Vérifiez les informations saisies."
-      );
+      const errMsg =
+        err.errors?.[0]?.longMessage ||
+        err.message ||
+        "Échec d'inscription. Vérifiez les informations saisies.";
+      setErrors({ general: errMsg });
+      Alert.alert("Erreur d'inscription", errMsg);
     }
   };
 
@@ -163,13 +195,27 @@ const SignUp = () => {
               </TouchableOpacity>
             </View>
 
+            {/* General Error Banner */}
+            {!!errors.general && (
+              <View style={styles.generalErrorBanner}>
+                <Ionicons name="alert-circle" size={20} color="#dc2626" style={{ marginRight: 8 }} />
+                <Text style={styles.generalErrorText}>{errors.general}</Text>
+              </View>
+            )}
+
             {/* Form */}
             <InputField
               label="Nom complet"
               placeholder="Ex: Jean Tchouamo"
               icon={icons.person}
               value={form.name}
-              onChangeText={(v: string) => setForm({ ...form, name: v })}
+              error={errors.name}
+              onChangeText={(v: string) => {
+                setForm({ ...form, name: v });
+                if (errors.name || errors.general) {
+                  setErrors({ ...errors, name: undefined, general: undefined });
+                }
+              }}
             />
 
             {/* Gender selection */}
@@ -232,16 +278,28 @@ const SignUp = () => {
               textContentType="emailAddress"
               autoCapitalize="none"
               value={form.email}
-              onChangeText={(v: string) => setForm({ ...form, email: v })}
+              error={errors.email}
+              onChangeText={(v: string) => {
+                setForm({ ...form, email: v });
+                if (errors.email || errors.general) {
+                  setErrors({ ...errors, email: undefined, general: undefined });
+                }
+              }}
             />
             <InputField
               label="Mot de passe"
-              placeholder="Choisissez un mot de passe"
+              placeholder="Choisissez un mot de passe (min 6 car.)"
               icon={icons.lock}
               secureTextEntry
               textContentType="password"
               value={form.password}
-              onChangeText={(v: string) => setForm({ ...form, password: v })}
+              error={errors.password}
+              onChangeText={(v: string) => {
+                setForm({ ...form, password: v });
+                if (errors.password || errors.general) {
+                  setErrors({ ...errors, password: undefined, general: undefined });
+                }
+              }}
             />
 
             {/* Clerk Captcha container for Bot Protection on Web */}
@@ -331,6 +389,24 @@ export default SignUp;
 const PRIMARY = "#0EA5E9";
 
 const styles = StyleSheet.create({
+  generalErrorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    borderColor: "#F87171",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  generalErrorText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#B91C1C",
+    fontWeight: "600",
+    fontFamily: "Jakarta-SemiBold",
+  },
   rootMobile: {
     flex: 1,
     backgroundColor: "#ffffff",
