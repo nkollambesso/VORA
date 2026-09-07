@@ -186,7 +186,7 @@ VORA s'appuie sur une suite d'APIs et de services cloud de premier plan pour gar
 ### Prérequis
 - **Node.js** v18+ ou v20+
 - **npm** ou **yarn**
-- Base de données PostgreSQL (ou instance Neon Serverless)
+- Base de données PostgreSQL (ou instance Neon Serverless cloud)
 
 ### 1. Démarrage du Backend
 
@@ -194,16 +194,190 @@ VORA s'appuie sur une suite d'APIs et de services cloud de premier plan pour gar
 cd backend
 npm install
 npm run dev
-# Serveur actif sur http://localhost:5000
+# Serveur actif sur http://localhost:5000 (WebSocket & API REST)
 ```
 
-### 2. Démarrage de l'Application Mobile / Web
+### 2. Démarrage du Frontend (Web & Mobile Expo)
 
 ```bash
 cd mobile
-npm install
+npm install --legacy-peer-deps
 npx expo start --web --port 8081
-# Application accessible sur http://localhost:8081
+# Application web accessible sur http://localhost:8081
+```
+
+---
+
+## Déploiement & Test sur Réseau Local (LAN / Wi-Fi)
+
+Pour tester l'application sur des smartphones physiques connectés au même réseau Wi-Fi local :
+
+### 1. Identifier l'adresse IP locale de votre machine
+- **Windows** : ouvrir PowerShell et taper `ipconfig` (relever l'adresse IPv4, ex: `192.168.1.135`).
+- **macOS / Linux** : ouvrir le terminal et taper `ifconfig` ou `ip a`.
+
+### 2. Configurer le fichier `mobile/.env`
+Mettre à jour les adresses de l'API et des WebSockets avec votre IP locale :
+```env
+EXPO_PUBLIC_BACKEND_URL=http://192.168.1.135:5000
+EXPO_PUBLIC_SOCKET_URL=http://192.168.1.135:5000
+```
+
+### 3. Lancer Expo en mode Réseau Local (LAN)
+```bash
+cd mobile
+npx expo start --lan
+```
+- **Sur Android / iOS** : Scanner le QR Code affiché dans le terminal avec l'application **Expo Go** (ou l'appareil photo sur iOS).
+- **Sur navigateur mobile** : Ouvrir l'URL `http://192.168.1.135:8081`.
+- *Note pare-feu Windows* : veillez à autoriser les connexions entrantes sur les ports `5000` et `8081`.
+
+---
+
+## Build du Front-End (Web & Mobile)
+
+### 1. Build Web Production (PWA / SPA)
+Pour générer une version web statique optimisée et prête à être hébergée (Nginx, Vercel, Netlify, Cloudflare Pages, S3...) :
+```bash
+cd mobile
+npx expo export --platform web
+```
+- Les fichiers de production sont compilés dans le dossier `mobile/dist/`.
+- Ce dossier peut être directement servi par n'importe quel serveur HTTP statique ou reverse proxy Nginx.
+
+### 2. Build Mobile Android (APK & AAB)
+
+#### Option A : Via EAS Build (Cloud Expo — Recommandé)
+```bash
+npm install -g eas-cli
+eas login
+eas build:configure
+
+# Générer un fichier APK autonome directement installable sur smartphone Android :
+eas build -p android --profile preview
+
+# Générer un bundle AAB optimisé pour soumission sur Google Play Store :
+eas build -p android --profile production
+```
+
+#### Option B : Build Local avec Prebuild (Android Studio / Gradle)
+```bash
+cd mobile
+npx expo prebuild --platform android
+cd android
+./gradlew assembleRelease
+```
+- L'APK autonome généré se trouve dans : `mobile/android/app/build/outputs/apk/release/app-release.apk`.
+
+### 3. Build Mobile iOS (IPA)
+```bash
+cd mobile
+eas build -p ios --profile production
+```
+
+---
+
+## Déploiement en Production sur Serveur VPS (Ubuntu / Debian)
+
+### 1. Prérequis sur le VPS
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y git curl ufw nginx certbot python3-certbot-nginx
+
+# Installation de Node.js 20 LTS
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# Installation du gestionnaire de processus PM2
+sudo npm install -g pm2
+```
+
+### 2. Déploiement & Compilation du Backend sur le VPS
+
+```bash
+# Cloner le dépôt
+git clone https://github.com/Nuxcine-Hackathon/TEAM-VANGUARD.git /var/www/vora
+cd /var/www/vora/backend
+
+# Installer les dépendances et compiler le TypeScript en JavaScript
+npm install
+npm run build
+```
+
+Créer et configurer le fichier de variables d'environnement `/var/www/vora/backend/.env` :
+```env
+PORT=5000
+DATABASE_URL=postgresql://<user>:<password>@<neon-host>/neondb?sslmode=require
+CLERK_SECRET_KEY=sk_live_...
+CLERK_PUBLISHABLE_KEY=pk_live_...
+CAMERPAY_API_KEY=...
+CAMERPAY_API_SECRET=...
+CAMERPAY_CALLBACK_SECRET=...
+CAMERPAY_API_URL=https://camerpay.biz/api
+ADMIN_EMAIL=admin@vora.cm
+ADMIN_PASSWORD=<MOT_DE_PASSE_SECURISE>
+ADMIN_COMMISSION_RATE=0.10
+```
+
+Démarrer le backend avec PM2 pour garantir une exécution continue avec auto-redémarrage :
+```bash
+pm2 start dist/server.js --name "vora-backend"
+pm2 startup
+pm2 save
+```
+
+### 3. Configuration du Reverse Proxy Nginx & WebSockets
+
+Créer le fichier de configuration `/etc/nginx/sites-available/vora.conf` :
+```nginx
+server {
+    server_name api.vora.cm;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+
+        # Support obligatoire des WebSockets (Socket.io & WebRTC signaling)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# Bloc optionnel pour héberger le front-end web compilé (dossier dist) sur le même VPS
+server {
+    server_name app.vora.cm;
+    root /var/www/vora/mobile/dist;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+Activer le site et tester la configuration Nginx :
+```bash
+sudo ln -s /etc/nginx/sites-available/vora.conf /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+### 4. Sécurisation HTTPS avec Certificat SSL Gratuit (Let's Encrypt)
+```bash
+sudo certbot --nginx -d api.vora.cm -d app.vora.cm
+```
+
+### 5. Configuration du Pare-Feu UFW
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 'Nginx Full'
+sudo ufw enable
 ```
 
 ---
