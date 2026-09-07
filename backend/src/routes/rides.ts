@@ -264,7 +264,8 @@ router.get('/user/:userId', async (req: Request, res: Response) => {
        FROM rides r
        LEFT JOIN drivers d ON r.driver_id = d.id
        LEFT JOIN users u ON d.user_id = u.id
-       WHERE r.rider_id = $1 
+       WHERE r.rider_id = $1
+         AND (r.hidden_by_rider IS NULL OR r.hidden_by_rider = FALSE)
        ORDER BY r.created_at DESC`,
       [userId]
     );
@@ -275,17 +276,49 @@ router.get('/user/:userId', async (req: Request, res: Response) => {
   }
 });
 
+// Effacer l'historique des courses d'un passager (soft-delete)
+router.delete('/history/user/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    await query(
+      `UPDATE rides SET hidden_by_rider = TRUE WHERE rider_id = $1 AND status IN ('COMPLETED', 'CANCELLED')`,
+      [userId]
+    );
+    return res.json({ success: true, message: 'Historique effacé avec succès.' });
+  } catch (error) {
+    console.error('Erreur suppression historique passager:', error);
+    return res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+});
+
 // Historique des courses d'un chauffeur
 router.get('/driver/:driverId', async (req: Request, res: Response) => {
   try {
     const { driverId } = req.params;
     const result = await query(
-      `SELECT * FROM rides WHERE driver_id = $1 ORDER BY created_at DESC`,
+      `SELECT * FROM rides WHERE driver_id = $1
+         AND (hidden_by_driver IS NULL OR hidden_by_driver = FALSE)
+       ORDER BY created_at DESC`,
       [driverId]
     );
     return res.json({ success: true, rides: result.rows });
   } catch (error) {
     console.error('Erreur historique chauffeur:', error);
+    return res.status(500).json({ success: false, error: 'Erreur serveur' });
+  }
+});
+
+// Effacer l'historique des courses d'un chauffeur (soft-delete)
+router.delete('/history/driver/:driverId', async (req: Request, res: Response) => {
+  try {
+    const { driverId } = req.params;
+    await query(
+      `UPDATE rides SET hidden_by_driver = TRUE WHERE driver_id = $1 AND status IN ('COMPLETED', 'CANCELLED')`,
+      [driverId]
+    );
+    return res.json({ success: true, message: 'Historique effacé avec succès.' });
+  } catch (error) {
+    console.error('Erreur suppression historique chauffeur:', error);
     return res.status(500).json({ success: false, error: 'Erreur serveur' });
   }
 });

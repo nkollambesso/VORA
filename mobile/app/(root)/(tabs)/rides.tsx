@@ -1,22 +1,81 @@
 import { useClerkUser } from "@/lib/useClerkSafe";
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useState, useCallback } from "react";
 
 import RideCard from "@/components/RideCard";
 import { images } from "@/constants";
 import { useFetch } from "@/lib/fetch";
+import { getBackendUrl } from "@/lib/config";
 import { Ride } from "@/types/type";
 
 const Rides = () => {
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
   const { user } = useClerkUser();
+  const [clearing, setClearing] = useState(false);
 
   const {
     data: recentRides,
     loading,
     error,
+    refetch,
   } = useFetch<Ride[]>(`/(api)/ride/${user?.id}`);
+
+
+  const handleClearHistory = useCallback(async () => {
+    const doDelete = async () => {
+      setClearing(true);
+      try {
+        const backendUrl = getBackendUrl();
+        const res = await fetch(`${backendUrl}/api/rides/history/user/${user?.id}`, {
+          method: "DELETE",
+        });
+        const data = await res.json();
+        if (data.success) {
+          refetch();
+        } else {
+          Alert.alert("Erreur", data.error || "Impossible d'effacer l'historique.");
+        }
+      } catch (e) {
+        Alert.alert("Erreur", "Connexion au serveur impossible.");
+      } finally {
+        setClearing(false);
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm(
+        "Effacer tout votre historique de courses ?\n\nLes courses actives ou en recherche ne seront pas supprimées."
+      );
+      if (confirmed) await doDelete();
+    } else {
+      Alert.alert(
+        "Effacer l'historique",
+        "Êtes-vous sûr de vouloir effacer tout votre historique de courses ? Les courses actives ou en recherche ne seront pas supprimées.",
+        [
+          { text: "Annuler", style: "cancel" },
+          {
+            text: "Effacer",
+            style: "destructive",
+            onPress: doDelete,
+          },
+        ]
+      );
+    }
+  }, [user?.id]);
+
+  const hasRides = recentRides && recentRides.length > 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -47,7 +106,26 @@ const Rides = () => {
           </View>
         )}
         ListHeaderComponent={
-          <Text style={styles.title}>Tous les Trajets</Text>
+          <View style={styles.headerRow}>
+            <Text style={styles.title}>Tous les Trajets</Text>
+            {hasRides && (
+              <TouchableOpacity
+                style={[styles.clearBtn, clearing && { opacity: 0.6 }]}
+                onPress={handleClearHistory}
+                disabled={clearing}
+                activeOpacity={0.75}
+              >
+                {clearing ? (
+                  <ActivityIndicator size="small" color="#ef4444" />
+                ) : (
+                  <>
+                    <Text style={styles.clearBtnIcon}>🗑</Text>
+                    <Text style={styles.clearBtnText}>Effacer</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
         }
       />
     </SafeAreaView>
@@ -65,11 +143,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 110,
   },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginVertical: 16,
+  },
   title: {
     fontSize: 24,
     fontWeight: "800",
     color: "#0f172a",
-    marginVertical: 16,
+  },
+  clearBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: "#fef2f2",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  clearBtnIcon: {
+    fontSize: 14,
+  },
+  clearBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#ef4444",
   },
   emptyContainer: {
     alignItems: "center",

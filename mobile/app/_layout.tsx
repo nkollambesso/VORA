@@ -2,12 +2,14 @@ import { ClerkProvider } from "@clerk/clerk-expo";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import "react-native-reanimated";
 import { LogBox, Platform, View, StyleSheet, Alert } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { tokenCache } from "@/lib/auth";
+import { voraNotif } from "@/lib/notifications";
+import { voraSocket } from "@/lib/socket";
 
 // Polyfill react-native-web Alert.alert (which is a complete no-op by default in react-native-web)
 if (Platform.OS === "web") {
@@ -123,6 +125,51 @@ export default function RootLayout() {
       SplashScreen.hideAsync().catch(() => {});
     }
   }, [loaded]);
+
+  // Initialiser les notifications VORA et écouter les événements de course en arrière-plan
+  const notifInitialized = useRef(false);
+  useEffect(() => {
+    if (Platform.OS !== "web" || notifInitialized.current) return;
+    notifInitialized.current = true;
+
+    // Demander la permission de notifications
+    voraNotif.init().catch(() => {});
+
+    // Attendre que le socket soit connecté (poll léger sur 5s)
+    const tryAttachListeners = (attempts = 0) => {
+      const socket = voraSocket.getSocket();
+      if (!socket) {
+        if (attempts < 10) setTimeout(() => tryAttachListeners(attempts + 1), 500);
+        return;
+      }
+
+      // Course acceptée par un chauffeur
+      socket.on("ride-accepted-by-driver", (data: any) => {
+        const driverName = data?.driver_name || data?.driverName;
+        voraNotif.notifyRideAccepted(driverName);
+      });
+
+      // Course annulée (par le chauffeur ou le passager)
+      socket.on("ride-cancelled", (data: any) => {
+        voraNotif.notifyRideCancelled(data?.reason, data?.cancelledBy);
+      });
+
+      // Course terminée
+      socket.on("ride-completed-mutual", (data: any) => {
+        voraNotif.notifyRideCompleted(data?.fare_fcfa);
+      });
+
+      // Nouvelle course disponible (chauffeur)
+      socket.on("new-ride-available", (data: any) => {
+        voraNotif.notifyNewRide(data?.origin_address);
+      });
+
+      console.log("[VORA Layout] Listeners de notifications globaux attachés.");
+    };
+
+    // Démarrer avec un léger délai pour laisser le socket s'initialiser
+    setTimeout(() => tryAttachListeners(), 1000);
+  }, []);
 
   const stack = (
     <Stack screenOptions={{ headerShown: false }}>

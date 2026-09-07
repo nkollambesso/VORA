@@ -23,6 +23,8 @@ import { voraSocket } from "@/lib/socket";
 import { voraVoice } from "@/lib/voiceAssistant";
 import { useClerkUser } from "@/lib/useClerkSafe";
 import { callAudio } from "@/lib/callAudio";
+import { voraNotif } from "@/lib/notifications";
+
 
 export default function ConfirmRide() {
   const { user } = useClerkUser();
@@ -133,14 +135,16 @@ export default function ConfirmRide() {
     // Arrivée déclarée par le chauffeur
     socket.on("arrival-declared", () => {
       setStatus("ARRIVEE_SIGNALEE");
+      voraNotif.playCompleted();
       voraVoice.speak(
         "Votre chauffeur signale être arrivé à destination. Veuillez confirmer la fin de la course."
       );
     });
 
     // Course clôturée mutuellement ou par expiration
-    socket.on("ride-completed-mutual", () => {
+    socket.on("ride-completed-mutual", (data: any) => {
       setStatus("COMPLETED");
+      voraNotif.notifyRideCompleted(data?.fare_fcfa || ride?.fare_fcfa);
       voraVoice.speak(
         "Course terminée. Merci d'avoir voyagé avec VORA. Veuillez noter votre chauffeur."
       );
@@ -155,6 +159,7 @@ export default function ConfirmRide() {
 
     // Annulation de la course par le chauffeur
     const onRideCancelled = (data?: { reason?: string; cancelledBy?: string }) => {
+      voraNotif.notifyRideCancelled(data?.reason, data?.cancelledBy);
       voraVoice.speak("Attention, votre chauffeur a dû annuler la prise en charge.");
       const reasonMsg = data?.reason || "Le chauffeur a rencontré un imprévu et a dû annuler la prise en charge avant le départ.";
 

@@ -118,6 +118,26 @@ Elle combine un **Frontend Web & Mobile sous React Native & Expo Router** (`/mob
 ### 18. Réinitialisation & Nettoyage Sécurisé de la Base de Données
 - Option sécurisée permettant à l'administrateur de vider l'ensemble des données de test (courses, chauffeurs, usagers, litiges, alertes) tout en préservant l'intégrité de la structure et les comptes administrateurs.
 
+### 19. Suppression de l'Historique de Courses
+- Le passager peut **effacer son historique de courses** depuis l'onglet *Tous les Trajets* via un bouton dédié 🗑️ **Effacer** affiché uniquement lorsqu'il y a des courses à supprimer.
+- La suppression est un **soft-delete** : les données restent en base de données à des fins d'audit, mais elles n'apparaissent plus dans l'interface utilisateur.
+- Endpoint backend : `DELETE /api/rides/history/user/:userId` (passager) et `DELETE /api/rides/history/driver/:driverId` (chauffeur).
+- Les courses actives (`SEARCHING`, `ACCEPTED`, `IN_TRANSIT`, `ARRIVEE_SIGNALEE`) ne sont **jamais** supprimées de la vue, uniquement les courses terminées ou annulées.
+
+### 20. Notifications Push & Alertes Audio en Temps Réel
+- **Système de notifications VORA** (`lib/notifications.ts`) — module natif utilisant la **Web Notifications API** (API standard W3C, sans dépendance tierce) pour déclencher des notifications système même lorsque l'application est en arrière-plan ou minimisée.
+- **Événements couverts** :
+  - 🚗 Course acceptée par un chauffeur → Notification toast + son harmonique montant.
+  - ❌ Course annulée (par chauffeur ou passager) → Notification + son grave descendant d'alerte.
+  - ✅ Course terminée → Notification + jingle signature VORA satisfaisant.
+  - 📍 Nouvelle course disponible (chauffeur) → Notification + son d'alerte positif.
+- **Feedback audio immédiat in-app** : Chaque événement déclencheur joue un son distinct généré en temps réel via l'**API Web Audio** (sans fichier audio externe), assurant une réactivité sonore même en mode hors-ligne partiel.
+- **Initialisation globale** : Les permissions de notification sont demandées dès le démarrage de l'application dans `_layout.tsx`, garantissant une couverture même hors de l'écran de course.
+
+### 21. Notification du Chauffeur lors d'une Annulation Passager
+- Lorsqu'un passager annule une course acceptée, le chauffeur est désormais **proactivement notifié** via Socket.io sur son ID utilisateur direct.
+- Le chauffeur reçoit une notification push **avec retour sonore** (son d'alerte) l'informant que le passager a annulé, évitant ainsi qu'il continue de se déplacer inutilement vers un point de ramassage abandonné.
+
 ---
 
 ## Structure du Projet

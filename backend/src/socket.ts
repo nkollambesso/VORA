@@ -283,6 +283,13 @@ export function setupSocketIO(io: any) {
 
           // 5. Informer les autres chauffeurs que la course n'est plus disponible
           io.to('role:DRIVER').emit('ride-taken', { rideId: data.rideId });
+
+          // 6. Notification globale pour le système de notifications VORA (background + PWA)
+          io.to(updatedRide.rider_id).emit('ride-accepted-by-driver', {
+            rideId: data.rideId,
+            driver_name: sanitizedRide.driver_display_name || sanitizedRide.driver_name,
+          });
+
         }
       } catch (err) {
         console.error('Erreur acceptation course:', err);
@@ -323,6 +330,14 @@ export function setupSocketIO(io: any) {
         }
         io.to(`ride:${rideId}`).emit('ride-cancelled', payload);
         io.emit(`ride-cancelled:${rideId}`, payload);
+
+        // Si le passager annule, notifier le chauffeur aussi (pour audio + push notification)
+        if (cancelledBy === 'passenger' && ride.driver_id) {
+          const driverUserRes = await query('SELECT user_id FROM drivers WHERE id = $1', [ride.driver_id]);
+          if (driverUserRes.rows.length > 0) {
+            io.to(driverUserRes.rows[0].user_id).emit('ride-cancelled', payload);
+          }
+        }
 
         socket.emit('cancel-ride-success', payload);
       } catch (err) {

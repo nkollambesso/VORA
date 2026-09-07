@@ -20,6 +20,8 @@ import { voraVoice } from "@/lib/voiceAssistant";
 import { useClerkUser } from "@/lib/useClerkSafe";
 import { callAudio } from "@/lib/callAudio";
 import { getBackendUrl } from "@/lib/config";
+import { voraNotif } from "@/lib/notifications";
+
 
 export default function DriverNavigation() {
   const { user } = useClerkUser();
@@ -129,6 +131,7 @@ export default function DriverNavigation() {
 
     socket.on("ride-completed-mutual", (data: any) => {
       setStatus("COMPLETED");
+      voraNotif.notifyDriverRideCompleted(data?.ride?.fare_fcfa || ride?.fare_fcfa);
       if (voiceEnabled) {
         voraVoice.speak("Course terminée avec succès. Merci pour votre professionnalisme sur VORA !");
       }

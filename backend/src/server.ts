@@ -76,4 +76,17 @@ server.listen(PORT, async () => {
   console.log(`🚀 Serveur VORA prêt sur le port ${PORT}`);
   console.log(`⚡ WebSocket Socket.io écoute active`);
   await initDatabase();
+
+  // Migration idempotente : ajout des colonnes de masquage de l'historique
+  try {
+    const { pool } = await import('./db/index');
+    await pool.query(`
+      ALTER TABLE rides
+        ADD COLUMN IF NOT EXISTS hidden_by_rider BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS hidden_by_driver BOOLEAN DEFAULT FALSE;
+    `);
+    console.log('✅ Migration rides (hidden_by_*) appliquée.');
+  } catch (err) {
+    console.warn('⚠️ Migration rides (hidden_by_*) ignorée (colonne probablement existante):', err);
+  }
 });
