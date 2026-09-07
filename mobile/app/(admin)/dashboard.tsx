@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { getBackendUrl } from "@/lib/config";
 import { clearAdminToken, getAdminToken } from "@/lib/adminAuth";
 
@@ -617,61 +618,43 @@ export default function AdminDashboard() {
           </TouchableOpacity>
         </View>
 
-        {/* Tab Navigation */}
-        <View style={styles.tabBar}>
-          <TouchableOpacity
-            style={[styles.tabItem, activeTab === "OVERVIEW" && styles.tabItemActive]}
-            onPress={() => setActiveTab("OVERVIEW")}
+        {/* Tab Navigation - Horizontal Scrollable with modern pills */}
+        <View style={styles.tabBarContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabScrollContent}
           >
-            <Text style={[styles.tabText, activeTab === "OVERVIEW" && styles.tabTextActive]}>
-              Aperçu & Litiges
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabItem, activeTab === "WALLET" && styles.tabItemActive]}
-            onPress={() => setActiveTab("WALLET")}
-          >
-            <Text style={[styles.tabText, activeTab === "WALLET" && styles.tabTextActive]}>
-              Commissions
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabItem, activeTab === "SUPPORT" && styles.tabItemActive]}
-            onPress={() => setActiveTab("SUPPORT")}
-          >
-            <Text style={[styles.tabText, activeTab === "SUPPORT" && styles.tabTextActive]}>
-              Assistance ({supportCalls.filter((c: any) => c.status === "PENDING").length})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabItem, activeTab === "ACCOUNTS" && styles.tabItemActive]}
-            onPress={() => setActiveTab("ACCOUNTS")}
-          >
-            <Text style={[styles.tabText, activeTab === "ACCOUNTS" && styles.tabTextActive]}>
-              Comptes Usagers ({usersList.length})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabItem, activeTab === "ADMINS" && styles.tabItemActive]}
-            onPress={() => setActiveTab("ADMINS")}
-          >
-            <Text style={[styles.tabText, activeTab === "ADMINS" && styles.tabTextActive]}>
-              Équipe ({adminsList.length})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabItem, activeTab === "SECURITY" && styles.tabItemActive]}
-            onPress={() => setActiveTab("SECURITY")}
-          >
-            <Text style={[styles.tabText, activeTab === "SECURITY" && styles.tabTextActive]}>
-              Sécurité
-            </Text>
-          </TouchableOpacity>
+            {[
+              { key: "OVERVIEW", label: "Aperçu & Litiges" },
+              { key: "WALLET", label: "Commissions" },
+              { key: "SUPPORT", label: "Assistance", count: supportCalls.filter((c: any) => c.status === "PENDING").length },
+              { key: "ACCOUNTS", label: "Comptes Usagers", count: usersList.length },
+              { key: "ADMINS", label: "Équipe Admin", count: adminsList.length },
+              { key: "SECURITY", label: "Sécurité" },
+            ].map((tab) => {
+              const isActive = activeTab === tab.key;
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={[styles.tabPill, isActive && styles.tabPillActive]}
+                  onPress={() => setActiveTab(tab.key as any)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.tabPillText, isActive && styles.tabPillTextActive]}>
+                    {tab.label}
+                  </Text>
+                  {typeof tab.count === "number" && (
+                    <View style={[styles.tabBadge, isActive && styles.tabBadgeActive]}>
+                      <Text style={[styles.tabBadgeText, isActive && styles.tabBadgeTextActive]}>
+                        {tab.count}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
         <View style={styles.body}>
@@ -775,39 +758,54 @@ export default function AdminDashboard() {
                 </View>
               )}
 
-              {/* Quick Actions */}
+              {/* Quick Actions - 2x2 grid on mobile with icons */}
               <Text style={styles.sectionTitle}>Actions Rapides</Text>
-              <View style={[styles.actionsGrid, isWide && styles.actionsGridWide]}>
+              <View style={styles.actionsGrid}>
                 <TouchableOpacity
                   style={styles.actionCard}
                   onPress={() => setActiveTab("WALLET")}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.actionCardTitle}>Portefeuille Commissions</Text>
-                  <Text style={styles.actionCardSub}>Gérer le solde & pourcentage</Text>
+                  <View style={[styles.actionIconWrapper, { backgroundColor: "#E0F2FE" }]}>
+                    <Ionicons name="wallet-outline" size={22} color="#0284C7" />
+                  </View>
+                  <Text style={styles.actionCardTitle}>Commissions</Text>
+                  <Text style={styles.actionCardSub}>Solde & pourcentage</Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity
                   style={styles.actionCard}
                   onPress={() => setActiveTab("SUPPORT")}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.actionCardTitle}>Assistance & Conflits</Text>
-                  <Text style={styles.actionCardSub}>Appels d'aide usagers</Text>
+                  <View style={[styles.actionIconWrapper, { backgroundColor: "#FEF3C7" }]}>
+                    <Ionicons name="headset-outline" size={22} color="#D97706" />
+                  </View>
+                  <Text style={styles.actionCardTitle}>Assistance & SOS</Text>
+                  <Text style={styles.actionCardSub}>Appels d'urgence usagers</Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity
                   style={styles.actionCard}
                   onPress={() => setActiveTab("ACCOUNTS")}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.actionCardTitle}>Gestion des Comptes</Text>
+                  <View style={[styles.actionIconWrapper, { backgroundColor: "#DCFCE7" }]}>
+                    <Ionicons name="people-outline" size={22} color="#16A34A" />
+                  </View>
+                  <Text style={styles.actionCardTitle}>Gestion Comptes</Text>
                   <Text style={styles.actionCardSub}>Bloquer / Débloquer usagers</Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity
-                  style={[styles.actionCard, { borderColor: "#FCA5A5", backgroundColor: "#FEF2F2" }]}
+                  style={[styles.actionCard, { borderColor: "#FECACA", backgroundColor: "#FEF2F2" }]}
                   onPress={handleResetDatabase}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.actionCardTitle, { color: "#DC2626" }]}>Vider la Base (Reset)</Text>
+                  <View style={[styles.actionIconWrapper, { backgroundColor: "#FEE2E2" }]}>
+                    <Ionicons name="trash-outline" size={22} color="#DC2626" />
+                  </View>
+                  <Text style={[styles.actionCardTitle, { color: "#DC2626" }]}>Vider la Base</Text>
                   <Text style={[styles.actionCardSub, { color: "#991B1B" }]}>Réinitialiser les tests</Text>
                 </TouchableOpacity>
               </View>
@@ -1588,11 +1586,58 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
-  tabBar: {
-    flexDirection: "row",
+  tabBarContainer: {
     backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
     borderBottomColor: "#E2E8F0",
+    paddingVertical: 10,
+  },
+  tabScrollContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  tabPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  tabPillActive: {
+    backgroundColor: "#0EA5E9",
+    borderColor: "#0284C7",
+  },
+  tabPillText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  tabPillTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+  },
+  tabBadge: {
+    marginLeft: 6,
+    backgroundColor: "#CBD5E1",
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  tabBadgeActive: {
+    backgroundColor: "#FFFFFF",
+  },
+  tabBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#334155",
+  },
+  tabBadgeTextActive: {
+    color: "#0284C7",
   },
   tabItem: {
     flex: 1,
@@ -1664,7 +1709,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   statsGrid: {
-    gap: 12,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
     marginTop: 12,
     marginBottom: 20,
   },
@@ -1676,8 +1723,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    padding: 16,
-    flex: 1,
+    padding: 14,
+    width: "48%",
+    minWidth: 140,
+    flexGrow: 1,
   },
   statCardWide: {
     minWidth: 180,
@@ -1689,7 +1738,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   statValue: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "900",
     color: "#0F172A",
     marginTop: 4,
@@ -1704,20 +1753,31 @@ const styles = StyleSheet.create({
   },
   actionsGrid: {
     flexDirection: "row",
-    gap: 12,
+    flexWrap: "wrap",
+    gap: 10,
     marginTop: 12,
     marginBottom: 24,
   },
   actionsGridWide: {
-    maxWidth: 600,
+    maxWidth: 700,
   },
   actionCard: {
-    flex: 1,
+    width: "48%",
+    minWidth: 140,
+    flexGrow: 1,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",
     borderRadius: 14,
-    padding: 16,
+    padding: 14,
+  },
+  actionIconWrapper: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
   },
   actionCardTitle: {
     fontSize: 14,
@@ -1725,7 +1785,7 @@ const styles = StyleSheet.create({
     color: "#0F172A",
   },
   actionCardSub: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#64748B",
     marginTop: 2,
   },

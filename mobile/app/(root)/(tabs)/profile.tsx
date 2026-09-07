@@ -67,6 +67,7 @@ const Profile = () => {
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [selectedRechargeAmount, setSelectedRechargeAmount] = useState<number>(5000);
+  const [customAmountText, setCustomAmountText] = useState<string>("");
   const [rechargeMethod, setRechargeMethod] = useState<"mtn" | "orange">("mtn");
   const [rechargePhone, setRechargePhone] = useState(
     user?.primaryPhoneNumber?.phoneNumber?.replace(/\D/g, "") || ""
@@ -149,6 +150,15 @@ const Profile = () => {
   };
 
   const handleRechargeWallet = async () => {
+    const finalAmount = customAmountText.trim()
+      ? parseInt(customAmountText.replace(/\D/g, ""), 10)
+      : selectedRechargeAmount;
+
+    if (!finalAmount || isNaN(finalAmount) || finalAmount < 100) {
+      Alert.alert("Montant Invalide", "Veuillez saisir ou choisir un montant d'au moins 100 FCFA.");
+      return;
+    }
+
     if (!rechargePhone || rechargePhone.trim().length < 8) {
       Alert.alert("Numéro Requis", "Veuillez saisir un numéro Mobile Money valide.");
       return;
@@ -161,7 +171,7 @@ const Profile = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: selectedRechargeAmount,
+          amount: finalAmount,
           phone: rechargePhone.trim(),
           operator: rechargeMethod,
         }),
@@ -170,28 +180,31 @@ const Profile = () => {
       if (data.success && typeof data.wallet_balance === "number") {
         setWalletBalance(data.wallet_balance);
         setShowWalletModal(false);
+        setCustomAmountText("");
         Alert.alert(
           "Recharge Réussie !",
-          `Votre portefeuille VORA a été crédité de ${selectedRechargeAmount.toLocaleString()} FCFA via ${
+          `Votre portefeuille VORA a été crédité de ${finalAmount.toLocaleString()} FCFA via ${
             rechargeMethod === "mtn" ? "MTN MoMo" : "Orange Money"
           }. Nouveau solde : ${data.wallet_balance.toLocaleString()} FCFA.`
         );
       } else {
-        setWalletBalance((prev) => prev + selectedRechargeAmount);
+        setWalletBalance((prev) => prev + finalAmount);
         setShowWalletModal(false);
+        setCustomAmountText("");
         Alert.alert(
           "Recharge Effectuée",
-          `Votre portefeuille VORA a été crédité de ${selectedRechargeAmount.toLocaleString()} FCFA via ${
+          `Votre portefeuille VORA a été crédité de ${finalAmount.toLocaleString()} FCFA via ${
             rechargeMethod === "mtn" ? "MTN MoMo" : "Orange Money"
           }.`
         );
       }
     } catch (err) {
-      setWalletBalance((prev) => prev + selectedRechargeAmount);
+      setWalletBalance((prev) => prev + finalAmount);
       setShowWalletModal(false);
+      setCustomAmountText("");
       Alert.alert(
         "Recharge Effectuée",
-        `Votre portefeuille VORA a été crédité de ${selectedRechargeAmount.toLocaleString()} FCFA.`
+        `Votre portefeuille VORA a été crédité de ${finalAmount.toLocaleString()} FCFA.`
       );
     } finally {
       setIsRecharging(false);
@@ -284,23 +297,6 @@ const Profile = () => {
             <Text style={styles.balanceAmount}>{walletBalance.toLocaleString()} FCFA</Text>
             <View style={styles.statusPill}>
               <Text style={styles.statusPillText}>Actif</Text>
-            </View>
-          </View>
-
-          <View style={styles.walletDivider} />
-
-          <View style={styles.walletFeaturesRow}>
-            <View style={styles.featureItem}>
-              <Ionicons name="flash-outline" size={14} color="#0284C7" style={{ marginRight: 4 }} />
-              <Text style={styles.featureText}>Paiement 1-clic</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="shield-checkmark-outline" size={14} color="#16A34A" style={{ marginRight: 4 }} />
-              <Text style={styles.featureText}>Garanti sans contact</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="refresh-outline" size={14} color="#D97706" style={{ marginRight: 4 }} />
-              <Text style={styles.featureText}>Remboursement auto</Text>
             </View>
           </View>
         </View>
@@ -482,21 +478,24 @@ const Profile = () => {
             </Text>
 
             {/* Montants rapides */}
-            <Text style={styles.modalFieldLabel}>Montant de la recharge :</Text>
+            <Text style={styles.modalFieldLabel}>Montants prédéfinis :</Text>
             <View style={styles.amountsGrid}>
               {RECHARGE_AMOUNTS.map((amt) => (
                 <TouchableOpacity
                   key={amt}
-                  onPress={() => setSelectedRechargeAmount(amt)}
+                  onPress={() => {
+                    setSelectedRechargeAmount(amt);
+                    setCustomAmountText("");
+                  }}
                   style={[
                     styles.amountOption,
-                    selectedRechargeAmount === amt && styles.amountOptionActive,
+                    !customAmountText && selectedRechargeAmount === amt && styles.amountOptionActive,
                   ]}
                 >
                   <Text
                     style={[
                       styles.amountOptionText,
-                      selectedRechargeAmount === amt && styles.amountOptionTextActive,
+                      !customAmountText && selectedRechargeAmount === amt && styles.amountOptionTextActive,
                     ]}
                   >
                     {amt.toLocaleString()} F
@@ -504,6 +503,23 @@ const Profile = () => {
                 </TouchableOpacity>
               ))}
             </View>
+
+            {/* Montant personnalisé */}
+            <Text style={styles.modalFieldLabel}>Ou saisir un montant libre (FCFA) :</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Ex: 3500, 15000, 75000..."
+              placeholderTextColor="#94A3B8"
+              keyboardType="numeric"
+              value={customAmountText}
+              onChangeText={(text) => {
+                const cleaned = text.replace(/\D/g, "");
+                setCustomAmountText(cleaned);
+                if (cleaned) {
+                  setSelectedRechargeAmount(parseInt(cleaned, 10));
+                }
+              }}
+            />
 
             {/* Choix Opérateur */}
             <Text style={styles.modalFieldLabel}>Opérateur Mobile Money :</Text>
@@ -549,7 +565,7 @@ const Profile = () => {
               <Text style={styles.modalConfirmBtnText}>
                 {isRecharging
                   ? "Paiement en cours..."
-                  : `Payer ${selectedRechargeAmount.toLocaleString()} FCFA`}
+                  : `Payer ${(customAmountText ? parseInt(customAmountText, 10) || 0 : selectedRechargeAmount).toLocaleString()} FCFA`}
               </Text>
             </TouchableOpacity>
 

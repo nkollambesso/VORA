@@ -18,6 +18,7 @@ import OAuth from "@/components/OAuth";
 import { icons, images } from "@/constants";
 import { useClerkAuth, useClerkUser } from "@/lib/useClerkSafe";
 import { tryAdminLogin } from "@/lib/adminAuth";
+import { getBackendUrl } from "@/lib/config";
 
 // Lazy-load Clerk hook only when context is available
 let _useSignIn: any = null;
@@ -78,36 +79,66 @@ const SignIn = () => {
 
     setSubmitting(true);
 
-    // 1. Check if entered credentials match system administrator
-    try {
-      const adminResult = await tryAdminLogin(emailTrimmed, passwordTrimmed);
-      if (adminResult.success) {
-        setSubmitting(false);
-        router.replace("/(admin)/dashboard" as any);
-        return;
+    // 1. Check if entered credentials match system administrator (only if not Chauffeur role)
+    if (role !== "DRIVER") {
+      try {
+        const adminResult = await tryAdminLogin(emailTrimmed, passwordTrimmed);
+        if (adminResult.success) {
+          setSubmitting(false);
+          router.replace("/(admin)/dashboard" as any);
+          return;
+        }
+        if (adminResult.isAdmin) {
+          // Admin email recognized but password was incorrect
+          setSubmitting(false);
+          Alert.alert(
+            "Accès Administrateur",
+            adminResult.error || "Mot de passe administrateur incorrect."
+          );
+          return;
+        }
+      } catch (e) {
+        // Backend unreachable or error: continue to regular Clerk flow
       }
-      if (adminResult.isAdmin) {
-        // Admin email recognized but password was incorrect
-        setSubmitting(false);
-        Alert.alert(
-          "Accès Administrateur",
-          adminResult.error || "Mot de passe administrateur incorrect."
-        );
-        return;
-      }
-    } catch (e) {
-      // Backend unreachable or error: continue to regular Clerk flow
     }
-
-    // 2. Regular user / driver sign-in
-    const targetRoute =
-      role === "DRIVER" ? "/(driver)/dashboard" : "/(root)/(tabs)/home";
 
     if (!isLoaded || !signIn) {
       setSubmitting(false);
       Alert.alert("Service indisponible", "Le service d'authentification n'est pas encore prêt.");
       return;
     }
+
+    // 2. Driver Ticket Auth (Bypasses 2FA for verified Chauffeur test accounts)
+    if (role === "DRIVER") {
+      try {
+        const backendUrl = getBackendUrl();
+        const ticketRes = await fetch(`${backendUrl}/api/drivers/auth-ticket`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailTrimmed, password: passwordTrimmed }),
+        });
+        const ticketData = await ticketRes.json();
+        if (ticketRes.ok && ticketData.success && ticketData.ticket) {
+          const attempt = await signIn.create({
+            strategy: "ticket",
+            ticket: ticketData.ticket,
+          });
+          if (attempt.status === "complete") {
+            await setActive({ session: attempt.createdSessionId });
+            setSubmitting(false);
+            router.replace("/(driver)/dashboard" as any);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("Driver ticket auth fallback to standard sign-in:", e);
+      }
+    }
+
+    // 3. Regular user / standard Clerk sign-in
+    const targetRoute =
+      role === "DRIVER" ? "/(driver)/dashboard" : "/(root)/(tabs)/home";
+
     try {
       const attempt = await signIn.create({
         identifier: emailTrimmed,
