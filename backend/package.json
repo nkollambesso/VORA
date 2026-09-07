@@ -23,5 +23,8 @@
     "@types/pg": "^8.11.6",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.5.2"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
   }
 }
