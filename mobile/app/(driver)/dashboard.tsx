@@ -569,7 +569,24 @@ export default function DriverDashboard() {
       <Modal visible={isRegisterModalOpen} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Enregistrement Véhicule & Chauffeur</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <Text style={[styles.modalTitle, { flex: 1, marginBottom: 0 }]}>Enregistrement Véhicule & Chauffeur</Text>
+              <TouchableOpacity
+                onPress={() => setIsRegisterModalOpen(false)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: "#F1F5F9",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginLeft: 8,
+                }}
+                accessibilityLabel="Fermer"
+              >
+                <Text style={{ fontSize: 18, color: "#64748B", fontWeight: "700" }}>✕</Text>
+              </TouchableOpacity>
+            </View>
             <Text style={styles.modalSub}>
               Veuillez saisir les informations de votre véhicule et accepter le contrat de partenariat VORA.
             </Text>
@@ -759,7 +776,24 @@ export default function DriverDashboard() {
       <Modal visible={isContractModalOpen} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { maxHeight: "88%" }]}>
-            <Text style={styles.modalTitle}>Contrat de Partenariat Chauffeur VORA</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <Text style={[styles.modalTitle, { flex: 1, marginBottom: 0 }]}>Contrat de Partenariat Chauffeur VORA</Text>
+              <TouchableOpacity
+                onPress={() => setIsContractModalOpen(false)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: "#F1F5F9",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginLeft: 8,
+                }}
+                accessibilityLabel="Fermer"
+              >
+                <Text style={{ fontSize: 18, color: "#64748B", fontWeight: "700" }}>✕</Text>
+              </TouchableOpacity>
+            </View>
             <Text style={styles.modalSub}>
               Convention cadre de mise en relation et de prestations de transport VORA Cameroun.
             </Text>

@@ -459,7 +459,24 @@ const Profile = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Recharger mon Portefeuille</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <Text style={[styles.modalTitle, { flex: 1, marginBottom: 0 }]}>Recharger mon Portefeuille</Text>
+              <TouchableOpacity
+                onPress={() => setShowWalletModal(false)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: "#F1F5F9",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginLeft: 8,
+                }}
+                accessibilityLabel="Fermer"
+              >
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
             <Text style={styles.modalSub}>
               Choisissez un montant et votre mode de paiement Mobile Money :
             </Text>
@@ -555,7 +572,24 @@ const Profile = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Photo de profil</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <Text style={[styles.modalTitle, { flex: 1, marginBottom: 0 }]}>Photo de profil</Text>
+              <TouchableOpacity
+                onPress={() => setShowAvatarModal(false)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: "#F1F5F9",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginLeft: 8,
+                }}
+                accessibilityLabel="Fermer"
+              >
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
             <Text style={styles.modalSub}>
               Choisissez ou téléversez votre avatar VORA :
             </Text>

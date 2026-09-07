@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, Alert, Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import CustomButton from "@/components/CustomButton";
 import GoogleTextInput from "@/components/GoogleTextInput";
@@ -24,7 +24,38 @@ const FindRide = () => {
   const [extraTip, setExtraTip] = useState(200);
   const [cancelling, setCancelling] = useState(false);
 
+  const executeCancel = async () => {
+    setCancelling(true);
+    try {
+      if (rideId) {
+        const backendUrl = getBackendUrl();
+        await fetch(`${backendUrl}/api/rides/${rideId}/cancel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "Annulé par le passager pendant la recherche" }),
+        });
+        const socket = voraSocket.getSocket();
+        if (socket) {
+          socket.emit("ride-cancelled", { rideId, cancelledBy: "passenger" });
+        }
+      }
+    } catch (err) {
+      console.warn("Cancel search error:", err);
+    } finally {
+      setCancelling(false);
+      setIsSearching(false);
+      router.replace("/(root)/(tabs)/home" as any);
+    }
+  };
+
   const handleCancelSearch = () => {
+    if (Platform.OS === "web") {
+      const confirmed = typeof window !== "undefined" ? window.confirm("Voulez-vous annuler la recherche de chauffeur ?") : true;
+      if (confirmed) {
+        executeCancel();
+      }
+      return;
+    }
     Alert.alert(
       "Annuler la recherche",
       "Voulez-vous annuler la recherche de chauffeur ?",
@@ -33,29 +64,7 @@ const FindRide = () => {
         {
           text: "Oui, annuler",
           style: "destructive",
-          onPress: async () => {
-            setCancelling(true);
-            try {
-              if (rideId) {
-                const backendUrl = getBackendUrl();
-                await fetch(`${backendUrl}/api/rides/${rideId}/cancel`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ reason: "Annulé par le passager pendant la recherche" }),
-                });
-                const socket = voraSocket.getSocket();
-                if (socket) {
-                  socket.emit("ride-cancelled", { rideId, cancelledBy: "passenger" });
-                }
-              }
-            } catch (err) {
-              console.warn("Cancel search error:", err);
-            } finally {
-              setCancelling(false);
-              setIsSearching(false);
-              router.replace("/(root)/(tabs)/home" as any);
-            }
-          },
+          onPress: executeCancel,
         },
       ]
     );
@@ -153,7 +162,24 @@ const FindRide = () => {
       <Modal visible={showAdjustModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Aucun chauffeur n'a accepté</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <Text style={[styles.modalTitle, { flex: 1 }]}>Aucun chauffeur n'a accepté</Text>
+              <TouchableOpacity
+                onPress={() => setShowAdjustModal(false)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: "#F1F5F9",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginLeft: 8,
+                }}
+                accessibilityLabel="Fermer"
+              >
+                <Text style={{ fontSize: 18, color: "#64748B", fontWeight: "700" }}>✕</Text>
+              </TouchableOpacity>
+            </View>
             <Text style={styles.modalSub}>
               Les chauffeurs à proximité sont actuellement occupés ou ont décliné. Vous pouvez réajuster votre offre avec un pourboire pour encourager la prise en charge.
             </Text>

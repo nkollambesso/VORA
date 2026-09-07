@@ -1334,7 +1334,24 @@ export default function AdminDashboard() {
       <Modal visible={isAddAdminModalOpen} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Créer un Compte Administrateur</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <Text style={[styles.modalTitle, { flex: 1, marginBottom: 0 }]}>Créer un Compte Administrateur</Text>
+              <TouchableOpacity
+                onPress={() => setIsAddAdminModalOpen(false)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: "#F1F5F9",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginLeft: 8,
+                }}
+                accessibilityLabel="Fermer"
+              >
+                <Text style={{ fontSize: 18, color: "#64748B", fontWeight: "700" }}>✕</Text>
+              </TouchableOpacity>
+            </View>
             <Text style={styles.modalSub}>
               Le nouvel administrateur pourra se connecter depuis la page de connexion unique avec ces identifiants.
             </Text>
@@ -1427,7 +1444,24 @@ export default function AdminDashboard() {
       <Modal visible={showRateModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Modifier le Taux de Commission</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <Text style={[styles.modalTitle, { flex: 1, marginBottom: 0 }]}>Modifier le Taux de Commission</Text>
+              <TouchableOpacity
+                onPress={() => setShowRateModal(false)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: "#F1F5F9",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginLeft: 8,
+                }}
+                accessibilityLabel="Fermer"
+              >
+                <Text style={{ fontSize: 18, color: "#64748B", fontWeight: "700" }}>✕</Text>
+              </TouchableOpacity>
+            </View>
             <Text style={styles.modalSub}>
               Définissez le pourcentage perçu par la plateforme VORA sur chaque course payée par les chauffeurs (entre 0% et 50%).
             </Text>

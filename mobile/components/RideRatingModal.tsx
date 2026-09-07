@@ -98,6 +98,26 @@ export const RideRatingModal: React.FC<RideRatingModalProps> = ({
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.backdrop}>
         <View style={styles.card}>
+          {/* Close button */}
+          <TouchableOpacity
+            onPress={onClose}
+            style={{
+              position: "absolute",
+              top: 16,
+              right: 16,
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: "#F1F5F9",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 10,
+            }}
+            accessibilityLabel="Fermer"
+          >
+            <Text style={{ fontSize: 18, color: "#64748B", fontWeight: "700" }}>✕</Text>
+          </TouchableOpacity>
+
           {/* Header */}
           <View style={styles.header}>
             <View style={{ backgroundColor: "#E0F2FE", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, alignSelf: "center", marginBottom: 8 }}>

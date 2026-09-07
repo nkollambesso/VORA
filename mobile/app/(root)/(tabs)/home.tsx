@@ -225,8 +225,24 @@ const Home = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalBadgeHeader}>
-              <Text style={styles.modalBadgeText}>FIN DE COURSE VORA</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <View style={[styles.modalBadgeHeader, { marginBottom: 0 }]}>
+                <Text style={styles.modalBadgeText}>FIN DE COURSE VORA</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowArrivalModal(false)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: "#F1F5F9",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                accessibilityLabel="Fermer"
+              >
+                <Text style={{ fontSize: 18, color: "#64748B", fontWeight: "700" }}>✕</Text>
+              </TouchableOpacity>
             </View>
             <Text style={styles.modalTitle}>Chauffeur Arrivé à Destination</Text>
             <Text style={styles.modalSub}>
@@ -281,7 +297,24 @@ const Home = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalDisputeTitle}>Signaler un Problème</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <Text style={[styles.modalDisputeTitle, { flex: 1, marginBottom: 0 }]}>Signaler un Problème</Text>
+              <TouchableOpacity
+                onPress={() => setShowDisputeModal(false)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: "#F1F5F9",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginLeft: 8,
+                }}
+                accessibilityLabel="Fermer"
+              >
+                <Text style={{ fontSize: 18, color: "#64748B", fontWeight: "700" }}>✕</Text>
+              </TouchableOpacity>
+            </View>
             <Text style={styles.modalSub}>
               Veuillez préciser le motif de votre litige. Le paiement sera immédiatement bloqué et soumis à l'arbitrage VORA :
             </Text>

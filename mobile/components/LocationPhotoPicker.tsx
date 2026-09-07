@@ -177,7 +177,24 @@ export const LocationPhotoPicker: React.FC<LocationPhotoPickerProps> = ({
       <Modal visible={isModalOpen} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Assigner une photo à ce lieu</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <Text style={[styles.modalTitle, { flex: 1, marginBottom: 0 }]}>Assigner une photo à ce lieu</Text>
+              <TouchableOpacity
+                onPress={() => setIsModalOpen(false)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: "#F1F5F9",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginLeft: 8,
+                }}
+                accessibilityLabel="Fermer"
+              >
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
             <Text style={styles.modalSub}>
               Prenez une photo du repère (panneau, bâtiment, pharmacie) pour guider la communauté.
             </Text>

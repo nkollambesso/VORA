@@ -310,6 +310,25 @@ export default function Chat() {
       <Modal visible={isCallActive} animationType="slide" transparent>
         <View style={styles.callOverlay}>
           <View style={styles.callCard}>
+            <TouchableOpacity
+              onPress={handleEndCall}
+              style={{
+                position: "absolute",
+                top: 16,
+                right: 16,
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: "rgba(255,255,255,0.15)",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 10,
+              }}
+              accessibilityLabel="Fermer"
+            >
+              <Text style={{ fontSize: 18, color: "#FFFFFF", fontWeight: "700" }}>✕</Text>
+            </TouchableOpacity>
+
             <View style={styles.callAvatarCircle}>
               <Text style={styles.callAvatarInitial}>
                 {activeDriver?.name?.charAt(0) || "C"}
