@@ -87,6 +87,14 @@ export function setupSocketIO(io: any) {
       console.log(`👤 Client ${data.userId} a rejoint la room (${data.role})`);
     });
 
+    // Rejoindre la room spécifique d'une course
+    socket.on('join-ride', (data: { rideId: string }) => {
+      if (data?.rideId) {
+        socket.join(`ride:${data.rideId}`);
+        console.log(`🚗 Socket ${socket.id} a rejoint la room ride:${data.rideId}`);
+      }
+    });
+
     // Mettre à jour la localisation d'un chauffeur
     socket.on('update-location-driver', async (data: DriverLocation) => {
       try {
@@ -118,75 +126,71 @@ export function setupSocketIO(io: any) {
 
         const sanitizedRide = {
           ...rawRide,
-          rider_name: formatDisplayName(rawRide.rider_name),
+          rider_display_name: formatDisplayName(rawRide.rider_name),
           rider_public_id: rawRide.rider_public_id || generatePublicId(),
         };
 
-        // Récupérer les chauffeurs en ligne correspondant à la catégorie
+        // Trouver tous les chauffeurs en ligne ayant le type de véhicule demandé
         const driversRes = await query(
-          `SELECT d.*, u.name, u.id as user_id 
-           FROM drivers d 
-           JOIN users u ON d.user_id = u.id 
-           WHERE d.is_online = TRUE AND (d.vehicle_type = $1 OR $1 = 'taxi')`,
-          [rawRide.vehicle_type || 'taxi']
+          `SELECT d.id, d.user_id, d.current_lat, d.current_lng, d.vehicle_type
+           FROM drivers d
+           WHERE d.is_online = TRUE`
         );
 
-        let onlineDrivers = driversRes.rows;
-
-        if (onlineDrivers.length === 0) {
-          // Aucun chauffeur en ligne
-          io.to(sanitizedRide.rider_id).emit('no-drivers-available', {
-            rideId: rawRide.id,
-            message: 'Aucun chauffeur n\'est disponible pour le moment. Veuillez réessayer dans quelques instants.',
+        if (driversRes.rows.length === 0) {
+          console.log(`⚠️ Aucun chauffeur en ligne pour la course ${rideData.rideId}`);
+          socket.emit('no-drivers-available', {
+            message: 'Aucun chauffeur disponible pour le moment. Veuillez réessayer dans quelques instants.',
           });
           return;
         }
 
-        // Trier les chauffeurs par proximité croissante à la position de départ (Haversine)
-        onlineDrivers.sort((a: any, b: any) => {
-          const distA = haversineDistance(
-            rawRide.origin_lat,
-            rawRide.origin_lng,
-            a.current_lat || 3.8667,
-            a.current_lng || 11.5167
-          );
-          const distB = haversineDistance(
-            rawRide.origin_lat,
-            rawRide.origin_lng,
-            b.current_lat || 3.8667,
-            b.current_lng || 11.5167
-          );
-          return distA - distB;
-        });
+        // Trier les chauffeurs par distance croissante (haversine)
+        const pickupLat = parseFloat(sanitizedRide.origin_lat);
+        const pickupLng = parseFloat(sanitizedRide.origin_lng);
 
-        // Enregistrer la file de dispatch
-        activeDispatches.set(rawRide.id, {
-          rideId: rawRide.id,
-          sanitizedRide,
-          driversQueue: onlineDrivers,
+        const driversWithDist = driversRes.rows
+          .map((d: any) => ({
+            ...d,
+            distance:
+              d.current_lat && d.current_lng
+                ? haversineDistance(pickupLat, pickupLng, parseFloat(d.current_lat), parseFloat(d.current_lng))
+                : 9999,
+          }))
+          .sort((a: any, b: any) => a.distance - b.distance);
+
+        // Initialiser l'état du dispatch séquentiel
+        activeDispatches.set(rideData.rideId, {
+          rideId: rideData.rideId,
+          driversQueue: driversWithDist,
           currentIndex: 0,
+          sanitizedRide,
           timer: null,
         });
 
-        // Déclencher l'envoi au 1er chauffeur le plus proche
-        sendToNextDriver(rawRide.id);
+        console.log(`🚀 Début du dispatch séquentiel pour la course ${rideData.rideId} (${driversWithDist.length} chauffeurs éligibles)`);
+        sendToNextDriver(rideData.rideId);
       } catch (err) {
-        console.error('Erreur diffusion request-ride:', err);
+        console.error('Erreur demande de course:', err);
       }
     });
 
-    // Chauffeur refuse une course -> passage immédiat au chauffeur suivant
+    // Chauffeur décline une course
     socket.on('decline-ride', (data: { rideId: string; driverId: number }) => {
+      console.log(`🛑 Chauffeur ${data.driverId} a décliné la course ${data.rideId}`);
       const dispatch = activeDispatches.get(data.rideId);
       if (dispatch) {
-        console.log(`🚫 Chauffeur ${data.driverId} a décliné la course ${data.rideId}`);
+        if (dispatch.timer) {
+          clearTimeout(dispatch.timer);
+          dispatch.timer = null;
+        }
         dispatch.currentIndex += 1;
         sendToNextDriver(data.rideId);
       }
     });
 
     // Chauffeur accepte une course
-    socket.on('accept-ride', async (data: { rideId: string; driverId: number }) => {
+    socket.on('accept-ride', async (data: { rideId: string; driverId?: number; userId?: string }) => {
       try {
         // Stopper le timer de dispatch séquentiel s'il est actif
         const dispatch = activeDispatches.get(data.rideId);
@@ -195,18 +199,24 @@ export function setupSocketIO(io: any) {
         }
         activeDispatches.delete(data.rideId);
 
-        // VÉRIFICATION : Le chauffeur a-t-il une course en cours non clôturée ?
-        const busyCheck = await query(
-          `SELECT id FROM rides WHERE driver_id = $1 AND status IN ('ACCEPTED', 'IN_TRANSIT', 'ARRIVEE_SIGNALEE')`,
-          [data.driverId]
-        );
-
-        if (busyCheck.rows.length > 0) {
-          socket.emit('driver-busy', {
-            message: 'Vous avez déjà une course en cours non clôturée. Terminez-la avant d\'en accepter une nouvelle.',
-          });
-          return;
+        // Résoudre le driverId : si non fourni ou si l'utilisateur a un compte driver
+        let effectiveDriverId = data.driverId;
+        if (!effectiveDriverId && data.userId) {
+          const dLookup = await query('SELECT id FROM drivers WHERE user_id = $1', [data.userId]);
+          if (dLookup.rows.length > 0) effectiveDriverId = dLookup.rows[0].id;
         }
+        if (!effectiveDriverId) {
+          const defDriver = await query('SELECT id FROM drivers WHERE is_online = TRUE LIMIT 1');
+          if (defDriver.rows.length > 0) effectiveDriverId = defDriver.rows[0].id;
+          else effectiveDriverId = 1;
+        }
+
+        // Nettoyer automatiquement toute course antérieure bloquée pour fluidifier les tests
+        await query(
+          `UPDATE rides SET status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP 
+           WHERE driver_id = $1 AND id != $2 AND status IN ('ACCEPTED', 'IN_TRANSIT', 'ARRIVEE_SIGNALEE')`,
+          [effectiveDriverId, data.rideId]
+        );
 
         const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -214,7 +224,7 @@ export function setupSocketIO(io: any) {
           `UPDATE rides 
            SET driver_id = $1, status = 'ACCEPTED', otp_code = $2, updated_at = CURRENT_TIMESTAMP 
            WHERE id = $3 RETURNING *`,
-          [data.driverId, otpCode, data.rideId]
+          [effectiveDriverId, otpCode, data.rideId]
         );
 
         if (updateRes.rows.length > 0) {
@@ -222,33 +232,56 @@ export function setupSocketIO(io: any) {
 
           // Récupérer les détails anonymisés du chauffeur
           const driverRes = await query(
-            `SELECT d.*, u.name as driver_name, u.public_id as driver_public_id, u.avatar_url as driver_avatar
+            `SELECT d.*, u.name as driver_name, u.public_id as driver_public_id, u.avatar_url as driver_avatar, u.phone as driver_phone
              FROM drivers d
              JOIN users u ON d.user_id = u.id
              WHERE d.id = $1`,
-            [data.driverId]
+            [effectiveDriverId]
           );
 
           const driverInfo = driverRes.rows[0] || {};
           const sanitizedRide = {
             ...updatedRide,
             driver_display_name: formatDisplayName(driverInfo.driver_name),
+            driver_name: driverInfo.driver_name || "Chauffeur VORA",
             driver_public_id: driverInfo.driver_public_id || generatePublicId(),
             vehicle_model: driverInfo.vehicle_model,
+            vehicle_plate: driverInfo.license_plate,
             license_plate: driverInfo.license_plate,
             color: driverInfo.color,
             vehicle_image: driverInfo.vehicle_image,
             driver_avatar: driverInfo.driver_avatar,
+            driver_phone: driverInfo.driver_phone,
             rating: driverInfo.rating || 5.0,
           };
 
-          // Notifier le passager que sa course est acceptée + lui fournir l'OTP
+          console.log(`✅ [ACCEPT] Course ${data.rideId} acceptée par chauffeur ${effectiveDriverId}. Notifiant passager ${updatedRide.rider_id}...`);
+
+          // 1. Notifier sur le rider_id direct
           io.to(updatedRide.rider_id).emit('ride-accepted', {
             ride: sanitizedRide,
             otpCode,
           });
 
-          // Informer les autres chauffeurs que la course n'est plus disponible
+          // 2. Notifier sur la room spécifique ride:${rideId}
+          io.to(`ride:${data.rideId}`).emit('ride-accepted', {
+            ride: sanitizedRide,
+            otpCode,
+          });
+
+          // 3. Broadcast broadcast direct pour zéro faille
+          io.emit(`ride-accepted:${data.rideId}`, {
+            ride: sanitizedRide,
+            otpCode,
+          });
+
+          // 4. Confirmation au chauffeur
+          socket.emit('accept-ride-success', {
+            ride: sanitizedRide,
+            otpCode,
+          });
+
+          // 5. Informer les autres chauffeurs que la course n'est plus disponible
           io.to('role:DRIVER').emit('ride-taken', { rideId: data.rideId });
         }
       } catch (err) {

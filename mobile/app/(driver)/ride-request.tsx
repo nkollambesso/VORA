@@ -10,11 +10,13 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 
 import { voraSocket } from "@/lib/socket";
+import { useClerkUser } from "@/lib/useClerkSafe";
 
 export default function DriverRideRequest() {
+  const { user } = useClerkUser();
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
-  const { rideData } = useLocalSearchParams();
+  const { rideData, driverId, userId } = useLocalSearchParams();
 
   const [ride, setRide] = useState<any>(null);
   const [timeLeft, setTimeLeft] = useState(20);
@@ -51,7 +53,8 @@ export default function DriverRideRequest() {
   useEffect(() => {
     if (timeLeft <= 0) {
       if (ride?.id) {
-        voraSocket.declineRide(ride.id, 1);
+        const activeDriverId = driverId ? parseInt(driverId as string, 10) : 1;
+        voraSocket.declineRide(ride.id, activeDriverId);
       }
       router.back();
       return;
@@ -66,10 +69,12 @@ export default function DriverRideRequest() {
 
   const handleAccept = () => {
     if (!ride) return;
-    voraSocket.acceptRide(ride.id, 1);
+    const activeDriverId = driverId ? parseInt(driverId as string, 10) : 1;
+    const activeUserId = (userId as string) || user?.id || "driver_demo";
+    voraSocket.acceptRide(ride.id, activeDriverId, activeUserId);
     router.replace({
       pathname: "/(driver)/navigation" as any,
-      params: { rideId: ride.id, rideData: JSON.stringify(ride) },
+      params: { rideId: ride.id, rideData: typeof ride === "string" ? ride : JSON.stringify(ride) },
     });
   };
 

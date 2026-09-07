@@ -328,7 +328,11 @@ export default function DriverDashboard() {
       if (isOnline) {
         router.push({
           pathname: "/(driver)/ride-request" as any,
-          params: { rideData: JSON.stringify(ride) },
+          params: {
+            rideData: typeof ride === "string" ? ride : JSON.stringify(ride),
+            driverId: driverProfile?.id ? driverProfile.id.toString() : "1",
+            userId: user?.id || "driver_demo",
+          },
         });
       }
     });

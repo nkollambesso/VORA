@@ -6,7 +6,10 @@ class VoraSocketService {
 
   public connect(userId: string, role: "PASSENGER" | "DRIVER" | "ADMIN") {
     if (typeof window === "undefined") return null;
-    if (this.socket && this.socket.connected) return this.socket;
+    if (this.socket && this.socket.connected) {
+      this.socket.emit("join", { userId, role });
+      return this.socket;
+    }
 
     const socketUrl = getSocketUrl();
     this.socket = io(socketUrl, {
@@ -31,6 +34,12 @@ class VoraSocketService {
     return this.socket;
   }
 
+  public joinRide(rideId: string) {
+    if (this.socket?.connected) {
+      this.socket.emit("join-ride", { rideId });
+    }
+  }
+
   public updateDriverLocation(driverId: number, lat: number, lng: number) {
     if (this.socket?.connected) {
       this.socket.emit("update-location-driver", { driverId, lat, lng });
@@ -43,9 +52,9 @@ class VoraSocketService {
     }
   }
 
-  public acceptRide(rideId: string, driverId: number) {
+  public acceptRide(rideId: string, driverId?: number, userId?: string) {
     if (this.socket?.connected) {
-      this.socket.emit("accept-ride", { rideId, driverId });
+      this.socket.emit("accept-ride", { rideId, driverId, userId });
     }
   }
 

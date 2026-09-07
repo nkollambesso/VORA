@@ -9,8 +9,10 @@ import { icons } from "@/constants";
 import { useLocationStore } from "@/store";
 import { voraSocket } from "@/lib/socket";
 import { getBackendUrl } from "@/lib/config";
+import { useClerkUser } from "@/lib/useClerkSafe";
 
 const FindRide = () => {
+  const { user } = useClerkUser();
   const { rideId } = useLocalSearchParams();
   const {
     userAddress,
@@ -71,37 +73,80 @@ const FindRide = () => {
   };
 
   useEffect(() => {
-    const socket = voraSocket.getSocket();
-    if (!socket) return;
+    const userId = user?.id || "rider_demo";
+    const socket = voraSocket.connect(userId, "PASSENGER");
+    if (socket && rideId) {
+      voraSocket.joinRide(rideId as string);
+    }
 
-    socket.on("all-drivers-declined", () => {
-      setIsSearching(false);
-      setShowAdjustModal(true);
-    });
-
-    socket.on("no-drivers-available", () => {
-      setIsSearching(false);
-      setShowAdjustModal(true);
-    });
-
-    socket.on("ride-accepted", (data: any) => {
+    const onRideAccepted = (data: any) => {
       setIsSearching(false);
       router.replace({
         pathname: "/(root)/confirm-ride",
         params: {
-          rideId: data.ride?.id || data.rideId,
-          otpCode: data.otpCode,
+          rideId: data.ride?.id || data.rideId || (rideId as string),
+          otpCode: data.otpCode || data.ride?.otp_code,
           rideData: JSON.stringify(data.ride || {}),
         },
       });
+    };
+
+    socket?.on("all-drivers-declined", () => {
+      setIsSearching(false);
+      setShowAdjustModal(true);
     });
 
+    socket?.on("no-drivers-available", () => {
+      setIsSearching(false);
+      setShowAdjustModal(true);
+    });
+
+    socket?.on("ride-accepted", onRideAccepted);
+    if (rideId) {
+      socket?.on(`ride-accepted:${rideId}`, onRideAccepted);
+    }
+
     return () => {
-      socket.off("all-drivers-declined");
-      socket.off("no-drivers-available");
-      socket.off("ride-accepted");
+      socket?.off("all-drivers-declined");
+      socket?.off("no-drivers-available");
+      socket?.off("ride-accepted", onRideAccepted);
+      if (rideId) {
+        socket?.off(`ride-accepted:${rideId}`, onRideAccepted);
+      }
     };
-  }, []);
+  }, [user, rideId]);
+
+  // Fallback Polling ultra-résilient (vérifie toutes les 1.5s si la course a été acceptée en DB)
+  useEffect(() => {
+    if (!rideId || !isSearching) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const backendUrl = getBackendUrl();
+        const res = await fetch(`${backendUrl}/api/rides/${rideId}`);
+        const data = await res.json();
+        if (
+          data.success &&
+          data.ride &&
+          ["ACCEPTED", "IN_TRANSIT", "ARRIVEE_SIGNALEE"].includes(data.ride.status)
+        ) {
+          setIsSearching(false);
+          router.replace({
+            pathname: "/(root)/confirm-ride",
+            params: {
+              rideId: data.ride.id,
+              otpCode: data.ride.otp_code,
+              rideData: JSON.stringify(data.ride),
+            },
+          });
+        }
+      } catch (err) {
+        // Fallback silencieux en cas de micro-coupure réseau
+      }
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [rideId, isSearching]);
 
   const handleRetrySearchWithOffer = () => {
     setShowAdjustModal(false);
