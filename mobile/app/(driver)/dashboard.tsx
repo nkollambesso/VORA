@@ -61,6 +61,7 @@ export default function DriverDashboard() {
   const [licensePlate, setLicensePlate] = useState("");
   const [vehicleColor, setVehicleColor] = useState("");
   const [vehicleImage, setVehicleImage] = useState<string>("");
+  const [vehicleDocuments, setVehicleDocuments] = useState<string>("");
   const [driverAvatar, setDriverAvatar] = useState<string>("");
   const [isAnalyzingFace, setIsAnalyzingFace] = useState(false);
   const [faceAnalysisResult, setFaceAnalysisResult] = useState<{ isPerson: boolean; message: string } | null>(null);
@@ -84,6 +85,7 @@ export default function DriverDashboard() {
         setLicensePlate(data.driver.license_plate || "");
         setVehicleColor(data.driver.color || "");
         if (data.driver.vehicle_image) setVehicleImage(data.driver.vehicle_image);
+        if (data.driver.vehicle_documents) setVehicleDocuments(data.driver.vehicle_documents);
         if (data.driver.avatar_url) setDriverAvatar(data.driver.avatar_url);
 
         if (data.driver.today_earnings !== undefined) {
@@ -122,6 +124,26 @@ export default function DriverDashboard() {
       }
     } catch {
       Alert.alert("Erreur", "Impossible d'accéder aux photos pour le véhicule.");
+    }
+  };
+
+  // Choisir les papiers du véhicule (Carte grise, assurance, permis)
+  const handlePickVehicleDocuments = async () => {
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.6,
+        base64: true,
+      });
+      if (!res.canceled && res.assets?.[0]) {
+        const asset = res.assets[0];
+        const dataUrl = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+        setVehicleDocuments(dataUrl);
+      }
+    } catch {
+      Alert.alert("Erreur", "Impossible d'accéder aux photos pour les papiers du véhicule.");
     }
   };
 
@@ -192,6 +214,14 @@ export default function DriverDashboard() {
       return;
     }
 
+    if (!vehicleDocuments) {
+      Alert.alert(
+        "Papiers du véhicule obligatoires",
+        "Veuillez ajouter une photo nette de votre carte grise, attestation d'assurance ou permis de conduire."
+      );
+      return;
+    }
+
     if (!driverAvatar) {
       Alert.alert(
         "Photo de profil obligatoire",
@@ -233,6 +263,7 @@ export default function DriverDashboard() {
           color: vehicleColor.trim(),
           vehicle_image: vehicleImage,
           avatar_url: driverAvatar,
+          vehicle_documents: vehicleDocuments,
         }),
       });
 
@@ -664,6 +695,31 @@ export default function DriverDashboard() {
                   <View style={styles.uploadPlaceholder}>
                     <Text style={styles.uploadPlaceholderTitle}>Ajouter la photo du véhicule</Text>
                     <Text style={styles.uploadPlaceholderSub}>Format JPG, PNG ou WebP</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* Papiers du Véhicule (Carte grise / Assurance / Permis) */}
+              <Text style={styles.formLabel}>PAPIERS DU VÉHICULE (CARTE GRISE, ASSURANCE, PERMIS)</Text>
+              <Text style={styles.formHelpText}>
+                Téléversez une photo nette de votre carte grise, attestation d'assurance ou permis de conduire pour validation réglementaire.
+              </Text>
+              <TouchableOpacity
+                style={styles.uploadBox}
+                onPress={handlePickVehicleDocuments}
+                activeOpacity={0.8}
+              >
+                {vehicleDocuments ? (
+                  <View style={styles.uploadedImgWrapper}>
+                    <Image source={{ uri: vehicleDocuments }} style={styles.uploadedImgPreview} resizeMode="cover" />
+                    <View style={styles.changeImgBadge}>
+                      <Text style={styles.changeImgText}>Modifier le document</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.uploadPlaceholder}>
+                    <Text style={styles.uploadPlaceholderTitle}>Ajouter les papiers du véhicule</Text>
+                    <Text style={styles.uploadPlaceholderSub}>Format JPG, PNG ou PDF scanné</Text>
                   </View>
                 )}
               </TouchableOpacity>

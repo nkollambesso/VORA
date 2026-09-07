@@ -49,6 +49,7 @@ router.post('/register', async (req: Request, res: Response) => {
       color,
       vehicle_image,
       avatar_url,
+      vehicle_documents,
     } = req.body;
 
     if (!vehicle_model?.trim() || !license_plate?.trim() || !color?.trim()) {
@@ -94,14 +95,15 @@ router.post('/register', async (req: Request, res: Response) => {
 
     // 2. Insérer ou mettre à jour dans la table drivers
     const insertQuery = `
-      INSERT INTO drivers (user_id, vehicle_type, vehicle_model, license_plate, color, vehicle_image)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO drivers (user_id, vehicle_type, vehicle_model, license_plate, color, vehicle_image, vehicle_documents)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       ON CONFLICT (user_id) DO UPDATE
       SET vehicle_type = EXCLUDED.vehicle_type,
           vehicle_model = EXCLUDED.vehicle_model,
           license_plate = EXCLUDED.license_plate,
           color = EXCLUDED.color,
-          vehicle_image = COALESCE(EXCLUDED.vehicle_image, drivers.vehicle_image)
+          vehicle_image = COALESCE(EXCLUDED.vehicle_image, drivers.vehicle_image),
+          vehicle_documents = COALESCE(EXCLUDED.vehicle_documents, drivers.vehicle_documents)
       RETURNING *;
     `;
 
@@ -112,6 +114,7 @@ router.post('/register', async (req: Request, res: Response) => {
       license_plate.trim().toUpperCase(),
       color.trim(),
       vehicle_image.trim(),
+      vehicle_documents ? vehicle_documents.trim() : null,
     ]);
 
     console.log(`[DRIVER REGISTER] Chauffeur ${user_id} enregistré avec véhicule ${vehicle_model} et photo validée IA.`);
