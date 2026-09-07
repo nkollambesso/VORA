@@ -42,11 +42,6 @@ jobs:
           cd mobile
           npm install --legacy-peer-deps
 
-      - name: Install Sharp (required for image processing in Expo web build)
-        run: |
-          cd mobile
-          npm install --save-dev sharp
-
       - name: Export Mobile Web Build
         run: |
           cd mobile
