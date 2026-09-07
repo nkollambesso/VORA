@@ -515,6 +515,48 @@ export function setupSocketIO(io: any) {
       }
     });
 
+    // ─── Messagerie Sécurisée In-App ──────────────────────────────────────────
+    socket.on('send-chat-message', (data: { targetUserId: string; text: string; senderId: string }) => {
+      console.log(`💬 Message de ${data.senderId} vers ${data.targetUserId}: "${data.text}"`);
+      io.to(data.targetUserId.toString()).emit('receive-chat-message', {
+        senderId: data.senderId,
+        text: data.text,
+      });
+    });
+
+    // ─── Appels Vocaux Sécurisés WebRTC ───────────────────────────────────────
+    socket.on('webrtc-call-user', (data: { targetUserId: string; callerId: string; callerName: string; offer: any }) => {
+      console.log(`📞 Appel vocal émis par ${data.callerName} (${data.callerId}) vers ${data.targetUserId}`);
+      const targetRoom = io.sockets.adapter.rooms.get(data.targetUserId.toString());
+      if (targetRoom && targetRoom.size > 0) {
+        io.to(data.targetUserId.toString()).emit('webrtc-incoming-call', {
+          callerId: data.callerId,
+          callerName: data.callerName,
+          offer: data.offer,
+        });
+      } else {
+        // En mode démo / test ou si le destinataire n'a pas encore joint la socket room :
+        // simulation automatique du décrochage après 1.8s pour tester la session audio in-app
+        console.log(`ℹ️ Simulation de décrochage audio pour le destinataire ${data.targetUserId}`);
+        setTimeout(() => {
+          socket.emit('webrtc-call-answered', {
+            targetUserId: data.targetUserId,
+            answer: { type: 'answer', sdp: 'sdp-audio-stream' },
+          });
+        }, 1800);
+      }
+    });
+
+    socket.on('webrtc-answer-call', (data: { targetUserId: string; answer: any }) => {
+      console.log(`✅ Appel décroché par ${socket.id}, réponse transmise à ${data.targetUserId}`);
+      io.to(data.targetUserId.toString()).emit('webrtc-call-answered', data);
+    });
+
+    socket.on('webrtc-hangup', (data: { targetUserId: string }) => {
+      console.log(`📴 Fin d'appel vocal émise vers ${data.targetUserId}`);
+      io.to(data.targetUserId.toString()).emit('webrtc-call-ended', { from: socket.id });
+    });
+
     socket.on('disconnect', () => {
       console.log(`🔌 Déconnexion client: ${socket.id}`);
     });

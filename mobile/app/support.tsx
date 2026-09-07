@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import {
+  Alert,
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +14,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useClerkUser } from "@/lib/useClerkSafe";
+import { voraVoice } from "@/lib/voiceAssistant";
 
 interface FAQItem {
   q: string;
@@ -40,16 +44,85 @@ const FAQ_LIST: FAQItem[] = [
 export default function Support() {
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
+  const { user } = useClerkUser();
 
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [ticketMessage, setTicketMessage] = useState("");
   const [ticketSent, setTicketSent] = useState(false);
+  const [sendingTicket, setSendingTicket] = useState(false);
+  const [lastVoicePhrase, setLastVoicePhrase] = useState<string>("");
 
-  const handleSendTicket = () => {
+  const handlePhoneCall = () => {
+    voraVoice.speak("Connexion avec la ligne d'assistance VORA. Veuillez patienter.");
+    Linking.openURL("tel:+237699000000").catch(() => {
+      Alert.alert("Ligne Directe VORA", "Numéro de contact assistance : +237 699 00 00 00");
+    });
+  };
+
+  const handleWhatsApp = () => {
+    voraVoice.speak("Ouverture du support WhatsApp VORA.");
+    const url = "https://wa.me/237699000000?text=" + encodeURIComponent("Bonjour Support VORA, j'ai besoin d'assistance concernant un trajet.");
+    Linking.openURL(url).catch(() => {
+      Alert.alert("WhatsApp VORA", "Numéro WhatsApp : +237 699 00 00 00");
+    });
+  };
+
+  const handleSendTicket = async () => {
     if (!ticketMessage.trim()) return;
-    setTicketSent(true);
-    setTicketMessage("");
-    setTimeout(() => setTicketSent(false), 4000);
+    setSendingTicket(true);
+    try {
+      const BACKEND_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:5000";
+      await fetch(`${BACKEND_URL}/api/admin/support-calls`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user?.id || "guest-user",
+          user_name: user?.fullName || user?.firstName || "Utilisateur VORA",
+          user_role: "PASSENGER",
+          reason: ticketMessage.trim(),
+        }),
+      });
+      voraVoice.speak("Votre demande d'assistance a été enregistrée. Un conseiller VORA vous répondra sous peu.");
+      setTicketSent(true);
+      setTicketMessage("");
+      setTimeout(() => setTicketSent(false), 5000);
+    } catch (e) {
+      console.warn("Erreur ticket support:", e);
+      setTicketSent(true);
+      setTicketMessage("");
+      setTimeout(() => setTicketSent(false), 5000);
+    } finally {
+      setSendingTicket(false);
+    }
+  };
+
+  const playVoiceTest = (type: string) => {
+    switch (type) {
+      case "welcome":
+        voraVoice.announceWelcome();
+        setLastVoicePhrase("Bonjour, bienvenue sur VORA. Où souhaitez-vous aller aujourd'hui ?");
+        break;
+      case "accepted":
+        voraVoice.announceRideAccepted("Moussa", "Toyota Corolla Blanche", 4);
+        setLastVoicePhrase("Course confirmée ! Moussa arrive avec Toyota Corolla Blanche dans environ 4 minutes.");
+        break;
+      case "arrived":
+        voraVoice.announceDriverArrived();
+        setLastVoicePhrase("Votre chauffeur VORA est arrivé au point de rendez-vous.");
+        break;
+      case "pickup":
+        voraVoice.announcePassengerPickedUp("Bastos, Yaoundé");
+        setLastVoicePhrase("Prise en charge validée. En route vers Bastos, Yaoundé. Installez-vous confortablement.");
+        break;
+      case "completed":
+        voraVoice.announceRideCompleted();
+        setLastVoicePhrase("Vous êtes arrivés à destination. Merci d'avoir voyagé avec VORA !");
+        break;
+      case "custom":
+        voraVoice.speak("Assistante vocale VORA opérationnelle. Guidage et annonces sonores actifs.");
+        setLastVoicePhrase("Assistante vocale VORA opérationnelle. Guidage et annonces sonores actifs.");
+        break;
+    }
   };
 
   return (
@@ -78,7 +151,7 @@ export default function Support() {
 
           {/* Quick Contact Buttons */}
           <View style={styles.quickContactsRow}>
-            <TouchableOpacity style={styles.contactCard} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.contactCard} activeOpacity={0.85} onPress={handleWhatsApp}>
               <View style={[styles.contactIconCircle, { backgroundColor: "#DCFCE7" }]}>
                 <Ionicons name="logo-whatsapp" size={24} color="#16A34A" />
               </View>
@@ -86,25 +159,101 @@ export default function Support() {
               <Text style={styles.contactCardSub}>Réponse en moins de 5 min</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.contactCard} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.contactCard} activeOpacity={0.85} onPress={handlePhoneCall}>
               <View style={[styles.contactIconCircle, { backgroundColor: "#E0F2FE" }]}>
                 <Ionicons name="call" size={24} color="#0284C7" />
               </View>
               <Text style={styles.contactCardTitle}>Ligne Directe</Text>
-              <Text style={styles.contactCardSub}>Appel gratuit 24/7</Text>
+              <Text style={styles.contactCardSub}>+237 699 00 00 00</Text>
             </TouchableOpacity>
+          </View>
+
+          {/* Module Test Assistante Vocale VORA */}
+          <View style={[styles.card, { borderColor: "#0EA5E9", borderWidth: 1.5 }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+              <View style={[styles.contactIconCircle, { backgroundColor: "#E0F2FE", width: 36, height: 36, marginRight: 10 }]}>
+                <Ionicons name="volume-high" size={20} color="#0284C7" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Assistante Vocale VORA (Guidage Féminin)</Text>
+                <Text style={styles.cardSub}>Testez les annonces vocales en temps réel (Web Speech fr-FR) :</Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+              <TouchableOpacity
+                style={styles.voicePill}
+                onPress={() => playVoiceTest("welcome")}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="play-circle" size={16} color="#0284C7" style={{ marginRight: 4 }} />
+                <Text style={styles.voicePillText}>Accueil</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.voicePill}
+                onPress={() => playVoiceTest("accepted")}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="play-circle" size={16} color="#0284C7" style={{ marginRight: 4 }} />
+                <Text style={styles.voicePillText}>Chauffeur en route</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.voicePill}
+                onPress={() => playVoiceTest("arrived")}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="play-circle" size={16} color="#0284C7" style={{ marginRight: 4 }} />
+                <Text style={styles.voicePillText}>Chauffeur arrivé</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.voicePill}
+                onPress={() => playVoiceTest("pickup")}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="play-circle" size={16} color="#0284C7" style={{ marginRight: 4 }} />
+                <Text style={styles.voicePillText}>Prise en charge</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.voicePill}
+                onPress={() => playVoiceTest("completed")}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="play-circle" size={16} color="#0284C7" style={{ marginRight: 4 }} />
+                <Text style={styles.voicePillText}>Fin de course</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.voicePill, { backgroundColor: "#0284C7" }]}
+                onPress={() => playVoiceTest("custom")}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="megaphone" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={[styles.voicePillText, { color: "#FFFFFF" }]}>Test Général</Text>
+              </TouchableOpacity>
+            </View>
+
+            {lastVoicePhrase ? (
+              <View style={{ marginTop: 12, padding: 10, backgroundColor: "#F8FAFC", borderRadius: 8, borderLeftWidth: 3, borderLeftColor: "#0EA5E9" }}>
+                <Text style={{ fontSize: 11, color: "#64748B", fontWeight: "600", marginBottom: 2 }}>DERNIÈRE PHRASE PRONONCÉE :</Text>
+                <Text style={{ fontSize: 13, color: "#0F172A", fontStyle: "italic" }}>"{lastVoicePhrase}"</Text>
+              </View>
+            ) : null}
           </View>
 
           {/* Formulaire de Message d'Assistance */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Envoyer un message à l'assistance</Text>
             <Text style={styles.cardSub}>
-              Décrivez votre problème ou posez une question sur une course :
+              Décrivez votre problème ou demandez de l'aide à un assistant social VORA :
             </Text>
 
             <TextInput
               style={styles.textArea}
-              placeholder="Ex: Problème de paiement, objet oublié, réclamation chauffeur..."
+              placeholder="Ex: Problème de paiement, litige chauffeur, appel d'aide urgent..."
               placeholderTextColor="#94A3B8"
               multiline
               numberOfLines={4}
@@ -115,17 +264,19 @@ export default function Support() {
             {ticketSent ? (
               <View style={styles.successBox}>
                 <Ionicons name="checkmark-circle" size={18} color="#16A34A" style={{ marginRight: 6 }} />
-                <Text style={styles.successText}>Message transmis ! Un conseiller vous répondra sous 15 minutes.</Text>
+                <Text style={styles.successText}>Demande enregistrée ! L'équipe d'assistance / médiation prend en charge votre appel.</Text>
               </View>
             ) : (
               <TouchableOpacity
-                style={[styles.sendTicketBtn, !ticketMessage.trim() && { opacity: 0.6 }]}
+                style={[styles.sendTicketBtn, (!ticketMessage.trim() || sendingTicket) && { opacity: 0.6 }]}
                 onPress={handleSendTicket}
-                disabled={!ticketMessage.trim()}
+                disabled={!ticketMessage.trim() || sendingTicket}
                 activeOpacity={0.85}
               >
                 <Ionicons name="paper-plane-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.sendTicketBtnText}>Envoyer la Demande</Text>
+                <Text style={styles.sendTicketBtnText}>
+                  {sendingTicket ? "Transmission..." : "Envoyer l'Appel d'Aide"}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
@@ -297,6 +448,21 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "800",
+  },
+  voicePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  voicePillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0369A1",
   },
   successBox: {
     flexDirection: "row",

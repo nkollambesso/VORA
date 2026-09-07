@@ -24,7 +24,8 @@ async function ensureAdminTables() {
     await query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS vehicle_image TEXT;`);
     await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN DEFAULT FALSE;`);
     await query(`CREATE TABLE IF NOT EXISTS admin_wallet (id SERIAL PRIMARY KEY, admin_email VARCHAR(255) UNIQUE NOT NULL, total_commissions INT DEFAULT 0, commission_rate NUMERIC(5,4) DEFAULT 0.1000, updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP);`);
-    await query(`CREATE TABLE IF NOT EXISTS support_calls (id SERIAL PRIMARY KEY, user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE, user_name VARCHAR(255), user_role VARCHAR(50), reason TEXT NOT NULL, status VARCHAR(50) DEFAULT 'PENDING', assigned_to VARCHAR(255), ride_id VARCHAR(100) REFERENCES rides(id) ON DELETE SET NULL, created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, resolved_at TIMESTAMP WITH TIME ZONE);`);
+    await query(`CREATE TABLE IF NOT EXISTS support_calls (id SERIAL PRIMARY KEY, user_id VARCHAR(255), user_name VARCHAR(255), user_role VARCHAR(50), reason TEXT NOT NULL, status VARCHAR(50) DEFAULT 'PENDING', assigned_to VARCHAR(255), ride_id VARCHAR(100) REFERENCES rides(id) ON DELETE SET NULL, created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, resolved_at TIMESTAMP WITH TIME ZONE);`);
+    await query(`ALTER TABLE support_calls DROP CONSTRAINT IF EXISTS support_calls_user_id_fkey;`);
     await query(`DELETE FROM drivers WHERE user_id IN ('driver-user-1', 'driver-user-2'); DELETE FROM users WHERE id IN ('driver-user-1', 'driver-user-2');`);
     await query(`INSERT INTO admin_accounts (email, password_hash, name, role) VALUES ($1, $2, 'Super Administrateur VORA', 'SUPER_ADMIN') ON CONFLICT (email) DO NOTHING;`, [ADMIN_EMAIL, sha256(ADMIN_PASSWORD)]);
     await query(`INSERT INTO admin_wallet (admin_email, total_commissions, commission_rate) VALUES ($1, 0, $2) ON CONFLICT (admin_email) DO NOTHING;`, [ADMIN_EMAIL, ADMIN_COMMISSION_RATE]);
@@ -225,7 +226,10 @@ router.post('/support-calls', async (req: Request, res: Response) => {
     if (!user_id || !reason || reason.trim().length < 5) return res.status(400).json({ success: false, error: 'user_id et reason requis.' });
     const result = await query(`INSERT INTO support_calls (user_id, user_name, user_role, reason, ride_id) VALUES ($1, $2, $3, $4, $5) RETURNING *`, [user_id, user_name || 'Utilisateur', user_role || 'PASSENGER', reason.trim(), ride_id || null]);
     return res.status(201).json({ success: true, call: result.rows[0] });
-  } catch { return res.status(500).json({ success: false, error: 'Erreur creation appel.' }); }
+  } catch (err) {
+    console.error('Erreur creation appel:', err);
+    return res.status(500).json({ success: false, error: 'Erreur creation appel.' });
+  }
 });
 
 router.put('/support-calls/:id', requireAdminAuth, async (req: Request, res: Response) => {
