@@ -422,25 +422,33 @@ install_localtunnel() {
 
 start_tunnel() {
     step "Démarrage du tunnel public (localtunnel)"
-    info "Création d'un tunnel HTTPS public vers le frontend..."
-    
-    # Démarrer lt en arrière-plan, capturer l'URL
-    lt --port "$FRONTEND_PORT" --print-requests > "$LOG_DIR/tunnel.log" 2>&1 &
+    info "Création de tunnels HTTPS publics - frontend ET backend..."
+
+    # Démarrer lt en arrière-plan, capturer l'URL (frontend + backend)
+    lt --port "$FRONTEND_PORT" > "$LOG_DIR/tunnel.log" 2>&1 &
     TUNNEL_PID=$!
-    
-    # Attendre que l'URL du tunnel soit disponible
+    lt --port "$BACKEND_PORT" > "$LOG_DIR/tunnel-backend.log" 2>&1 &
+    BACKEND_TUNNEL_PID=$!
+
+    # Attendre que les URLs soient disponibles (domaine actuel : *.loca.lt)
     local attempts=0
     while [ $attempts -lt 30 ]; do
-        if grep -oE 'https://[a-z0-9-]+\.l\.tunnel\.dev' "$LOG_DIR/tunnel.log" >/dev/null 2>&1; then
-            TUNNEL_URL=$(grep -oE 'https://[a-z0-9-]+\.l\.tunnel\.dev' "$LOG_DIR/tunnel.log" | head -1)
-            ok "Tunnel public actif !"
+        TUNNEL_URL=$(grep -oE 'https://[a-z0-9-]+\.loca\.lt' "$LOG_DIR/tunnel.log" 2>/dev/null | head -1)
+        BACKEND_TUNNEL_URL=$(grep -oE 'https://[a-z0-9-]+\.loca\.lt' "$LOG_DIR/tunnel-backend.log" 2>/dev/null | head -1)
+        if [ -n "$TUNNEL_URL" ] && [ -n "$BACKEND_TUNNEL_URL" ]; then
+            ok "Tunnels publics actifs !"
+            # Pointer le mobile vers le tunnel backend (accessible de partout)
+            sed -i.bak "s|EXPO_PUBLIC_BACKEND_URL=.*|EXPO_PUBLIC_BACKEND_URL=$BACKEND_TUNNEL_URL|; s|EXPO_PUBLIC_SOCKET_URL=.*|EXPO_PUBLIC_SOCKET_URL=$BACKEND_TUNNEL_URL|" "$MOBILE_DIR/.env" 2>/dev/null || true
+            rm -f "$MOBILE_DIR/.env.bak"
+            # Mot de passe tunnel (demandé au 1er accès depuis un téléphone)
+            TUNNEL_PASS=$(curl -s -m 8 https://loca.lt/mytunnelpassword 2>/dev/null)
             return 0
         fi
         sleep 1
         attempts=$((attempts + 1))
-        printf "\r  ${CYAN}⠋${RESET} Création du tunnel... %ds " $attempts
+        printf "\r  ${CYAN}⠋${RESET} Création des tunnels... %ds " $attempts
     done
-    
+
     echo ""
     warn "Le tunnel met du temps à démarrer. Essayez : lt --port $FRONTEND_PORT"
     return 0
@@ -515,6 +523,10 @@ show_links() {
         echo -e "  │  ${BOLD}$TUNNEL_URL${RESET}"
         echo -e "  └─────────────────────────────────────────────────────────┘"
         echo ""
+        if [ -n "$TUNNEL_PASS" ]; then
+            echo -e "  ${BOLD}${YELLOW}🔑  MOT DE PASSE TUNNEL (demandé au 1er accès) : $TUNNEL_PASS${RESET}"
+            echo ""
+        fi
     fi
     
     echo -e "  ${BOLD}${CYAN}💻  OUVRIR SUR ORDINATEUR :${RESET}"
@@ -615,6 +627,13 @@ ENVEOF
         ok "Compte chauffeur de test configuré"
     fi
     
+    # Libérer les ports 5000/8081 si une ancienne instance tourne encore
+    # (sinon le nouveau backend crashe avec EADDRINUSE)
+    if command -v fuser &>/dev/null; then
+        fuser -k 5000/tcp 8081/tcp 2>/dev/null || true
+        sleep 1
+    fi
+
     # 3. Installation des dépendances
     install_backend_deps
     install_frontend_deps

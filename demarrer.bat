@@ -248,6 +248,11 @@ echo   Frontend dans cette fenetre.
 echo  ============================================================
 echo.
 
+REM === Liberation des ports 5000/8081 - evite EADDRINUSE au 2e lancement ===
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 5000,8081 -State Listen -ErrorAction SilentlyContinue | Select-Object -Unique OwningProcess | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
+echo  [OK] Ports 5000 et 8081 liberes si necessaire.
+echo.
+
 start "VORA Backend" /d "%SCRIPT_DIR%\backend" cmd /k "echo Backend en cours... && call npm run dev"
 echo  Demarrage Backend...
 timeout /t 8 /nobreak >nul
@@ -287,25 +292,67 @@ echo  Backend URL : http://%LOCAL_IP%:5000
 echo.
 
 REM === Tunnel ===
-if "%TUNNEL_CHOICE%"=="2" (
-    echo  Tunnel PUBLIC en cours...
-    start /b cmd /c "lt --port 8081 --print-requests > %SCRIPT_DIR%\logs\tunnel.log 2>&1"
-    timeout /t 15 /nobreak >nul
-    for /f "tokens=*" %%i in ('type %SCRIPT_DIR%\logs\tunnel.log ^| findstr /r "https://"') do set "TUNNEL_URL=%%i"
-    echo.
-    echo   Lien telephone - tunnel :
-    echo   %TUNNEL_URL%
-    echo.
+REM Structure en goto : les variables captees par for /f ne sont pas
+REM expansibles a l'interieur d'un meme bloc parenthese en batch.
+if not "%TUNNEL_CHOICE%"=="2" goto lan_links
+
+if not exist "%SCRIPT_DIR%\logs" mkdir "%SCRIPT_DIR%\logs"
+echo  Creation des tunnels publics - frontend ET backend...
+start /b cmd /c "lt --port 8081 > %SCRIPT_DIR%\logs\tunnel.log 2>&1"
+start /b cmd /c "lt --port 5000 > %SCRIPT_DIR%\logs\tunnel-backend.log 2>&1"
+echo  Attente des tunnels (15 secondes)...
+timeout /t 15 /nobreak >nul
+
+set "TUNNEL_URL="
+set "BACKEND_TUNNEL_URL="
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "$m = Select-String -Path '%SCRIPT_DIR%\logs\tunnel.log' -Pattern 'https://[a-z0-9-]+\.loca\.lt' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($m) { $m.Matches[0].Value }"`) do set "TUNNEL_URL=%%i"
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "$m = Select-String -Path '%SCRIPT_DIR%\logs\tunnel-backend.log' -Pattern 'https://[a-z0-9-]+\.loca\.lt' -ErrorAction SilentlyContinue | Select-Object -First 1; if ($m) { $m.Matches[0].Value }"`) do set "BACKEND_TUNNEL_URL=%%i"
+
+REM Pointer le mobile vers le tunnel backend - accessible depuis partout
+if defined BACKEND_TUNNEL_URL powershell -NoProfile -Command "$f='%SCRIPT_DIR%\mobile\.env'; $c=Get-Content $f; $c=$c -replace 'EXPO_PUBLIC_BACKEND_URL=.*','EXPO_PUBLIC_BACKEND_URL=%BACKEND_TUNNEL_URL%' -replace 'EXPO_PUBLIC_SOCKET_URL=.*','EXPO_PUBLIC_SOCKET_URL=%BACKEND_TUNNEL_URL%'; Set-Content $f $c"
+
+set "TUNNEL_PASS="
+for /f "usebackq delims=" %%i in (`curl -s -m 8 https://loca.lt/mytunnelpassword`) do set "TUNNEL_PASS=%%i"
+
+echo.
+echo  ============================================================
+echo   LIENS TUNNEL PUBLIC - accessibles depuis n'importe ou :
+echo.
+if defined TUNNEL_URL (
+    echo   APPLICATION - Frontend :
+    echo     %TUNNEL_URL%
 ) else (
-    echo  ============================================================
-    echo.
-    echo   SUR VOTRE TELEPHONE :
-    echo   Ouvrez le navigateur et tapez :
-    echo.
-    echo     http://%LOCAL_IP%:8081
-    echo.
-    echo  ============================================================
+    echo   Tunnel frontend indisponible - voir logs\tunnel.log
 )
+if defined BACKEND_TUNNEL_URL (
+    echo.
+    echo   API BACKEND - utilisee automatiquement par l'app :
+    echo     %BACKEND_TUNNEL_URL%
+)
+if defined TUNNEL_PASS (
+    echo.
+    echo   MOT DE PASSE TUNNEL - demande au 1er acces sur le phone :
+    echo     %TUNNEL_PASS%
+) else (
+    echo.
+    echo   Mot de passe tunnel : ouvrez https://loca.lt/mytunnelpassword
+    echo   sur ce PC pour l'afficher.
+)
+echo  ============================================================
+echo.
+goto after_tunnel
+
+:lan_links
+echo  ============================================================
+echo.
+echo   SUR VOTRE TELEPHONE :
+echo   Ouvrez le navigateur et tapez :
+echo.
+echo     http://%LOCAL_IP%:8081
+echo.
+echo  ============================================================
+
+:after_tunnel
 
 REM === Nettoyage env-tmp ===
 if exist "%SCRIPT_DIR%\env-tmp" rmdir /s /q "%SCRIPT_DIR%\env-tmp"
