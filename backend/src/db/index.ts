@@ -6,6 +6,15 @@ dotenv.config();
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
+  // Recycler les connexions inactives pour éviter les coupures réseau Neon
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 15000,
+  max: 10,
+});
+
+// Éviter le crash du process sur une erreur de connexion inattendue (idle client)
+pool.on('error', (err: Error) => {
+  console.warn('[DATABASE] Erreur de connexion idle:', err.message);
 });
 
 export const query = async (text: string, params?: any[]) => {
@@ -28,7 +37,11 @@ export async function withTransaction<T>(fn: (queryFn: typeof query) => Promise<
     await client.query('COMMIT');
     return result;
   } catch (err) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // La connexion est peut-être déjà morte — ignorer l'échec du ROLLBACK
+    }
     throw err;
   } finally {
     client.release();
