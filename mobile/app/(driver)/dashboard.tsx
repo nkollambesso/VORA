@@ -22,6 +22,8 @@ import * as ImagePicker from "expo-image-picker";
 import { getDocumentAsync } from "@/lib/docPicker";
 import { useClerkUser, useClerkAuth } from "@/lib/useClerkSafe";
 import { voraSocket } from "@/lib/socket";
+import { voraVoice } from "@/lib/voiceAssistant";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function DriverDashboard() {
   const { user } = useClerkUser();
@@ -52,6 +54,12 @@ export default function DriverDashboard() {
   const [currentLocation, setCurrentLocation] = useState<any>(null);
   const [todayEarnings, setTodayEarnings] = useState(0);
   const [todayRidesCount, setTodayRidesCount] = useState(0);
+
+  // État Assistante Vocale VORA Chauffeur
+  const [voiceEnabled, setVoiceEnabled] = useState(voraVoice.isEnabled());
+  useEffect(() => {
+    return voraVoice.subscribe(setVoiceEnabled);
+  }, []);
 
   // Modals et formulaires
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -439,6 +447,37 @@ export default function DriverDashboard() {
           </View>
 
           <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+            <TouchableOpacity
+              onPress={() => {
+                const next = voraVoice.toggleEnabled();
+                setVoiceEnabled(next);
+                if (next) voraVoice.speak("Assistante VORA activée.");
+              }}
+              style={[
+                styles.earningsBtn,
+                voiceEnabled
+                  ? { backgroundColor: "rgba(14,165,233,0.2)", borderColor: "rgba(14,165,233,0.5)" }
+                  : { backgroundColor: "rgba(148,163,184,0.15)", borderColor: "rgba(148,163,184,0.3)" },
+              ]}
+              activeOpacity={0.8}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Ionicons
+                  name={voiceEnabled ? "volume-high" : "volume-mute"}
+                  size={13}
+                  color={voiceEnabled ? "#38bdf8" : "#94a3b8"}
+                />
+                <Text
+                  style={[
+                    styles.earningsBtnText,
+                    { color: voiceEnabled ? "#38bdf8" : "#94a3b8" },
+                  ]}
+                >
+                  {voiceEnabled ? "Voix VORA" : "Voix Off"}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
             <TouchableOpacity
               onPress={() => router.push("/(driver)/earnings" as any)}
               style={styles.earningsBtn}

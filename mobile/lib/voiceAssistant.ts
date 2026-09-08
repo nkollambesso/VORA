@@ -9,14 +9,63 @@ class VoiceAssistant {
   private isSpeaking = false;
   private selectedVoice: SpeechSynthesisVoice | null = null;
   private voiceLoaded = false;
+  private enabled = true;
+  private listeners: Set<(enabled: boolean) => void> = new Set();
 
   constructor() {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      this.initVoice();
-      if (window.speechSynthesis.onvoiceschanged !== undefined) {
-        window.speechSynthesis.onvoiceschanged = () => this.initVoice();
+    if (typeof window !== "undefined") {
+      try {
+        const stored = window.localStorage?.getItem("vora_voice_enabled");
+        if (stored !== null) {
+          this.enabled = stored !== "false";
+        }
+      } catch (e) {
+        // localStorage not available or restricted
+      }
+
+      if ("speechSynthesis" in window) {
+        this.initVoice();
+        if (window.speechSynthesis.onvoiceschanged !== undefined) {
+          window.speechSynthesis.onvoiceschanged = () => this.initVoice();
+        }
       }
     }
+  }
+
+  public isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  public setEnabled(enabled: boolean) {
+    this.enabled = enabled;
+    if (!enabled && typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {}
+    }
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage?.setItem("vora_voice_enabled", enabled ? "true" : "false");
+      } catch (e) {}
+    }
+    this.listeners.forEach((cb) => {
+      try {
+        cb(enabled);
+      } catch (e) {}
+    });
+  }
+
+  public toggleEnabled(): boolean {
+    const next = !this.enabled;
+    this.setEnabled(next);
+    return next;
+  }
+
+  public subscribe(listener: (enabled: boolean) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   private initVoice() {
@@ -47,6 +96,8 @@ class VoiceAssistant {
   }
 
   public speak(text: string, options?: { pitch?: number; rate?: number }) {
+    if (!this.enabled) return;
+
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
       console.log(`[Assistante VORA] 🎙️ "${text}"`);
       return;

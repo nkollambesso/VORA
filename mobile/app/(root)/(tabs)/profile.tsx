@@ -8,6 +8,7 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -18,6 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import InputField from "@/components/InputField";
 import { getBackendUrl } from "@/lib/config";
+import { voraVoice } from "@/lib/voiceAssistant";
 
 const AVATAR_PRESETS = [
   "https://api.dicebear.com/7.x/shapes/png?seed=VoraAero&backgroundColor=0284c7",
@@ -62,6 +64,12 @@ const Profile = () => {
   const [gender, setGender] = useState<"MALE" | "FEMALE" | "OTHER">("MALE");
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [kycStatus, setKycStatus] = useState<string>("unverified");
+
+  // État Assistante Vocale VORA (Passager)
+  const [voiceEnabled, setVoiceEnabled] = useState(voraVoice.isEnabled());
+  useEffect(() => {
+    return voraVoice.subscribe(setVoiceEnabled);
+  }, []);
 
   // Wallet States (initialized to 0, not mockup 12500)
   const [walletBalance, setWalletBalance] = useState<number>(0);
@@ -485,6 +493,63 @@ const Profile = () => {
             placeholder={user?.primaryPhoneNumber?.phoneNumber || "+237 6XX XX XX XX"}
             editable={false}
           />
+
+          {/* Section Préférences & Accessibilité */}
+          <View style={{ marginTop: 24, paddingTop: 16, borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
+            <Text style={styles.cardSectionTitle}>Préférences & Accessibilité</Text>
+            <View style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              backgroundColor: "#F8FAFC",
+              padding: 14,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: "#E2E8F0",
+              marginTop: 10,
+            }}>
+              <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 12 }}>
+                <View style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  backgroundColor: voiceEnabled ? "rgba(14,165,233,0.15)" : "#E2E8F0",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginRight: 12,
+                }}>
+                  <Ionicons
+                    name={voiceEnabled ? "volume-high" : "volume-mute"}
+                    size={20}
+                    color={voiceEnabled ? "#0284C7" : "#64748B"}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontFamily: "Jakarta-SemiBold", color: "#0F172A" }}>
+                    Assistante Vocale VORA
+                  </Text>
+                  <Text style={{ fontSize: 12, fontFamily: "Jakarta", color: "#64748B", marginTop: 2 }}>
+                    {voiceEnabled
+                      ? "Guidage GPS et annonces de course actives"
+                      : "Annonces vocales désactivées"}
+                  </Text>
+                </View>
+              </View>
+
+              <Switch
+                value={voiceEnabled}
+                onValueChange={(val) => {
+                  voraVoice.setEnabled(val);
+                  setVoiceEnabled(val);
+                  if (val) {
+                    voraVoice.speak("Assistante vocale VORA activée.");
+                  }
+                }}
+                trackColor={{ false: "#CBD5E1", true: "#38BDF8" }}
+                thumbColor={voiceEnabled ? "#0284C7" : "#F1F5F9"}
+              />
+            </View>
+          </View>
 
           <TouchableOpacity
             style={styles.profileLogoutBtn}

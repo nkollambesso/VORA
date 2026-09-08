@@ -349,6 +349,8 @@ export function setupSocketIO(io: any) {
     // =========================================================================
     // SIGNALISATION APPEL VOCAL IN-APP (WebRTC)
     // =========================================================================
+
+    // Approche 1 : ciblage par userId (nécessite que driver_user_id soit connu)
     socket.on('webrtc-call-user', (data: { targetUserId: string; callerId: string; callerName: string; offer: any }) => {
       io.to(data.targetUserId).emit('webrtc-incoming-call', {
         callerId: data.callerId,
@@ -357,6 +359,28 @@ export function setupSocketIO(io: any) {
       });
     });
 
+    // Approche 2 : ciblage par rideId (le + fiable — les 2 parties sont déjà dans ride:{rideId})
+    socket.on('webrtc-call-ride', (data: { rideId: string; callerId: string; callerName: string }) => {
+      // Émet à tout le monde dans la room ride:{rideId} SAUF l'expéditeur
+      socket.to(`ride:${data.rideId}`).emit('webrtc-incoming-call', {
+        callerId: data.callerId,
+        callerName: data.callerName,
+        rideId: data.rideId,
+      });
+      console.log(`📞 [CALL] Appel de ${data.callerName} dans la course ${data.rideId}`);
+    });
+
+    // Réponse à l'appel (par rideId)
+    socket.on('webrtc-answer-ride', (data: { rideId: string; callerId: string }) => {
+      socket.to(`ride:${data.rideId}`).emit('webrtc-call-answered', { rideId: data.rideId });
+    });
+
+    // Raccrochage (par rideId)
+    socket.on('webrtc-hangup-ride', (data: { rideId: string }) => {
+      socket.to(`ride:${data.rideId}`).emit('webrtc-call-ended', { rideId: data.rideId });
+    });
+
+    // Anciens événements userId — maintenus pour compatibilité
     socket.on('webrtc-answer-call', (data: { targetUserId: string; answer: any }) => {
       io.to(data.targetUserId).emit('webrtc-call-answered', {
         answer: data.answer,

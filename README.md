@@ -58,11 +58,20 @@ Elle combine un **Frontend Web & Mobile sous React Native & Expo Router** (`/mob
 - Intégration d'une cartographie dynamique OpenStreetMap / Leaflet avec un niveau de zoom rapproché (niveau 15-16) permettant de distinguer nettement les noms des quartiers camerounais (Mokolo, Bastos, Tsinga, Deido, Bonanjo...) et les carrefours.
 - Suivi en direct du véhicule du chauffeur (voiture ou moto) qui s'anime sur la carte du passager via WebSocket (`driver-location:${driverId}`).
 
-### 6. Navigation Chauffeur en 2 Etapes & Assistante Vocale VORA
+### 6. Navigation Chauffeur en 2 Étapes, Appels In-App & Contrôle de l'Assistante Vocale VORA
 - **Navigation en 2 étapes** :
   1. **Étape 1 (Vers le point de ramassage)** : La carte guide vers le client avec bouton *"Prendre en charge le client"* (émet `pickup-passenger`).
   2. **Étape 2 (Vers la destination finale)** : Dès la prise en charge, la carte bascule sur l'itinéraire de destination avec bouton *"Terminer la course"*.
-- **Assistante Vocale VORA** : Système vocal féminin fluide en français (Web Speech API) guidant le chauffeur et le passager à chaque transition de statut.
+- **Contrôle & Désactivation de l'Assistante Vocale VORA (Passager & Chauffeur)** :
+  - Tant le passager que le chauffeur ont le **contrôle total pour activer ou couper l'assistante vocale** à tout moment.
+  - **Côté Passager** : Bouton interactif direct sur l'écran de course (`confirm-ride.tsx`) avec statuts visuels (*Voix Active* / *Voix Coupée*) et commutateur dédié dans le profil usager (*Préférences & Accessibilité*).
+  - **Côté Chauffeur** : Bouton rapide de coupure de voix dans le tableau de bord chauffeur et bouton flottant sur la carte GPS de navigation.
+  - La préférence est automatiquement persistée localement et respectée pour toutes les synthèses vocales.
+- **Appels Vocaux 100% In-App (VoIP & WebRTC)** :
+  - Communication vocale directe intégrée sans redirection vers le composeur téléphonique du smartphone.
+  - Sonnerie d'appel entrant cool et réaliste (Web Audio API à deux tonalités harmonieuses 440 Hz + 480 Hz).
+  - Signalisation bidirectionnelle temps réel sur la room de course Socket.io (`webrtc-call-ride`, `webrtc-answer-ride`, `webrtc-hangup-ride`).
+  - Décrochage, compteur d'appel en cours et raccrochage synchronisé instantanément pour les deux parties.
 
 ### 7. Cloture de Course & Notoriete du Chauffeur
 - En fin de course, l'assistante VORA remercie le passager et l'invite à évaluer son trajet.

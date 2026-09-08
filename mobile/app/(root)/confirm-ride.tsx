@@ -60,6 +60,12 @@ export default function ConfirmRide() {
   ]);
   const [chatInputText, setChatInputText] = useState("");
 
+  // ─── ÉTAT ASSISTANTE VOCALE VORA (Passager peut activer/désactiver) ────
+  const [voiceEnabled, setVoiceEnabled] = useState(voraVoice.isEnabled());
+  useEffect(() => {
+    return voraVoice.subscribe(setVoiceEnabled);
+  }, []);
+
   // 1. Initialiser les données de la course
   useEffect(() => {
     if (params.rideData) {
@@ -230,8 +236,15 @@ export default function ConfirmRide() {
 
   // 5. Socket Listeners pour Appel In-App & Chat en direct
   useEffect(() => {
-    const socket = voraSocket.getSocket();
+    // S'assurer que le socket est connecté (reconnexion si nécessaire)
+    let socket = voraSocket.getSocket();
+    if (!socket && user?.id) {
+      socket = voraSocket.connect(user.id, "PASSENGER");
+    }
     if (!socket) return;
+
+    // Rejoindre la room de la course pour le VoIP
+    if (rideId) voraSocket.joinRide(rideId);
 
     const handleIncomingChatMessage = (data: { senderId: string; text: string }) => {
       setChatMessages((prev) => [
@@ -246,6 +259,7 @@ export default function ConfirmRide() {
     };
 
     const handleCallAnswered = () => {
+      callAudio.stopRinging();
       callAudio.playConnected();
       setCallStatus("connected");
       voraVoice.speak("Communication vocale sécurisée établie.");
@@ -260,23 +274,25 @@ export default function ConfirmRide() {
       }, 1200);
     };
 
-    // Quand le chauffeur appelle le passager — sonnerie côté passager
-    const handleIncomingCall = (data: { callerId: string; callerName: string }) => {
+    // Sonnerie côté passager quand le chauffeur appelle
+    const handleIncomingCall = (data: { callerId: string; callerName: string; rideId?: string }) => {
       setIsCallActive(true);
       setCallStatus("calling");
       callAudio.startRinging();
       voraVoice.speak(`Appel entrant de ${data.callerName || "votre chauffeur"}`);
 
-      // Réponse automatique après 1.5s (simulation VoIP)
+      // Auto-réponse après 1.5s + envoi de la confirmation à l'appelant
       setTimeout(() => {
         callAudio.stopRinging();
         callAudio.playConnected();
         setCallStatus("connected");
         const s = voraSocket.getSocket();
-        s?.emit("webrtc-answer-call", {
-          targetUserId: data.callerId,
-          answer: { type: "answer", sdp: "sdp-audio-answer" },
-        });
+        const callRideId = data.rideId || rideId;
+        if (callRideId) {
+          s?.emit("webrtc-answer-ride", { rideId: callRideId, callerId: data.callerId });
+        } else {
+          s?.emit("webrtc-answer-call", { targetUserId: data.callerId, answer: {} });
+        }
       }, 1500);
     };
 
@@ -287,12 +303,12 @@ export default function ConfirmRide() {
 
     return () => {
       callAudio.stopRinging();
-      socket.off("receive-chat-message", handleIncomingChatMessage);
-      socket.off("webrtc-call-answered", handleCallAnswered);
-      socket.off("webrtc-call-ended", handleCallEnded);
-      socket.off("webrtc-incoming-call", handleIncomingCall);
+      socket!.off("receive-chat-message", handleIncomingChatMessage);
+      socket!.off("webrtc-call-answered", handleCallAnswered);
+      socket!.off("webrtc-call-ended", handleCallEnded);
+      socket!.off("webrtc-incoming-call", handleIncomingCall);
     };
-  }, []);
+  }, [rideId, user?.id]);
 
   const handleStartInAppCall = () => {
     setIsCallActive(true);
@@ -301,31 +317,24 @@ export default function ConfirmRide() {
     callAudio.startRinging();
     voraVoice.speak("Appel vocal sécurisé VORA en cours.");
 
-    const socket = voraSocket.getSocket();
-    // driver_user_id est l'ID Clerk du chauffeur (string), driver_id est son ID base de données (int)
-    // On utilise driver_user_id en priorité car c'est l'ID de la room socket
-    const targetUserId = ride?.driver_user_id?.toString() ||
-      (typeof ride?.driver_id === "string" ? ride.driver_id : null) ||
-      null;
-
-    if (!targetUserId) {
-      // Fallback : simuler une connexion automatisée si le driver_user_id est inconnu
-      setTimeout(() => {
-        callAudio.stopRinging();
-        callAudio.playConnected();
-        setCallStatus("connected");
-      }, 1500);
-      return;
+    // S'assurer que le socket est connecté
+    let socket = voraSocket.getSocket();
+    if (!socket && user?.id) {
+      socket = voraSocket.connect(user.id, "PASSENGER");
+      if (rideId) voraSocket.joinRide(rideId);
     }
 
-    socket?.emit("webrtc-call-user", {
-      targetUserId,
-      callerId: user?.id || "rider_me",
-      callerName: user?.fullName || "Passager VORA",
-      offer: { type: "offer", sdp: "sdp-audio-stream" },
-    });
+    const currentRideId = rideId || ride?.id;
+    if (currentRideId && socket) {
+      // Méthode principale : via la room de la course (la plus fiable)
+      socket.emit("webrtc-call-ride", {
+        rideId: currentRideId,
+        callerId: user?.id || "rider_me",
+        callerName: user?.fullName || user?.firstName || "Passager VORA",
+      });
+    }
 
-    // Si pas de réponse après 2s, auto-connecter (simulation VoIP)
+    // Auto-connecter après 3s si pas de réponse (simulation VoIP)
     setTimeout(() => {
       setCallStatus((prev) => {
         if (prev === "calling") {
@@ -335,12 +344,16 @@ export default function ConfirmRide() {
         }
         return prev;
       });
-    }, 2000);
+    }, 3000);
   };
 
   const handleEndInAppCall = () => {
     callAudio.playEnded();
     const socket = voraSocket.getSocket();
+    const currentRideId = rideId || ride?.id;
+    if (currentRideId && socket) {
+      socket.emit("webrtc-hangup-ride", { rideId: currentRideId });
+    }
     const targetUserId = ride?.driver_user_id || ride?.driver_id || "1";
     socket?.emit("webrtc-hangup", { targetUserId: targetUserId.toString() });
     setCallStatus("ended");
@@ -638,12 +651,28 @@ export default function ConfirmRide() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => voraVoice.speak("Assistante VORA : Le chauffeur est en approche.")}
-              style={styles.voiceButton}
+              onPress={() => {
+                const next = voraVoice.toggleEnabled();
+                setVoiceEnabled(next);
+                if (next) {
+                  voraVoice.speak("Assistante vocale VORA activée.");
+                }
+              }}
+              style={[
+                styles.voiceButton,
+                !voiceEnabled && { backgroundColor: "rgba(148,163,184,0.12)", borderColor: "rgba(148,163,184,0.35)" },
+              ]}
               activeOpacity={0.8}
             >
-              <Ionicons name="volume-medium" size={14} color="#0EA5E9" style={{ marginRight: 4 }} />
-              <Text style={styles.voiceButtonText}>VORA Voix</Text>
+              <Ionicons
+                name={voiceEnabled ? "volume-high" : "volume-mute"}
+                size={14}
+                color={voiceEnabled ? "#0EA5E9" : "#94A3B8"}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={[styles.voiceButtonText, !voiceEnabled && { color: "#94A3B8" }]}>
+                {voiceEnabled ? "Voix Active" : "Voix Coupée"}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
