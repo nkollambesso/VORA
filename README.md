@@ -615,9 +615,34 @@ Même chose sur réseau local (LAN) : si l'IP de la machine est `192.168.1.50`, 
 
 ## Équipe de Développement — TEAM-VANGUARD
 
-- **Patrick Assako** (@patrickassako) — *Lead Developer*
-- **Legrand Onana** (@psycho237-prog) — *Fullstack Engineer*
-
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/patrickassako">
+        <img src="https://github.com/patrickassako.png" width="80" style="border-radius:50%"><br>
+        <b>Fullstack Developer</b>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/psycho237-prog">
+        <img src="https://github.com/psycho123-prog.png" width="80" style="border-radius:50%"><br>
+        <b>Lead Developer</b>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/nkollambesso">
+        <img src="https://github.com/nkollambesso.png" width="80" style="border-radius:50%"><br>
+        <b>Assistant Manager</b>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/ongueamassoka-hue">
+        <img src="https://github.com/ongueamassoka-hue.png" width="80" style="border-radius:50%"><br>
+        <b>Project Manager & Designer</b>
+      </a>
+    </td>
+  </tr>
+</table>
 ---
 
 <div align="center">
