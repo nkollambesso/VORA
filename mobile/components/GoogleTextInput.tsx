@@ -1,0 +1,362 @@
+// @ts-nocheck
+import React, { useState } from "react";
+import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+
+import { icons } from "@/constants";
+import { searchLandmarks, CameroonLandmark, detectCityFromCoords } from "@/constants/cameroon-landmarks";
+import { parseInformalCameroonianLocation, parseWithGeminiAI, AILocationResult } from "@/lib/aiLocationParser";
+import { GoogleInputProps } from "@/types/type";
+import { useLocationStore } from "@/store";
+
+const geoapifyKey = process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY || process.env.EXPO_PUBLIC_PLACES_API_KEY;
+
+const GoogleTextInput = ({
+  icon,
+  initialLocation,
+  containerStyle,
+  textInputBackgroundColor,
+  handlePress,
+}: GoogleInputProps) => {
+  const { userLatitude, userLongitude, userAddress } = useLocationStore();
+  const currentCity = detectCityFromCoords(userLatitude, userLongitude, userAddress);
+
+  const [inputText, setInputText] = useState("");
+  const [landmarkMatches, setLandmarkMatches] = useState<CameroonLandmark[]>([]);
+  const [geoapifyMatches, setGeoapifyMatches] = useState<any[]>([]);
+  const [aiMatch, setAiMatch] = useState<AILocationResult | null>(null);
+
+  const fetchGeoapifySuggestions = async (text: string) => {
+    if (!geoapifyKey || text.length < 2) {
+      setGeoapifyMatches([]);
+      return;
+    }
+    try {
+      const proximity = (userLongitude && userLatitude) ? `&bias=proximity:${userLongitude},${userLatitude}` : "";
+      const res = await fetch(
+        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(text)}&filter=countrycode:cm${proximity}&apiKey=${geoapifyKey}`
+      );
+      const data = await res.json();
+      if (data?.features && Array.isArray(data.features)) {
+        // Filtrage strict : les courses VORA ne sortent pas de la ville actuelle !
+        const cityNorm = currentCity.toLowerCase();
+        const filtered = data.features.filter((f: any) => {
+          const p = f.properties || {};
+          const cityProp = (p.city || p.county || p.state || "").toLowerCase();
+          const formatted = (p.formatted || "").toLowerCase();
+
+          // Rejeter formellement si le résultat appartient à une autre grande ville camerounaise
+          const otherCities = ["yaounde", "yaoundé", "douala", "bafoussam", "garoua", "maroua", "kribi", "bamenda", "limbe", "buea"];
+          for (const oc of otherCities) {
+            if (oc !== cityNorm && (cityProp.includes(oc) || formatted.includes(oc))) {
+              return false;
+            }
+          }
+          return true;
+        });
+        setGeoapifyMatches(filtered.slice(0, 5));
+      }
+    } catch (e) {
+      // ignore network error
+    }
+  };
+
+  const handleInputChange = (text: string) => {
+    setInputText(text);
+    if (!text || text.trim() === "") {
+      setLandmarkMatches([]);
+      setGeoapifyMatches([]);
+      setAiMatch(null);
+      return;
+    }
+
+    const cityNorm = currentCity.toLowerCase();
+
+    // 1. Local IA Natural Language Parser (0ms)
+    const localParsed = parseInformalCameroonianLocation(text);
+    if (localParsed) {
+      const sub = (localParsed.subtitle || "").toLowerCase();
+      const otherCities = ["yaounde", "yaoundé", "douala", "bafoussam", "garoua", "kribi"];
+      const isOtherCity = otherCities.some((oc) => oc !== cityNorm && sub.includes(oc));
+      if (!isOtherCity) {
+        setAiMatch(localParsed);
+      }
+    }
+
+    // 2. Google Gemini API Call (live LLM)
+    parseWithGeminiAI(text).then((geminiResult) => {
+      if (geminiResult) {
+        const sub = (geminiResult.subtitle || "").toLowerCase();
+        const otherCities = ["yaounde", "yaoundé", "douala", "bafoussam", "garoua", "kribi"];
+        const isOtherCity = otherCities.some((oc) => oc !== cityNorm && sub.includes(oc));
+        if (!isOtherCity) {
+          setAiMatch(geminiResult);
+        }
+      }
+    });
+
+    // 3. Local Cameroon Landmarks (Strictement filtré par la ville actuelle de l'usager)
+    const matches = searchLandmarks(text, currentCity);
+    setLandmarkMatches(matches);
+
+    // 4. Geoapify API
+    fetchGeoapifySuggestions(text);
+  };
+
+  const clearSuggestions = () => {
+    setLandmarkMatches([]);
+    setGeoapifyMatches([]);
+    setAiMatch(null);
+  };
+
+  return (
+    <View style={styles.outerContainer}>
+      <View style={styles.inputWrapper}>
+        <View style={styles.leftIconContainer}>
+          <Image
+            source={icon ? icon : icons.search}
+            style={styles.leftIcon}
+            resizeMode="contain"
+          />
+        </View>
+        <TextInput
+          style={[styles.textInput, textInputBackgroundColor ? { backgroundColor: textInputBackgroundColor } : null]}
+          value={inputText}
+          onChangeText={handleInputChange}
+          placeholder={initialLocation ?? "Saisissez un quartier, repère (ex: derrière pharmacie Mvog-Ada)..."}
+          placeholderTextColor="#94A3B8"
+        />
+      </View>
+
+      {/* Suggestion des Repères Locaux & Adresses */}
+      {(aiMatch || landmarkMatches.length > 0 || geoapifyMatches.length > 0) && (
+        <View style={styles.landmarkSuggestions}>
+          <Text style={styles.landmarkHeader}>Lieux et repères suggérés</Text>
+          <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 240 }}>
+            {/* AI Natural Language Resolved Item */}
+            {aiMatch && (
+              <TouchableOpacity
+                onPress={() => {
+                  const fullAddress = `${aiMatch.title}, ${aiMatch.subtitle}`;
+                  setInputText(fullAddress);
+                  clearSuggestions();
+                  handlePress({
+                    latitude: aiMatch.latitude,
+                    longitude: aiMatch.longitude,
+                    address: fullAddress,
+                  });
+                }}
+                style={styles.aiItem}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingRight: 8 }}>
+                  <Image source={icons.point} style={{ width: 18, height: 18, marginRight: 10, tintColor: "#0284c7" }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.aiTitle}>{aiMatch.title}</Text>
+                    <Text style={styles.aiDesc}>{aiMatch.subtitle}</Text>
+                  </View>
+                </View>
+                <View style={styles.aiBadge}>
+                  <Text style={styles.aiBadgeText}>Repère</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* Geoapify Results */}
+            {geoapifyMatches.map((feature: any, idx: number) => {
+              const props = feature.properties;
+              const title = props.name || props.formatted || props.city || "Lieu";
+              const desc = [props.suburb, props.city, props.country].filter(Boolean).join(", ");
+              const fullAddress = props.formatted || title;
+              return (
+                <TouchableOpacity
+                  key={`geo-${idx}`}
+                  onPress={() => {
+                    setInputText(fullAddress);
+                    clearSuggestions();
+                    handlePress({
+                      latitude: props.lat ?? 3.8856,
+                      longitude: props.lon ?? 11.5162,
+                      address: fullAddress,
+                    });
+                  }}
+                  style={styles.landmarkItem}
+                >
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={styles.landmarkName}>{title}</Text>
+                    <Text style={styles.landmarkDesc}>{desc}</Text>
+                  </View>
+                  <View style={styles.landmarkBadge}>
+                    <Text style={styles.landmarkBadgeText}>GPS</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+
+            {/* Local Landmark Matches */}
+            {landmarkMatches.map((item) => {
+              const fullAddress = `${item.name}, ${item.zone} (${item.city})`;
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  onPress={() => {
+                    setInputText(fullAddress);
+                    clearSuggestions();
+                    handlePress({
+                      latitude: item.latitude,
+                      longitude: item.longitude,
+                      address: fullAddress,
+                    });
+                  }}
+                  style={styles.landmarkItem}
+                >
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={styles.landmarkName}>{item.name}</Text>
+                    <Text style={styles.landmarkDesc}>{item.description}</Text>
+                  </View>
+                  <View style={styles.landmarkBadge}>
+                    <Text style={styles.landmarkBadgeText}>{item.zone}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+    </View>
+  );
+};
+
+export default GoogleTextInput;
+
+const styles = StyleSheet.create({
+  outerContainer: {
+    position: "relative",
+    zIndex: 50,
+    marginVertical: 8,
+  },
+  inputWrapper: {
+    position: "relative",
+    justifyContent: "center",
+    width: "100%",
+  },
+  leftIconContainer: {
+    position: "absolute",
+    left: 14,
+    zIndex: 10,
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  leftIcon: {
+    width: 20,
+    height: 20,
+  },
+  textInput: {
+    backgroundColor: "#ffffff",
+    fontSize: 15,
+    fontWeight: "600",
+    width: "100%",
+    borderRadius: 14,
+    borderColor: "#e2e8f0",
+    borderWidth: 1,
+    color: "#0F172A",
+    height: 52,
+    paddingLeft: 46,
+    paddingRight: 16,
+    shadowColor: "#0EA5E9",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  landmarkSuggestions: {
+    backgroundColor: "rgba(255, 255, 255, 0.98)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(14, 165, 233, 0.3)",
+    marginTop: 6,
+    padding: 8,
+    shadowColor: "#0EA5E9",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 100,
+  },
+  landmarkHeader: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#0284c7",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    textTransform: "uppercase",
+  },
+  landmarkItem: {
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  landmarkName: {
+    fontWeight: "700",
+    fontSize: 14,
+    color: "#1e293b",
+  },
+  landmarkDesc: {
+    fontSize: 12,
+    color: "#94a3b8",
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  landmarkBadge: {
+    backgroundColor: "#f0f9ff",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#bae6fd",
+  },
+  landmarkBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#0369a1",
+  },
+  aiItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 6,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  aiTitle: {
+    fontWeight: "700",
+    fontSize: 14,
+    color: "#0F172A",
+  },
+  aiDesc: {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  aiBadge: {
+    backgroundColor: "#E0F2FE",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+  },
+  aiBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#0284C7",
+  },
+});

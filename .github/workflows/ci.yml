@@ -1,0 +1,57 @@
+name: VORA CI — Lint & Type-Check
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  backend:
+    name: Backend — Install & Type-Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm install
+
+      - name: Type-Check Backend (TypeScript)
+        run: |
+          cd backend
+          npx tsc --noEmit
+
+  mobile:
+    name: Mobile — Install & Type-Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Mobile Dependencies
+        run: |
+          cd mobile
+          npm install --legacy-peer-deps
+
+      - name: Type-Check Mobile (TypeScript)
+        run: |
+          cd mobile
+          npx tsc --noEmit
+
+      - name: Validate Expo Config
+        run: |
+          cd mobile
+          npx expo config --type public > /dev/null
