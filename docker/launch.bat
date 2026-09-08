@@ -4,14 +4,18 @@ color 0B
 cls
 
 echo.
-echo  ╔══════════════════════════════════════════════════════════╗
-echo  ║                                                          ║
-echo  ║   VORA - Lanceur Docker (sans Node.js requis)           ║
-echo  ║                                                          ║
-echo  ║   Ce script lance VORA dans des conteneurs Docker.      ║
-echo  ║   Vous n'avez PAS besoin d'installer Node.js.           ║
-echo  ║                                                          ║
-echo  ╚══════════════════════════════════════════════════════════╝
+echo       ___  ______     _______        __
+echo      ^|"  \^|"  ^|^|/    " \ ^|"      \      /"^\\
+echo       \\  \/. ./  /    ) :^|_____/   )   /' /\  \
+echo        \.    // (: (____/ //  //      /  //  __'  \
+echo         \\   /   \        /  ^|:  __   \ /   /  \\  \
+echo          \__/     "_____/   ^|__|  \___)(___/    \___)
+echo.
+echo   Lanceur Docker — sans Node.js requis
+echo   VORA — Plateforme de Mobilite Urbaine ^& VTC
+echo.
+echo  Ce script lance VORA dans des conteneurs Docker.
+echo  Vous n'avez PAS besoin d'installer Node.js.
 echo.
 echo  Prerequis : Docker Desktop doit etre installe et en cours
 echo  d'execution sur votre ordinateur.

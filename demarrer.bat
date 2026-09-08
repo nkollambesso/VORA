@@ -4,18 +4,14 @@ color 0B
 cls
 
 echo.
-echo  ╔══════════════════════════════════════════════════════════╗
-echo  ║                                                          ║
-echo  ║       ██╗   ██╗ █████╗  ██████╗ █████╗                  ║
-echo  ║       ██║   ██║██╔══██╗██╔════╝██╔══██╗                 ║
-echo  ║       ██║   ██║███████║██║     ███████║                 ║
-echo  ║       ╚██╗ ██╔╝██╔══██║██║     ██╔══██║                 ║
-echo  ║        ╚████╔╝ ██║  ██║╚██████╗██║  ██║                 ║
-echo  ║         ╚═══╝  ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝                 ║
-echo  ║                                                          ║
-echo  ║       Plateforme de Mobilite Urbaine ^& VTC              ║
-echo  ║                                                          ║
-echo  ╚══════════════════════════════════════════════════════════╝
+echo       ___  ______     _______        __
+echo      ^|"  \^|"  ^|^|/    " \ ^|"      \      /"^\\
+echo       \\  \/. ./  /    ) :^|_____/   )   /' /\  \
+echo        \.    // (: (____/ //  //      /  //  __'  \
+echo         \\   /   \        /  ^|:  __   \ /   /  \\  \
+echo          \__/     "_____/   ^|__|  \___)(___/    \___)
+echo.
+echo   Plateforme de Mobilite Urbaine ^& VTC - Cameroun
 echo.
 echo  Ce script va :
 echo    1. Installer toutes les dependances automatiquement
@@ -169,31 +165,30 @@ echo  Demarrage du Frontend Expo (cela peut prendre quelques secondes)...
 echo.
 if "%TUNNEL_CHOICE%"=="2" (
     echo  ============================================================
-echo.
-echo   Mode TUNNEL PUBLIC - accessible depuis n'importe ou :
-echo.
-echo   En attente du tunnel public...
-echo.
+    echo.
+    echo   Mode TUNNEL PUBLIC - accessible depuis n'importe ou :
+    echo.
+    echo   En attente du tunnel public...
+    echo.
     start /b cmd /c "lt --port 8081 --print-requests > %~dp0logs\tunnel.log 2>&1"
     timeout /t 15 /nobreak >nul
     for /f "tokens=*" %%i in ('type %~dp0logs\tunnel.log ^| findstr /r "https://"') do set TUNNEL_URL=%%i
     echo   Copiez ce lien dans le navigateur de votre telephone :
-echo.
-echo     %TUNNEL_URL%
-echo.
+    echo.
+    echo     %TUNNEL_URL%
+    echo.
 ) else (
-echo  ============================================================
-echo.
-echo   SUR VOTRE TELEPHONE :
-echo   Ouvrez le navigateur et tapez :
-echo.
-echo     http://%LOCAL_IP%:8081
-echo.
-echo   OU scannez le QR code qui va apparaitre ci-dessous.
+    echo  ============================================================
+    echo.
+    echo   SUR VOTRE TELEPHONE :
+    echo   Ouvrez le navigateur et tapez :
+    echo.
+    echo     http://%LOCAL_IP%:8081
+    echo.
+    echo   OU scannez le QR code qui va apparaitre ci-dessous.
+    echo.
+    echo  ============================================================
 )
-echo.
-echo  ============================================================
-echo.
 
 cd /d "%~dp0mobile"
 call npx expo start --web --port 8081 --lan

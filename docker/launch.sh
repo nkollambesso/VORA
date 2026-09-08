@@ -27,11 +27,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$SCRIPT_DIR"
 
 echo ""
-echo -e "${CYAN}  ╔══════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${CYAN}  ║                                                          ║${RESET}"
-echo -e "${CYAN}  ║   ${BOLD}VORA — Lanceur Docker (sans Node.js requis)${RESET}${CYAN}           ║${RESET}"
-echo -e "${CYAN}  ║                                                          ║${RESET}"
-echo -e "${CYAN}  ╚══════════════════════════════════════════════════════════╝${RESET}"
+cat <<'BANNER'
+      ___  ______     _______        __
+     |"  \ /"  |/    " \ /"      \      /"\
+      \\/. ./  /    ) :|_____/   )   /' /\  \
+       \.    // (: (____/ //  //      /  //  __'  \
+        \   /   \        /  |:  __   \ /   /  \\  \
+         \__/     "_____/   |__|  \___)(___/    \___)
+BANNER
+echo -e "${BOLD}Lanceur Docker (sans Node.js requis)${RESET}"
+echo -e "${DIM}VORA — Plateforme de Mobilite Urbaine${RESET}"
 echo ""
 echo -e "  Ce script lance VORA dans des conteneurs Docker."
 echo -e "  ${BOLD}Vous n'avez PAS besoin d'installer Node.js.${RESET}"
