@@ -1,0 +1,24 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files first for layer caching
+COPY backend/package*.json ./
+
+# Install dependencies
+RUN npm install --legacy-peer-deps
+
+# Copy backend source
+COPY backend/src ./src
+COPY backend/tsconfig.json ./
+
+# Build TypeScript (optional, dev mode uses ts-node-dev)
+# RUN npm run build
+
+# Environment
+ENV PORT=5000
+ENV NODE_ENV=development
+
+EXPOSE 5000
+
+CMD ["npm", "run", "dev"]

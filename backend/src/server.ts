@@ -10,9 +10,10 @@ dotenv.config();
 
 const app = createApp();
 const server = http.createServer(app);
-const allowedOrigins = process.env.CORS_ORIGINS
+// '*' en chaîne = autoriser toutes les origines (voir app.ts)
+const allowedOrigins: string | string[] = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
-  : ['*'];
+  : '*';
 
 const io = new SocketIOServer(server, {
   cors: {

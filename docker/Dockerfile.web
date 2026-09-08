@@ -1,0 +1,19 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY mobile/package*.json ./
+
+# Install dependencies
+RUN npm install --legacy-peer-deps
+
+# Copy mobile source
+COPY mobile/ ./
+
+# Expose Expo dev server port
+ENV PORT=8081
+EXPOSE 8081
+
+# Start Expo in web mode for development (no build needed)
+CMD ["npx", "expo", "start", "--web", "--port", "8081", "--lan"]
