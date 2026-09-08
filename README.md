@@ -625,7 +625,7 @@ Même chose sur réseau local (LAN) : si l'IP de la machine est `192.168.1.50`, 
     </td>
     <td align="center">
       <a href="https://github.com/psycho237-prog">
-        <img src="https://github.com/psycho123-prog.png" width="80" style="border-radius:50%"><br>
+        <img src="https://github.com/psycho237-prog.png" width="80" style="border-radius:50%"><br>
         <b>Lead Developer</b>
       </a>
     </td>
