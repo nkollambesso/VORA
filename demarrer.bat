@@ -3,7 +3,7 @@ title VORA - Demarrage
 color 0B
 cls
 
-REM ─── GARDE : garder la fenetre ouverte en cas d'erreur ──────────────────
+REM === GARDE : garder la fenetre ouverte en cas d'erreur ===
 if "%~1"=="" (
     cmd /k "%~f0" KEEP_OPEN
     goto :eof
@@ -12,12 +12,10 @@ if "%~1"=="" (
 echo.
 echo  ============================================================
 echo.
-echo      __ __ _____ _____ ____  ____
-echo     / //_// ___// ___// __ \/ __ \
-echo    / ,<  \__ \ \__ \/ / / / /_/ /
-echo   /_/|_|/____//____//_/ /_/\____/
+echo     V V V     VORA
+echo      V O R A
 echo.
-echo   Plateforme de Mobilite Urbaine et VTC - Cameroun
+echo     Plateforme de Mobilite Urbaine et VTC
 echo.
 echo  ============================================================
 echo.
@@ -25,28 +23,28 @@ echo  Ce script va :
 echo    1. Installer Node.js portable si besoin
 echo    2. Installer toutes les dependances
 echo    3. Demarrer Backend + Frontend
-echo    4. Afficher le lien pour votre telephone
+echo    4. Afficher le lien pour ouvrir sur votre telephone
 echo.
-echo  Appuyez sur une touche...
+echo  Appuyez sur une touche pour commencer...
 pause >nul
 
-REM ─── Log ───────────────────────────────────────────────────────────────
+REM === Log ===
 set "LOGFILE=%~dp0logs\vora-start.log"
 if not exist "%~dp0logs" mkdir "%~dp0logs"
 echo === VORA Demarrage %date% %time% === > "%LOGFILE%"
 
-REM ─── Repertoire du script ──────────────────────────────────────────────
+REM === Repertoire du script ===
 set "SCRIPT_DIR=%~dp0"
 if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 
-REM ─── Config Node ───────────────────────────────────────────────────────
+REM === Config Node ===
 set "NODE_VERSION=v20.18.1"
 set "NODE_DIR=%SCRIPT_DIR%\node-win-x64"
 set "NODE_EXE=%NODE_DIR%\node.exe"
 
 echo [DEBUG] SCRIPT_DIR=%SCRIPT_DIR% >> "%LOGFILE%"
 
-REM ─── [1/5] Node.js ─────────────────────────────────────────────────────
+REM === [1/5] Node.js ===
 echo.
 echo  [1/5] Verification de Node.js...
 
@@ -138,7 +136,7 @@ set "USE_PORTABLE=1"
 
 :node_ok
 
-REM ─── PATH pour Node portable ──────────────────────────────────────────
+REM === PATH pour Node portable ===
 if "%USE_PORTABLE%"=="1" (
     set "PATH=%NODE_DIR%;%NODE_DIR%\node_modules\.bin;%PATH%"
     set "NPM_CONFIG_PREFIX=%NODE_DIR%"
@@ -150,7 +148,7 @@ if "%USE_PORTABLE%"=="1" (
     set "NPX_CMD=%NODE_DIR%\npx.cmd"
 )
 
-REM ─── [2/5] npm ─────────────────────────────────────────────────────────
+REM === [2/5] npm ===
 echo  [2/5] Verification de npm...
 "%NPM_CMD%" --version >nul 2>&1
 if %errorlevel% neq 0 (
@@ -161,7 +159,7 @@ if %errorlevel% neq 0 (
 echo  [OK] npm detecte.
 echo.
 
-REM ─── [3/5] Backend deps ────────────────────────────────────────────────
+REM === [3/5] Backend deps ===
 echo  [3/5] Installation dependances Backend...
 echo         (1-2 minutes)
 echo.
@@ -175,7 +173,7 @@ echo.
 echo  [OK] Backend installe !
 echo.
 
-REM ─── [4/5] Frontend deps ───────────────────────────────────────────────
+REM === [4/5] Frontend deps ===
 echo  [4/5] Installation dependances Frontend...
 echo         (2-3 minutes)
 echo.
@@ -189,7 +187,7 @@ echo.
 echo  [OK] Frontend installe !
 echo.
 
-REM ─── [5/5] Lancement ──────────────────────────────────────────────────
+REM === [5/5] Lancement ===
 echo  [5/5] Demarrage des serveurs...
 echo.
 echo  ============================================================
@@ -205,7 +203,7 @@ if "%TUNNEL_CHOICE%"=="2" (
     echo  [OK] localtunnel installe.
 )
 
-REM ─── Backend ──────────────────────────────────────────────────────────
+REM === Backend ===
 echo.
 echo  ============================================================
 echo   Backend dans une nouvelle fenetre.
@@ -232,7 +230,7 @@ if %errorlevel% neq 0 (
 echo  [OK] Backend sur http://localhost:5000
 echo.
 
-REM ─── IP locale ────────────────────────────────────────────────────────
+REM === IP locale ===
 echo  Detection IP locale...
 set "LOCAL_IP="
 for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4" ^| findstr /v "127.0.0.1"') do (
@@ -243,7 +241,7 @@ if "%LOCAL_IP%"=="" set "LOCAL_IP=127.0.0.1"
 echo  [OK] IP : %LOCAL_IP%
 echo.
 
-REM ─── .env mobile ──────────────────────────────────────────────────────
+REM === .env mobile ===
 cd /d "%SCRIPT_DIR%\mobile"
 > .env (
     echo EXPO_PUBLIC_BACKEND_URL=http://%LOCAL_IP%:5000
@@ -253,7 +251,7 @@ cd /d "%SCRIPT_DIR%\mobile"
 echo  Backend URL : http://%LOCAL_IP%:5000
 echo.
 
-REM ─── Tunnel ───────────────────────────────────────────────────────────
+REM === Tunnel ===
 if "%TUNNEL_CHOICE%"=="2" (
     echo  Tunnel PUBLIC en cours...
     start /b cmd /c "lt --port 8081 --print-requests > %SCRIPT_DIR%\logs\tunnel.log 2>&1"
@@ -274,7 +272,7 @@ if "%TUNNEL_CHOICE%"=="2" (
     echo  ============================================================
 )
 
-REM ─── Frontend ─────────────────────────────────────────────────────────
+REM === Frontend ===
 cd /d "%SCRIPT_DIR%\mobile"
 "%NPX_CMD%" expo start --web --port 8081 --lan
 
