@@ -48,7 +48,7 @@ show_banner() {
       \  \/. .//  /    ) :)|_____/   )   /' /\  \
        \.    // (: (____/ //  //      /   //  __'  \
         \   /  \        /  |:  __   \  /   /  \\  \
-         \__/    "_____/   |__|  \___)(___/    \___)
+         \__/    \"_____/   |__|  \___)(___/    \___)
 BANNER
     echo -e "${BOLD}Plateforme de Mobilite Urbaine & VTC${RESET}"
     echo -e "${DIM}Cameroun${RESET}"
@@ -90,6 +90,11 @@ FRONTEND_LOG="$LOG_DIR/frontend.log"
 BACKEND_PID=""
 FRONTEND_PID=""
 
+# ─── Portable Node.js config ───────────────────────────────────────────────
+NODE_VERSION="v20.18.1"
+NODE_DIR=""
+NODE_CMD=""
+
 # ─── Nettoyage à la sortie ──────────────────────────────────────────────────
 cleanup() {
     echo ""
@@ -103,43 +108,141 @@ cleanup() {
 }
 trap cleanup SIGINT SIGTERM EXIT
 
-# ─── Vérification de Node.js ────────────────────────────────────────────────
-check_node() {
-    step "Vérification de Node.js"
-    if ! command -v node &>/dev/null; then
-        fail "Node.js n'est pas installé !"
-        echo ""
-        echo -e "  ${BOLD}Installez Node.js depuis :${RESET}"
-        echo -e "  ${CYAN}https://nodejs.org${RESET}  (version 18+ recommandée)"
-        echo ""
+# ─── Installation Node.js portable ─────────────────────────────────────────
+install_portable_node() {
+    local os_name="$1"  # "linux" or "darwin"
+    local arch="$2"     # "x64" or "arm64"
+    local tarball="node-${NODE_VERSION}-${os_name}-${arch}.tar.gz"
+    local url="https://node.org/dist/${NODE_VERSION}/${tarball}"
+    local dest_dir="$SCRIPT_DIR/node-${os_name}-${arch}"
+
+    echo ""
+    echo -e "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "  ${YELLOW}  ⬇  Téléchargement de Node.js ${NODE_VERSION} (${os_name}-${arch})${RESET}"
+    echo -e "  ${YELLOW}     (1-2 min la première fois, ensuite c'est automatique)${RESET}"
+    echo -e "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo ""
+
+    # Télécharger
+    local tmp_file="$SCRIPT_DIR/${tarball}"
+    curl -L -# -o "$tmp_file" "$url"
+    if [ $? -ne 0 ]; then
+        fail "Le téléchargement a échoué. Vérifiez votre connexion internet."
+        echo -e "  URL essayer : ${CYAN}${url}${RESET}"
         exit 1
     fi
+
+    # Extraire
+    info "Extraction de Node.js..."
+    tar -xzf "$tmp_file" -C "$SCRIPT_DIR" 2>/dev/null
+    rm -f "$tmp_file"
+
+    # Renommer
+    if [ -d "$dest_dir" ]; then
+        local final_dir="$SCRIPT_DIR/node-${os_name}-${arch}"
+        ok "Node.js extrait dans : ${final_dir}"
+    fi
+}
+
+# ─── Vérification / Installation de Node.js ────────────────────────────────
+check_node() {
+    step "Vérification de Node.js"
+
+    # 1. Chercher Node.js système
+    if command -v node &>/dev/null; then
+        NODE_CMD="node"
+        NPM_CMD="npm"
+        local ver
+        ver=$(node --version)
+        ok "Node.js système détecté : ${BOLD}$ver${RESET}"
+        return 0
+    fi
+
+    # 2. Chercher Node.js portable Linux
+    local linux_arch="x64"
+    [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]] && linux_arch="arm64"
+    local linux_node="$SCRIPT_DIR/node-linux-${linux_arch}/bin/node"
+    if [ -x "$linux_node" ]; then
+        NODE_DIR="$SCRIPT_DIR/node-linux-${linux_arch}"
+        NODE_CMD="$linux_node"
+        NPM_CMD="$NODE_DIR/bin/npm"
+        PATH="$NODE_DIR/bin:$PATH"
+        local ver
+        ver=$("$NODE_CMD" --version)
+        ok "Node.js portable détecté : ${BOLD}$ver${RESET}"
+        return 0
+    fi
+
+    # 3. Chercher Node.js portable macOS
+    local mac_arch="x64"
+    [[ "$(uname -m)" == "arm64" ]] && mac_arch="arm64"
+    local mac_node="$SCRIPT_DIR/node-darwin-${mac_arch}/bin/node"
+    if [ -x "$mac_node" ]; then
+        NODE_DIR="$SCRIPT_DIR/node-darwin-${mac_arch}"
+        NODE_CMD="$mac_node"
+        NPM_CMD="$NODE_DIR/bin/npm"
+        PATH="$NODE_DIR/bin:$PATH"
+        local ver
+        ver=$("$NODE_CMD" --version)
+        ok "Node.js portable détecté : ${BOLD}$ver${RESET}"
+        return 0
+    fi
+
+    # 4. Télécharger et installer automatiquement
+    warn "Node.js non trouvé. Installation automatique..."
+    local os_name="linux"
+    [[ "$OSTYPE" == "darwin"* ]] && os_name="darwin"
+    local arch="x64"
+    [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]] && arch="arm64"
+
+    install_portable_node "$os_name" "$arch"
+
+    local portable_node="$SCRIPT_DIR/node-${os_name}-${arch}/bin/node"
+    if [ ! -x "$portable_node" ]; then
+        fail "L'installation a échoué. Node.js introuvable après extraction."
+        exit 1
+    fi
+
+    NODE_DIR="$SCRIPT_DIR/node-${os_name}-${arch}"
+    NODE_CMD="$portable_node"
+    NPM_CMD="$NODE_DIR/bin/npm"
+    PATH="$NODE_DIR/bin:$PATH"
+
     local ver
-    ver=$(node --version)
-    ok "Node.js détecté : ${BOLD}$ver${RESET}"
+    ver=$("$NODE_CMD" --version)
+    ok "Node.js portable installé : ${BOLD}$ver${RESET}"
 }
 
 # ─── Vérification de npm ────────────────────────────────────────────────────
 check_npm() {
-    if ! command -v npm &>/dev/null; then
+    step "Vérification de npm"
+    local npm_cmd="npm"
+    if [ -n "$NODE_DIR" ]; then
+        npm_cmd="$NODE_DIR/bin/npm"
+    fi
+    if [ ! -x "$npm_cmd" ] && ! command -v npm &>/dev/null; then
         fail "npm n'est pas installé !"
         echo -e "  ${CYAN}Réinstallez Node.js depuis https://nodejs.org${RESET}"
         exit 1
     fi
     local ver
-    ver=$(npm --version)
+    ver=$("$npm_cmd" --version 2>/dev/null || npm --version 2>/dev/null)
     ok "npm détecté : ${BOLD}$ver${RESET}"
 }
 
 # ─── Installation des dépendances Backend ────────────────────────────────────
 install_backend_deps() {
     step "Installation des dépendances Backend (Express, Socket.io, NeonDB...)"
+    local npm_cmd="npm"
+    if [ -n "$NODE_DIR" ]; then
+        npm_cmd="$NODE_DIR/bin/npm"
+    fi
     if [ -d "$BACKEND_DIR/node_modules" ]; then
         warn "node_modules existant détecté, mise à jour des dépendances..."
-        (cd "$BACKEND_DIR" && npm install --legacy-peer-deps) > "$LOG_DIR/backend-install.log" 2>&1 &
+        (cd "$BACKEND_DIR" && "$npm_cmd" install --legacy-peer-deps) > "$LOG_DIR/backend-install.log" 2>&1 &
     else
         info "Première installation... cela peut prendre 1-2 minutes."
-        (cd "$BACKEND_DIR" && npm install --legacy-peer-deps) > "$LOG_DIR/backend-install.log" 2>&1 &
+        (cd "$BACKEND_DIR" && "$npm_cmd" install --legacy-peer-deps) > "$LOG_DIR/backend-install.log" 2>&1 &
     fi
     local pid=$!
     spinner $pid "Installation backend en cours..."
@@ -157,13 +260,17 @@ install_backend_deps() {
 # ─── Installation des dépendances Frontend (Mobile/Web) ──────────────────────
 install_frontend_deps() {
     step "Installation des dépendances Frontend (Expo, React Native, Maps...)"
+    local npm_cmd="npm"
+    if [ -n "$NODE_DIR" ]; then
+        npm_cmd="$NODE_DIR/bin/npm"
+    fi
     if [ -d "$MOBILE_DIR/node_modules" ]; then
         warn "node_modules existant détecté, mise à jour..."
-        (cd "$MOBILE_DIR" && npm install --legacy-peer-deps) > "$LOG_DIR/frontend-install.log" 2>&1 &
+        (cd "$MOBILE_DIR" && "$npm_cmd" install --legacy-peer-deps) > "$LOG_DIR/frontend-install.log" 2>&1 &
     else
         info "Première installation... cela peut prendre 2-3 minutes."
         info "De nombreuses dépendances React Native, Maps, Expo sont nécessaires."
-        (cd "$MOBILE_DIR" && npm install --legacy-peer-deps) > "$LOG_DIR/frontend-install.log" 2>&1 &
+        (cd "$MOBILE_DIR" && "$npm_cmd" install --legacy-peer-deps) > "$LOG_DIR/frontend-install.log" 2>&1 &
     fi
     local pid=$!
     spinner $pid "Installation frontend en cours..."
@@ -252,6 +359,11 @@ ENVEOF
 start_backend() {
     step "Démarrage du serveur Backend (port $BACKEND_PORT)"
     
+    local npm_cmd="npm"
+    if [ -n "$NODE_DIR" ]; then
+        npm_cmd="$NODE_DIR/bin/npm"
+    fi
+    
     # Vérifier si le port est déjà utilisé
     if lsof -i ":$BACKEND_PORT" >/dev/null 2>&1 || ss -tlnp 2>/dev/null | grep -q ":$BACKEND_PORT"; then
         warn "Le port $BACKEND_PORT est déjà utilisé — tentative d'arrêt..."
@@ -260,7 +372,7 @@ start_backend() {
     fi
     
     info "Démarrage du serveur Express + Socket.io..."
-    (cd "$BACKEND_DIR" && npm run dev) > "$BACKEND_LOG" 2>&1 &
+    (cd "$BACKEND_DIR" && "$npm_cmd" run dev) > "$BACKEND_LOG" 2>&1 &
     BACKEND_PID=$!
     
     # Attendre que le serveur démarre
@@ -290,12 +402,16 @@ TUNNEL_URL=""
 
 install_localtunnel() {
     step "Installation de localtunnel (tunnel public)"
+    local npm_cmd="npm"
+    if [ -n "$NODE_DIR" ]; then
+        npm_cmd="$NODE_DIR/bin/npm"
+    fi
     if command -v lt &>/dev/null; then
         ok "localtunnel déjà installé"
         return 0
     fi
     info "Installation de localtunnel..."
-    npm install -g localtunnel > /dev/null 2>&1
+    "$npm_cmd" install -g localtunnel > /dev/null 2>&1
     if ! command -v lt &>/dev/null; then
         fail "Impossible d'installer localtunnel. Installation manuelle :"
         echo -e "  ${CYAN}npm install -g localtunnel${RESET}"
@@ -334,6 +450,11 @@ start_tunnel() {
 start_frontend() {
     step "Démarrage du Frontend Expo (port $FRONTEND_PORT)"
     
+    local npx_cmd="npx"
+    if [ -n "$NODE_DIR" ]; then
+        npx_cmd="$NODE_DIR/bin/npx"
+    fi
+    
     info "Lancement du serveur de développement Expo en mode Web (LAN)..."
     
     # Déterminer le port available
@@ -345,7 +466,7 @@ start_frontend() {
     FRONTEND_PORT=$port
     
     # Lancer Expo en mode LAN pour que les appareils mobiles puissent s'y connecter
-    (cd "$MOBILE_DIR" && npx expo start --web --port "$FRONTEND_PORT" --lan) > "$FRONTEND_LOG" 2>&1 &
+    (cd "$MOBILE_DIR" && "$npx_cmd" expo start --web --port "$FRONTEND_PORT" --lan) > "$FRONTEND_LOG" 2>&1 &
     FRONTEND_PID=$!
     
     # Attendre que le serveur démarre
@@ -441,12 +562,12 @@ main() {
     echo -e "  ${DIM}Installe les dépendances et lance l'application sur le réseau local${RESET}"
     echo ""
     
-    # 1. Vérifications
-    step "Vérification de l'environnement"
+    # 1. Vérifications Node.js (auto-install si absent)
     check_node
     check_npm
     
     # 2. Vérifier que les .env existent
+    step "Vérification de la configuration"
     if [ ! -f "$BACKEND_DIR/.env" ]; then
         warn "Fichier backend/.env manquant !"
         if [ -f "$BACKEND_DIR/.env.example" ]; then
@@ -464,6 +585,8 @@ ADMIN_COMMISSION_RATE=0.10
 ENVEOF
             ok "Fichier backend/.env créé (modifiez-le avec vos vraies clés API)"
         fi
+    else
+        ok "Fichier backend/.env trouvé"
     fi
     
     # 3. Installation des dépendances
