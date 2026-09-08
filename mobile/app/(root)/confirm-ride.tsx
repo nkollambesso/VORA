@@ -24,6 +24,7 @@ import { voraVoice } from "@/lib/voiceAssistant";
 import { useClerkUser } from "@/lib/useClerkSafe";
 import { callAudio } from "@/lib/callAudio";
 import { voraNotif } from "@/lib/notifications";
+import { voraVoIP } from "@/lib/webrtcVoice";
 
 
 export default function ConfirmRide() {
@@ -244,7 +245,8 @@ export default function ConfirmRide() {
     if (!socket) return;
 
     // Rejoindre la room de la course pour le VoIP
-    if (rideId) voraSocket.joinRide(rideId);
+    const currentRideId = (rideId || ride?.id || "").toString();
+    if (currentRideId) voraSocket.joinRide(currentRideId);
 
     const handleIncomingChatMessage = (data: { senderId: string; text: string }) => {
       setChatMessages((prev) => [
@@ -258,80 +260,112 @@ export default function ConfirmRide() {
       ]);
     };
 
-    const handleCallAnswered = () => {
+    const handleCallAnswered = (data?: any) => {
       callAudio.stopRinging();
       callAudio.playConnected();
       setCallStatus("connected");
       voraVoice.speak("Communication vocale sécurisée établie.");
+      if (data?.answer) {
+        voraVoIP.handleAnswer(data.answer);
+      }
     };
 
     const handleCallEnded = () => {
       callAudio.playEnded();
+      voraVoIP.cleanup();
       setCallStatus("ended");
       setTimeout(() => {
         setIsCallActive(false);
         setCallDuration(0);
-      }, 1200);
+      }, 800);
     };
 
     // Sonnerie côté passager quand le chauffeur appelle
-    const handleIncomingCall = (data: { callerId: string; callerName: string; rideId?: string }) => {
+    const handleIncomingCall = (data: { callerId: string; callerName: string; rideId?: string; offer?: any }) => {
       setIsCallActive(true);
       setCallStatus("calling");
       callAudio.startRinging();
       voraVoice.speak(`Appel entrant de ${data.callerName || "votre chauffeur"}`);
 
-      // Auto-réponse après 1.5s + envoi de la confirmation à l'appelant
-      setTimeout(() => {
+      // Auto-réponse après 1.5s
+      setTimeout(async () => {
         callAudio.stopRinging();
         callAudio.playConnected();
         setCallStatus("connected");
         const s = voraSocket.getSocket();
-        const callRideId = data.rideId || rideId;
-        if (callRideId) {
-          s?.emit("webrtc-answer-ride", { rideId: callRideId, callerId: data.callerId });
-        } else {
-          s?.emit("webrtc-answer-call", { targetUserId: data.callerId, answer: {} });
+        const callRideId = (data.rideId || rideId || ride?.id || "").toString();
+        if (s && callRideId) {
+          await voraVoIP.answerCall(s, callRideId, data.offer);
+          s.emit("webrtc-answer-ride", { rideId: callRideId, callerId: data.callerId });
         }
       }, 1500);
     };
 
+    const handleOffer = async (data: any) => {
+      const s = voraSocket.getSocket();
+      const callRideId = (data.rideId || rideId || ride?.id || "").toString();
+      if (s && callRideId && data?.offer) {
+        await voraVoIP.answerCall(s, callRideId, data.offer);
+      }
+    };
+
+    const handleIceCandidate = (data: any) => {
+      if (data?.candidate) {
+        voraVoIP.handleIceCandidate(data.candidate);
+      }
+    };
+
+    const handleAudioChunk = (data: any) => {
+      if (data?.audioBase64) {
+        voraVoIP.playAudioChunk(data.audioBase64);
+      }
+    };
+
     socket.on("receive-chat-message", handleIncomingChatMessage);
     socket.on("webrtc-call-answered", handleCallAnswered);
+    socket.on("webrtc-answer-ride", handleCallAnswered);
     socket.on("webrtc-call-ended", handleCallEnded);
     socket.on("webrtc-incoming-call", handleIncomingCall);
+    socket.on("webrtc-offer-ride", handleOffer);
+    socket.on("webrtc-ice-candidate-ride", handleIceCandidate);
+    socket.on("webrtc-audio-chunk", handleAudioChunk);
 
     return () => {
       callAudio.stopRinging();
       socket!.off("receive-chat-message", handleIncomingChatMessage);
       socket!.off("webrtc-call-answered", handleCallAnswered);
+      socket!.off("webrtc-answer-ride", handleCallAnswered);
       socket!.off("webrtc-call-ended", handleCallEnded);
       socket!.off("webrtc-incoming-call", handleIncomingCall);
+      socket!.off("webrtc-offer-ride", handleOffer);
+      socket!.off("webrtc-ice-candidate-ride", handleIceCandidate);
+      socket!.off("webrtc-audio-chunk", handleAudioChunk);
     };
-  }, [rideId, user?.id]);
+  }, [rideId, user?.id, ride?.id]);
 
-  const handleStartInAppCall = () => {
+  const handleStartInAppCall = async () => {
     setIsCallActive(true);
     setCallStatus("calling");
     setCallDuration(0);
     callAudio.startRinging();
     voraVoice.speak("Appel vocal sécurisé VORA en cours.");
 
-    // S'assurer que le socket est connecté
     let socket = voraSocket.getSocket();
     if (!socket && user?.id) {
       socket = voraSocket.connect(user.id, "PASSENGER");
-      if (rideId) voraSocket.joinRide(rideId);
     }
 
-    const currentRideId = rideId || ride?.id;
+    const currentRideId = (rideId || ride?.id || "").toString();
     if (currentRideId && socket) {
-      // Méthode principale : via la room de la course (la plus fiable)
+      voraSocket.joinRide(currentRideId);
       socket.emit("webrtc-call-ride", {
         rideId: currentRideId,
         callerId: user?.id || "rider_me",
         callerName: user?.fullName || user?.firstName || "Passager VORA",
       });
+
+      // Lance la transmission vocale micro réelle
+      await voraVoIP.startCall(socket, currentRideId);
     }
 
     // Auto-connecter après 3s si pas de réponse (simulation VoIP)
@@ -349,18 +383,24 @@ export default function ConfirmRide() {
 
   const handleEndInAppCall = () => {
     callAudio.playEnded();
+    voraVoIP.cleanup();
     const socket = voraSocket.getSocket();
-    const currentRideId = rideId || ride?.id;
-    if (currentRideId && socket) {
-      socket.emit("webrtc-hangup-ride", { rideId: currentRideId });
-    }
+    const currentRideId = (rideId || ride?.id || "").toString();
     const targetUserId = ride?.driver_user_id || ride?.driver_id || "1";
-    socket?.emit("webrtc-hangup", { targetUserId: targetUserId.toString() });
+    if (currentRideId && socket) {
+      socket.emit("webrtc-hangup-ride", {
+        rideId: currentRideId,
+        targetUserId: targetUserId.toString(),
+      });
+    }
+    if (targetUserId && socket) {
+      socket.emit("webrtc-hangup", { targetUserId: targetUserId.toString() });
+    }
     setCallStatus("ended");
     setTimeout(() => {
       setIsCallActive(false);
       setCallDuration(0);
-    }, 1000);
+    }, 600);
   };
 
   const handleSendChatMessage = () => {
@@ -822,7 +862,11 @@ export default function ConfirmRide() {
             <View style={styles.callControlsRow}>
               <TouchableOpacity
                 style={[styles.callControlBtn, isMuted && styles.callControlBtnActive]}
-                onPress={() => setIsMuted(!isMuted)}
+                onPress={() => {
+                  const next = !isMuted;
+                  setIsMuted(next);
+                  voraVoIP.setMuted(next);
+                }}
               >
                 <Ionicons name={isMuted ? "mic-off" : "mic"} size={20} color={isMuted ? "#EF4444" : "#FFFFFF"} />
                 <Text style={[styles.callControlBtnText, isMuted && styles.callControlBtnTextActive]}>
@@ -832,7 +876,11 @@ export default function ConfirmRide() {
 
               <TouchableOpacity
                 style={[styles.callControlBtn, isSpeakerOn && styles.callControlBtnActive]}
-                onPress={() => setIsSpeakerOn(!isSpeakerOn)}
+                onPress={() => {
+                  const next = !isSpeakerOn;
+                  setIsSpeakerOn(next);
+                  voraVoIP.setSpeaker(next);
+                }}
               >
                 <Ionicons name={isSpeakerOn ? "volume-high" : "volume-low"} size={20} color={isSpeakerOn ? "#0EA5E9" : "#FFFFFF"} />
                 <Text style={[styles.callControlBtnText, isSpeakerOn && styles.callControlBtnTextActive]}>

@@ -361,7 +361,6 @@ export function setupSocketIO(io: any) {
 
     // Approche 2 : ciblage par rideId (le + fiable — les 2 parties sont déjà dans ride:{rideId})
     socket.on('webrtc-call-ride', (data: { rideId: string; callerId: string; callerName: string }) => {
-      // Émet à tout le monde dans la room ride:{rideId} SAUF l'expéditeur
       socket.to(`ride:${data.rideId}`).emit('webrtc-incoming-call', {
         callerId: data.callerId,
         callerName: data.callerName,
@@ -370,14 +369,34 @@ export function setupSocketIO(io: any) {
       console.log(`📞 [CALL] Appel de ${data.callerName} dans la course ${data.rideId}`);
     });
 
-    // Réponse à l'appel (par rideId)
-    socket.on('webrtc-answer-ride', (data: { rideId: string; callerId: string }) => {
-      socket.to(`ride:${data.rideId}`).emit('webrtc-call-answered', { rideId: data.rideId });
+    // Échange d'Offre WebRTC Audio
+    socket.on('webrtc-offer-ride', (data: { rideId: string; offer: any; callerId?: string }) => {
+      socket.to(`ride:${data.rideId}`).emit('webrtc-offer-ride', data);
     });
 
-    // Raccrochage (par rideId)
-    socket.on('webrtc-hangup-ride', (data: { rideId: string }) => {
+    // Réponse à l'appel WebRTC Audio (par rideId)
+    socket.on('webrtc-answer-ride', (data: { rideId: string; answer?: any; callerId?: string }) => {
+      socket.to(`ride:${data.rideId}`).emit('webrtc-call-answered', data);
+      socket.to(`ride:${data.rideId}`).emit('webrtc-answer-ride', data);
+    });
+
+    // Échange ICE Candidate (connexion P2P directe)
+    socket.on('webrtc-ice-candidate-ride', (data: { rideId: string; candidate: any }) => {
+      socket.to(`ride:${data.rideId}`).emit('webrtc-ice-candidate-ride', data);
+    });
+
+    // Streaming de fragments audio en direct (Fallback fiable 100%)
+    socket.on('webrtc-audio-chunk', (data: { rideId: string; audioBase64: string }) => {
+      socket.to(`ride:${data.rideId}`).emit('webrtc-audio-chunk', data);
+    });
+
+    // Raccrochage universel (diffuse à la room de la course ET à la room utilisateur cible)
+    socket.on('webrtc-hangup-ride', (data: { rideId: string; targetUserId?: string }) => {
       socket.to(`ride:${data.rideId}`).emit('webrtc-call-ended', { rideId: data.rideId });
+      if (data.targetUserId) {
+        io.to(data.targetUserId).emit('webrtc-call-ended', { rideId: data.rideId });
+      }
+      console.log(`📴 [CALL] Raccrochage dans la course ${data.rideId}`);
     });
 
     // Anciens événements userId — maintenus pour compatibilité
