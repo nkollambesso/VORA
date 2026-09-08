@@ -6,6 +6,7 @@ module.exports = {
   testMatch: ['**/__tests__/**/*.test.ts'],
   moduleFileExtensions: ['ts', 'js', 'json'],
   testTimeout: 30000,
+  maxWorkers: 1,
   collectCoverageFrom: [
     'src/utils/**/*.ts',
     'src/routes/**/*.ts',

@@ -26,20 +26,29 @@ export async function initTestDb(): Promise<void> {
  * Deletes in order to respect foreign key constraints.
  */
 export async function cleanTestDb(): Promise<void> {
-  await pool.query('DELETE FROM ride_disputes');
-  await pool.query('DELETE FROM support_calls');
-  await pool.query('DELETE FROM sos_alerts');
-  await pool.query('DELETE FROM location_photos');
-  await pool.query('DELETE FROM rides');
-  await pool.query('DELETE FROM drivers');
-  await pool.query('DELETE FROM users WHERE id NOT LIKE $1', ['admin_%']);
-  // Clean test admin accounts but keep the default one
-  await pool.query("DELETE FROM admin_accounts WHERE email != 'admin@vora.cm'");
-  await pool.query('DELETE FROM admin_wallet WHERE admin_email != $1', ['admin@vora.cm']);
-  // Ensure the default admin wallet record exists
-  await pool.query(
-    `INSERT INTO admin_wallet (admin_email, total_commissions, commission_rate) VALUES ('admin@vora.cm', 0, 0.10) ON CONFLICT (admin_email) DO NOTHING`
-  );
+  // Use a single transaction to avoid FK constraint violations during cleanup
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM ride_disputes');
+    await client.query('DELETE FROM support_calls');
+    await client.query('DELETE FROM sos_alerts');
+    await client.query('DELETE FROM location_photos');
+    await client.query('DELETE FROM rides');
+    await client.query('DELETE FROM drivers');
+    await client.query('DELETE FROM users WHERE id NOT LIKE $1', ['admin_%']);
+    await client.query("DELETE FROM admin_accounts WHERE email != 'admin@vora.cm'");
+    await client.query('DELETE FROM admin_wallet WHERE admin_email != $1', ['admin@vora.cm']);
+    await client.query(
+      `INSERT INTO admin_wallet (admin_email, total_commissions, commission_rate) VALUES ('admin@vora.cm', 0, 0.10) ON CONFLICT (admin_email) DO NOTHING`
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /**
