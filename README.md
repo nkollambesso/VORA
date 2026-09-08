@@ -45,6 +45,15 @@ VORA/
 │   ├── types/                # Types TypeScript
 │   └── package.json
 │
+├── docker/
+│   ├── Dockerfile.backend     # Conteneur Backend Node.js
+│   ├── Dockerfile.web         # Conteneur Frontend Expo
+│   ├── launch.bat             # Lanceur Windows (double-clic)
+│   └── launch.sh              # Lanceur Linux/Mac
+├── docker-compose.yml         # Orchestration Docker (Backend + Frontend)
+├── start.sh                   # Script de démarrage bash (toutes plateformes)
+├── demarrer.bat               # Lanceur Windows (double-clic)
+├── start                      # Lanceur Linux/Mac
 ├── .gitignore
 └── README.md
 ```
