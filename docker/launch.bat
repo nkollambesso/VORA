@@ -4,27 +4,27 @@ color 0B
 cls
 
 echo.
-echo      ___      ___  ______     _______        __
-echo     ^|"  \    /"  ^|^|/    " \   /"      \      /""\
-echo      \   \  //  /// ____  \ ^|:        ^|    /    \
-echo       \  \/. .//  /    ) :)^|_____/   )   /' /\  \
-echo        \.    // (: (____/ //  //      /   //  __'  \
-echo         \   /  \        /  ^|:  __   \  /   /  \\  \
-echo          \__/    \"_____/   ^|__^|  \___)(___/    \___)
+echo  ============================================================
 echo.
-echo   Lanceur Docker — sans Node.js requis
-echo   VORA — Plateforme de Mobilite Urbaine ^& VTC
+echo      __ __ _____ _____ ____  ____
+echo     / //_// ___// ___// __ \/ __ \
+echo    / ,<  \__ \ \__ \/ / / / /_/ /
+echo   /_/|_|/____//____//_/ /_/\____/
+echo.
+echo   Lanceur Docker - sans Node.js requis
+echo   VORA - Plateforme de Mobilite Urbaine et VTC
+echo.
+echo  ============================================================
 echo.
 echo  Ce script lance VORA dans des conteneurs Docker.
 echo  Vous n'avez PAS besoin d'installer Node.js.
 echo.
-echo  Prerequis : Docker Desktop doit etre installe et en cours
-echo  d'execution sur votre ordinateur.
+echo  Prerequis : Docker Desktop installe et en cours d'execution.
 echo.
 echo  Telecharger Docker Desktop :
 echo    https://www.docker.com/products/docker-desktop
 echo.
-echo  Appuyez sur une touche pour continuer...
+echo  Appuyez sur une touche...
 pause >nul
 
 echo.
@@ -33,7 +33,7 @@ docker --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo.
     echo  ============================================================
-    echo   ERREUR : Docker n'est pas installe ou n'est pas dans le PATH.
+    echo   ERREUR : Docker non installe ou non dans le PATH.
     echo.
     echo   1. Telechargez Docker Desktop depuis :
     echo      https://www.docker.com/products/docker-desktop
@@ -56,7 +56,7 @@ docker compose version >nul 2>&1
 if %errorlevel% neq 0 (
     docker-compose --version >nul 2>&1
     if %errorlevel% neq 0 (
-        echo  ERREUR : Docker Compose n'est pas disponible.
+        echo  ERREUR : Docker Compose non disponible.
         echo  Mettez a jour Docker Desktop.
         pause
         exit /b 1
