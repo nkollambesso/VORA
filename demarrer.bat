@@ -154,6 +154,44 @@ call npm --version
 echo  [OK] npm detecte.
 echo.
 
+REM === [2.5/5] Fichiers .env ===
+echo  [2.5/5] Configuration des fichiers .env...
+echo.
+
+REM --- Extraction depuis env-configs.zip (cles reelles) ---
+if exist "%SCRIPT_DIR%\env-configs.zip" (
+    echo  Extraction de env-configs.zip...
+    powershell -NoProfile -Command "Expand-Archive -Path '%SCRIPT_DIR%\env-configs.zip' -DestinationPath '%SCRIPT_DIR%\env-tmp' -Force" 2>>"%LOGFILE%"
+    if exist "%SCRIPT_DIR%\env-tmp\backend.env" (
+        if not exist "%SCRIPT_DIR%\backend\.env" (
+            copy /y "%SCRIPT_DIR%\env-tmp\backend.env" "%SCRIPT_DIR%\backend\.env" >nul
+            echo  [OK] backend\.env cree depuis env-configs.zip
+        )
+    )
+    if exist "%SCRIPT_DIR%\env-tmp\mobile.env" (
+        copy /y "%SCRIPT_DIR%\env-tmp\mobile.env" "%SCRIPT_DIR%\mobile\.env" >nul
+        echo  [OK] mobile\.env copie depuis env-configs.zip
+    )
+)
+
+REM --- backend\.env obligatoire ---
+if not exist "%SCRIPT_DIR%\backend\.env" (
+    echo.
+    echo  ============================================================
+    echo   ERREUR : backend\.env introuvable !
+    echo.
+    echo   Le backend a besoin des cles de connexion : Neon, Clerk.
+    echo   - Placez le fichier env-configs.zip a la racine du projet,
+    echo     a cote de demarrer.bat, puis relancez ce script.
+    echo   - Ou creez backend\.env manuellement, voir le README.
+    echo  ============================================================
+    echo.
+    pause
+    goto :eof
+)
+echo  [OK] backend\.env present.
+echo.
+
 REM === [3/5] Backend deps ===
 echo  [3/5] Installation dependances Backend...
 echo         (1-2 minutes)
@@ -232,11 +270,15 @@ echo.
 
 REM === .env mobile ===
 cd /d "%SCRIPT_DIR%\mobile"
-> .env (
-    echo EXPO_PUBLIC_BACKEND_URL=http://%LOCAL_IP%:5000
-    echo EXPO_PUBLIC_SOCKET_URL=http://%LOCAL_IP%:5000
-    echo EXPO_PUBLIC_GEMINI_API_KEY=your_key_here
+if not exist .env (
+    > .env (
+        echo EXPO_PUBLIC_BACKEND_URL=http://%LOCAL_IP%:5000
+        echo EXPO_PUBLIC_SOCKET_URL=http://%LOCAL_IP%:5000
+        echo EXPO_PUBLIC_GEMINI_API_KEY=your_key_here
+    )
 )
+REM Mise a jour des URLs Backend avec l'IP locale (conserve les cles reelles)
+powershell -NoProfile -Command "$f='%SCRIPT_DIR%\mobile\.env'; $c=Get-Content $f; $c=$c -replace 'EXPO_PUBLIC_BACKEND_URL=.*','EXPO_PUBLIC_BACKEND_URL=http://%LOCAL_IP%:5000' -replace 'EXPO_PUBLIC_SOCKET_URL=.*','EXPO_PUBLIC_SOCKET_URL=http://%LOCAL_IP%:5000'; if (-not ($c -match 'EXPO_PUBLIC_BACKEND_URL=')) { $c += 'EXPO_PUBLIC_BACKEND_URL=http://%LOCAL_IP%:5000' }; if (-not ($c -match 'EXPO_PUBLIC_SOCKET_URL=')) { $c += 'EXPO_PUBLIC_SOCKET_URL=http://%LOCAL_IP%:5000' }; Set-Content $f $c"
 echo  Backend URL : http://%LOCAL_IP%:5000
 echo.
 
@@ -247,7 +289,7 @@ if "%TUNNEL_CHOICE%"=="2" (
     timeout /t 15 /nobreak >nul
     for /f "tokens=*" %%i in ('type %SCRIPT_DIR%\logs\tunnel.log ^| findstr /r "https://"') do set "TUNNEL_URL=%%i"
     echo.
-    echo   Lien telephone (tunnel) :
+    echo   Lien telephone - tunnel :
     echo   %TUNNEL_URL%
     echo.
 ) else (
@@ -260,6 +302,9 @@ if "%TUNNEL_CHOICE%"=="2" (
     echo.
     echo  ============================================================
 )
+
+REM === Nettoyage env-tmp ===
+if exist "%SCRIPT_DIR%\env-tmp" rmdir /s /q "%SCRIPT_DIR%\env-tmp"
 
 REM === Frontend ===
 cd /d "%SCRIPT_DIR%\mobile"

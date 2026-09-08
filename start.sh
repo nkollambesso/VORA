@@ -570,6 +570,24 @@ main() {
     step "Vérification de la configuration"
     if [ ! -f "$BACKEND_DIR/.env" ]; then
         warn "Fichier backend/.env manquant !"
+        # Priorité : extraire les vraies clés depuis env-configs.zip
+        if [ -f "$SCRIPT_DIR/env-configs.zip" ]; then
+            info "Extraction de env-configs.zip..."
+            tmpdir="$SCRIPT_DIR/.env-tmp"
+            mkdir -p "$tmpdir"
+            unzip -o "$SCRIPT_DIR/env-configs.zip" -d "$tmpdir" >/dev/null 2>&1 || true
+            if [ -f "$tmpdir/backend.env" ]; then
+                cp "$tmpdir/backend.env" "$BACKEND_DIR/.env"
+                ok "Fichier backend/.env créé depuis env-configs.zip"
+            fi
+            if [ -f "$tmpdir/mobile.env" ] && [ ! -f "$MOBILE_DIR/.env" ]; then
+                cp "$tmpdir/mobile.env" "$MOBILE_DIR/.env"
+                ok "Fichier mobile/.env créé depuis env-configs.zip"
+            fi
+            rm -rf "$tmpdir"
+        fi
+    fi
+    if [ ! -f "$BACKEND_DIR/.env" ]; then
         if [ -f "$BACKEND_DIR/.env.example" ]; then
             cp "$BACKEND_DIR/.env.example" "$BACKEND_DIR/.env"
             ok "Fichier backend/.env créé depuis .env.example"
@@ -583,7 +601,7 @@ ADMIN_EMAIL=admin@vora.cm
 ADMIN_PASSWORD=VoraAdmin2025!
 ADMIN_COMMISSION_RATE=0.10
 ENVEOF
-            ok "Fichier backend/.env créé (modifiez-le avec vos vraies clés API)"
+            warn "Fichier backend/.env minimal créé — modifiez-le avec vos vraies clés API !"
         fi
     else
         ok "Fichier backend/.env trouvé"
