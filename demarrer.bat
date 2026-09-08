@@ -9,6 +9,9 @@ if "%~1"=="" (
     goto :eof
 )
 
+REM === Mode AUTO-TEST : verifie Node + npm puis s'arrete ===
+if /i "%~1"=="CHECK" goto self_check
+
 echo.
 echo  ============================================================
 echo.
@@ -42,8 +45,6 @@ set "NODE_VERSION=v20.18.1"
 set "NODE_DIR=%SCRIPT_DIR%\node-win-x64"
 set "NODE_EXE=%NODE_DIR%\node.exe"
 
-echo [DEBUG] SCRIPT_DIR=%SCRIPT_DIR% >> "%LOGFILE%"
-
 REM === [1/5] Node.js ===
 echo.
 echo  [1/5] Verification de Node.js...
@@ -53,20 +54,19 @@ set "USE_PORTABLE=0"
 REM Test Node portable
 if exist "%NODE_EXE%" (
     "%NODE_EXE%" --version >nul 2>&1
-    if %errorlevel% equ 0 (
+    if not errorlevel 1 (
         echo  [OK] Node.js portable detecte.
         "%NODE_EXE%" --version
+        set "USE_PORTABLE=1"
         goto node_ok
     )
 )
 
 REM Test Node systeme
 where node >nul 2>&1
-if %errorlevel% equ 0 (
+if not errorlevel 1 (
     echo  [OK] Node.js systeme detecte.
     node --version
-    set "NODE_EXE=node"
-    set "NODE_DIR="
     goto node_ok
 )
 
@@ -88,7 +88,7 @@ echo  Telechargement de Node.js %NODE_VERSION% (%ARCH%)...
 echo.
 
 where curl >nul 2>&1
-if %errorlevel% neq 0 (
+if errorlevel 1 (
     echo  ERREUR : curl non disponible.
     echo  Telechargez Node.js depuis : https://nodejs.org
     echo  Extracez dans : %NODE_DIR%
@@ -96,7 +96,7 @@ if %errorlevel% neq 0 (
 )
 
 curl -L -o "%NODE_ZIP%" "%NODE_URL%" --progress-bar
-if %errorlevel% neq 0 (
+if errorlevel 1 (
     echo  ERREUR : Telechargement echoue. Verifiez internet.
     goto error_exit
 )
@@ -105,7 +105,7 @@ echo.
 echo  Extraction...
 
 powershell -NoProfile -Command "Expand-Archive -Path '%NODE_ZIP%' -DestinationPath '%SCRIPT_DIR%' -Force" 2>>"%LOGFILE%"
-if %errorlevel% neq 0 (
+if errorlevel 1 (
     echo  ERREUR extraction. Voir : %LOGFILE%
     goto error_exit
 )
@@ -124,7 +124,7 @@ if not exist "%NODE_EXE%" (
 )
 
 "%NODE_EXE%" --version >nul 2>&1
-if %errorlevel% neq 0 (
+if errorlevel 1 (
     echo  ERREUR : Node.js ne demarre pas.
     goto error_exit
 )
@@ -136,26 +136,21 @@ set "USE_PORTABLE=1"
 
 :node_ok
 
-REM === PATH pour Node portable ===
-if "%USE_PORTABLE%"=="1" (
-    set "PATH=%NODE_DIR%;%NODE_DIR%\node_modules\.bin;%PATH%"
-    set "NPM_CONFIG_PREFIX=%NODE_DIR%"
-)
-set "NPM_CMD=npm"
-set "NPX_CMD=npx"
-if "%USE_PORTABLE%"=="1" (
-    set "NPM_CMD=%NODE_DIR%\npm.cmd"
-    set "NPX_CMD=%NODE_DIR%\npx.cmd"
-)
+REM === PATH pour Node portable (important : le PATH est herite
+REM      par la fenetre Backend et par npm/npx) ===
+if not "%USE_PORTABLE%"=="1" goto path_done
+set "PATH=%NODE_DIR%;%NODE_DIR%\node_modules\.bin;%PATH%"
+set "NPM_CONFIG_PREFIX=%NODE_DIR%"
+:path_done
 
 REM === [2/5] npm ===
 echo  [2/5] Verification de npm...
-"%NPM_CMD%" --version >nul 2>&1
-if %errorlevel% neq 0 (
+call npm --version >nul 2>&1
+if errorlevel 1 (
     echo  ERREUR : npm indisponible.
     goto error_exit
 )
-"%NPM_CMD%" --version
+call npm --version
 echo  [OK] npm detecte.
 echo.
 
@@ -164,8 +159,8 @@ echo  [3/5] Installation dependances Backend...
 echo         (1-2 minutes)
 echo.
 cd /d "%SCRIPT_DIR%\backend"
-"%NPM_CMD%" install --legacy-peer-deps
-if %errorlevel% neq 0 (
+call npm install --legacy-peer-deps
+if errorlevel 1 (
     echo  ERREUR installation Backend. Verifiez internet.
     goto error_exit
 )
@@ -178,8 +173,8 @@ echo  [4/5] Installation dependances Frontend...
 echo         (2-3 minutes)
 echo.
 cd /d "%SCRIPT_DIR%\mobile"
-"%NPM_CMD%" install --legacy-peer-deps
-if %errorlevel% neq 0 (
+call npm install --legacy-peer-deps
+if errorlevel 1 (
     echo  ERREUR installation Frontend. Verifiez internet.
     goto error_exit
 )
@@ -199,7 +194,7 @@ echo.
 set /p TUNNEL_CHOICE="  Entrez 1 ou 2 : "
 if "%TUNNEL_CHOICE%"=="2" (
     echo  Installation de localtunnel...
-    "%NPM_CMD%" install -g localtunnel
+    call npm install -g localtunnel
     echo  [OK] localtunnel installe.
 )
 
@@ -211,18 +206,12 @@ echo   Frontend dans cette fenetre.
 echo  ============================================================
 echo.
 
-cd /d "%SCRIPT_DIR%\backend"
-if "%USE_PORTABLE%"=="1" (
-    start "VORA Backend" cmd /k "cd /d "%SCRIPT_DIR%\backend" && set "PATH=%NODE_DIR%;%NODE_DIR%\node_modules\.bin;%PATH%" && set "NPM_CONFIG_PREFIX=%NODE_DIR%" && echo Backend en cours... && "%NODE_EXE%" "%NPM_CMD%" run dev"
-) else (
-    start "VORA Backend" cmd /k "cd /d "%SCRIPT_DIR%\backend" && echo Backend en cours... && npm run dev"
-)
-
+start "VORA Backend" /d "%SCRIPT_DIR%\backend" cmd /k "echo Backend en cours... && call npm run dev"
 echo  Demarrage Backend...
 timeout /t 8 /nobreak >nul
 
 curl -s http://localhost:5000/health >nul 2>&1
-if %errorlevel% neq 0 (
+if errorlevel 1 (
     echo  [INFO] Backend en retard...
     timeout /t 5 /nobreak >nul
 )
@@ -274,10 +263,62 @@ if "%TUNNEL_CHOICE%"=="2" (
 
 REM === Frontend ===
 cd /d "%SCRIPT_DIR%\mobile"
-"%NPX_CMD%" expo start --web --port 8081 --lan
+call npx expo start --web --port 8081 --lan
 
 echo.
 echo  Serveurs arretes.
+echo.
+pause
+goto :eof
+
+REM ============================================================
+REM  AUTO-TEST : demarrer.bat CHECK
+REM ============================================================
+:self_check
+echo.
+echo  ============================================================
+echo   AUTO-TEST VORA - verifie que tout fonctionne
+echo  ============================================================
+echo.
+set "SCRIPT_DIR=%~dp0"
+if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
+set "NODE_DIR=%SCRIPT_DIR%\node-win-x64"
+if exist "%NODE_DIR%\node.exe" set "PATH=%NODE_DIR%;%NODE_DIR%\node_modules\.bin;%PATH%"
+
+echo  [1/3] Test Node.js...
+if exist "%NODE_DIR%\node.exe" (
+    call "%NODE_DIR%\node.exe" --version
+    if not errorlevel 1 (
+        echo  [OK] Node portable fonctionne.
+    ) else (
+        echo  [ECHEC] Node portable ne demarre pas.
+    )
+) else (
+    where node >nul 2>&1
+    if not errorlevel 1 (
+        echo  [OK] Node systeme :
+        call node --version
+    ) else (
+        echo  [ECHEC] Aucun Node trouve.
+    )
+)
+
+echo.
+echo  [2/3] Test npm...
+call npm --version
+if errorlevel 1 (
+    echo  [ECHEC] npm ne fonctionne pas.
+) else (
+    echo  [OK] npm fonctionne.
+)
+
+echo.
+echo  [3/3] Test execution du script...
+echo  [OK] Le script s'execute sans erreur de syntaxe.
+echo.
+echo  ============================================================
+echo   Fin de l'auto-test. Cette fenetre reste ouverte.
+echo  ============================================================
 echo.
 pause
 goto :eof
