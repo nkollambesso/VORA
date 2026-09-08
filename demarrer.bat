@@ -190,6 +190,10 @@ if not exist "%SCRIPT_DIR%\backend\.env" (
     goto :eof
 )
 echo  [OK] backend\.env present.
+
+REM --- Compte chauffeur de test (contourne le 2FA de demos) ---
+powershell -NoProfile -Command "$f='%SCRIPT_DIR%\backend\.env'; $c=Get-Content $f; if (-not ($c -match '^TEST_DRIVER_EMAIL=')) { Add-Content $f 'TEST_DRIVER_EMAIL=driver@vora.cm' }; if (-not ($c -match '^TEST_DRIVER_PASSWORD=')) { Add-Content $f 'TEST_DRIVER_PASSWORD=VoraDriver2025!' }; if (-not ($c -match '^TEST_DRIVER_USER_ID=')) { Add-Content $f 'TEST_DRIVER_USER_ID=user_3J0e6Cia2ik2J0ThgjtinPV8ySe' }"
+echo  [OK] Compte chauffeur de test configure.
 echo.
 
 REM === [3/5] Backend deps ===

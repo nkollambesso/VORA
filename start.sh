@@ -606,6 +606,14 @@ ENVEOF
     else
         ok "Fichier backend/.env trouvé"
     fi
+
+    # Compte chauffeur de test (contourne le 2FA de démo — variables ajoutées si absentes)
+    if [ -f "$BACKEND_DIR/.env" ]; then
+        grep -q "^TEST_DRIVER_EMAIL=" "$BACKEND_DIR/.env" || echo "TEST_DRIVER_EMAIL=driver@vora.cm" >> "$BACKEND_DIR/.env"
+        grep -q "^TEST_DRIVER_PASSWORD=" "$BACKEND_DIR/.env" || echo "TEST_DRIVER_PASSWORD=VoraDriver2025!" >> "$BACKEND_DIR/.env"
+        grep -q "^TEST_DRIVER_USER_ID=" "$BACKEND_DIR/.env" || echo "TEST_DRIVER_USER_ID=user_3J0e6Cia2ik2J0ThgjtinPV8ySe" >> "$BACKEND_DIR/.env"
+        ok "Compte chauffeur de test configuré"
+    fi
     
     # 3. Installation des dépendances
     install_backend_deps
