@@ -13,9 +13,11 @@ import locationPhotosRouter from './routes/locationPhotos';
 
 export function createApp() {
   const app = express();
-  const allowedOrigins = process.env.CORS_ORIGINS
+  // '*' en chaîne = autoriser toutes les origines (un tableau ['*'] est une
+  // liste blanche littérale et casse le CORS pour les origines réelles)
+  const allowedOrigins: string | string[] = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
-    : ['*'];
+    : '*';
 
   app.use(cors({
     origin: allowedOrigins,
