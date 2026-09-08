@@ -23,7 +23,9 @@ export function createApp() {
     origin: allowedOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
   }));
-  app.use(express.json());
+  // Limite relevée : l'inscription chauffeur envoie la photo du véhicule en base64
+  app.use(express.json({ limit: '25mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
   // Routes REST API
   app.use('/api/rides', ridesRouter);

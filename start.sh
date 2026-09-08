@@ -650,6 +650,15 @@ ENVEOF
     # 7. Démarrage Frontend
     start_frontend
     
+    # 7.5 Seed du chauffeur de test (idempotent — évite le 404 profil)
+    step "Vérification du chauffeur de test"
+    if (cd "$BACKEND_DIR" && "$NODE_DIR/bin/npx" ts-node --transpile-only src/db/seed-driver.ts >/dev/null 2>&1) || \\
+       (cd "$BACKEND_DIR" && npx ts-node --transpile-only src/db/seed-driver.ts >/dev/null 2>&1); then
+        ok "Chauffeur de test prêt — driver@vora.cm / VoraDriver2025!"
+    else
+        warn "Seed chauffeur ignoré (la base contient déjà les comptes)."
+    fi
+    
     # 8. Tunnel public (optionnel)
     if [ "$USE_TUNNEL" = true ]; then
         install_localtunnel

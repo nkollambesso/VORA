@@ -266,6 +266,17 @@ if errorlevel 1 (
 echo  [OK] Backend sur http://localhost:5000
 echo.
 
+REM === Seed du chauffeur de test (idempotent, evite le 404 profil) ===
+echo  Verification du chauffeur de test...
+cd /d "%SCRIPT_DIR%\backend"
+call npx ts-node --transpile-only src/db/seed-driver.ts >nul 2>&1
+if errorlevel 1 (
+    echo  [INFO] Seed chauffeur ignore - la base utilisee contient deja les comptes.
+) else (
+    echo  [OK] Chauffeur de test pret - driver@vora.cm / VoraDriver2025!
+)
+echo.
+
 REM === IP locale ===
 echo  Detection IP locale...
 set "LOCAL_IP="
