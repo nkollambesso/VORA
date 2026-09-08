@@ -147,6 +147,24 @@ Elle combine un **Frontend Web & Mobile sous React Native & Expo Router** (`/mob
 - Lorsqu'un passager annule une course acceptée, le chauffeur est désormais **proactivement notifié** via Socket.io sur son ID utilisateur direct.
 - Le chauffeur reçoit une notification push **avec retour sonore** (son d'alerte) l'informant que le passager a annulé, évitant ainsi qu'il continue de se déplacer inutilement vers un point de ramassage abandonné.
 
+### 22. Page de Profil Chauffeur Complète & Mise à Jour des Données
+- Interface dédiée (`mobile/app/(driver)/profile.tsx`) accessible directement depuis l'en-tête du tableau de bord chauffeur.
+- **Identité & Contact** : Mise à jour en temps réel du nom, du numéro de téléphone camerounais (+237) et de la photo de profil avec **vérification faciale par IA** (certifie la présence d'un visage humain authentique).
+- **Véhicule & Documents** : Mise à jour de la catégorie (Moto bendskin, Taxi jaune, Confort VIP), de la marque et du modèle, de la plaque d'immatriculation, de la couleur, de la photo du véhicule et des documents officiels (carte grise, attestation d'assurance).
+- **Synchronisation API** : Endpoint dédié `PUT /api/drivers/profile/:userId` mettant à jour à la fois la table `users` et la table `drivers` avec validation d'intégrité.
+
+### 23. Confinement Strict de la Recherche Intra-Urbaine (Villes du Cameroun)
+- Application rigoureuse du principe intra-ville : les courses VORA ne franchissent pas les frontières interurbaines mais sont valables dans toutes les villes du Cameroun (Yaoundé, Douala, Bafoussam, Garoua, Bamenda, Kribi, Maroua, Ngaoundéré, etc.).
+- Détection dynamique de la ville actuelle de l'utilisateur à partir des coordonnées GPS ou de l'adresse de prise en charge (`detectCityFromCoords`).
+- Filtrage strict dans la barre de recherche (`GoogleTextInput.tsx`) : les repères camerounais, les suggestions Geoapify et les interprétations IA sont filtrés pour correspondre **exclusivement à la ville actuelle de l'usager**. Si l'usager se trouve à Yaoundé, aucun résultat situé à Douala ou ailleurs ne peut être retourné.
+
+### 24. Appels Vocaux VoIP In-App Bidirectionnels & Retransmission Audio 100% Fiable
+- **Signalisation multi-canaux sans faille** : La signalisation WebRTC (`webrtc-call-ride`, `webrtc-answer-ride`, `webrtc-hangup-ride`) est diffusée sur la room de la course, sur l'événement direct dédié `webrtc-incoming-call:${rideId}`, et directement sur l'identifiant Clerk de la contrepartie via une résolution en base de données.
+- **Sonnerie bidirectionnelle garantie** : Que le passager appelle le chauffeur ou que le chauffeur appelle le passager, la sonnerie retentit immédiatement et de manière audible sur les deux appareils.
+- **Transmission réelle de la voix** : Double mécanisme robuste combinant `RTCPeerConnection` (pistes audio natives avec serveurs STUN) et un streaming continu de fragments audio autonomes (WebM/Opus) joués via une file d'attente séquentielle évitant tout conflit de décodage.
+- **Gestion des permissions & Autoplay Unlock** : Déverrouillage automatique des restrictions audio du navigateur au toucher, notification visuelle si le microphone est bloqué, et bouton interactif de réautorisation en un clic.
+- **Raccrochage synchronisé** : Dès qu'une partie raccroche, l'appel est instantanément clôturé des deux côtés avec signal acoustique de fin d'appel.
+
 ---
 
 ## Structure du Projet

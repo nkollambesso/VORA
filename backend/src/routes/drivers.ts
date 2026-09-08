@@ -237,6 +237,82 @@ router.get('/profile/:userId', async (req: Request, res: Response) => {
   }
 });
 
+// Mettre à jour les informations du profil chauffeur
+router.put('/profile/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const {
+      name,
+      phone,
+      vehicle_type,
+      vehicle_model,
+      license_plate,
+      color,
+      vehicle_image,
+      avatar_url,
+      vehicle_documents,
+    } = req.body;
+
+    // 1. Mettre à jour l'utilisateur si name / phone / avatar fournis
+    if (avatar_url && avatar_url.trim().length > 50) {
+      const faceCheck = await verifyDriverFace(avatar_url);
+      if (!faceCheck.isPerson) {
+        return res.status(400).json({
+          success: false,
+          error: faceCheck.reason || 'La photo de profil fournie ne représente pas un visage humain valide.',
+        });
+      }
+    }
+
+    await query(
+      `UPDATE users 
+       SET name = COALESCE($1, name),
+           phone = COALESCE($2, phone),
+           avatar_url = COALESCE($3, avatar_url)
+       WHERE id = $4`,
+      [name?.trim() || null, phone?.trim() || null, avatar_url?.trim() || null, userId]
+    );
+
+    // 2. Mettre à jour les informations du véhicule et documents dans la table drivers
+    const updated = await query(
+      `UPDATE drivers
+       SET vehicle_type = COALESCE($1, vehicle_type),
+           vehicle_model = COALESCE($2, vehicle_model),
+           license_plate = COALESCE($3, license_plate),
+           color = COALESCE($4, color),
+           vehicle_image = COALESCE($5, vehicle_image),
+           vehicle_documents = COALESCE($6, vehicle_documents)
+       WHERE user_id = $7
+       RETURNING *`,
+      [
+        vehicle_type || null,
+        vehicle_model?.trim() || null,
+        license_plate?.trim()?.toUpperCase() || null,
+        color?.trim() || null,
+        vehicle_image?.trim() || null,
+        vehicle_documents?.trim() || null,
+        userId,
+      ]
+    );
+
+    const userRes = await query(`SELECT name, email, phone, avatar_url, public_id FROM users WHERE id = $1`, [userId]);
+    const u = userRes.rows[0] || {};
+    const d = updated.rows[0] || {};
+
+    return res.json({
+      success: true,
+      driver: {
+        ...d,
+        ...u,
+        display_name: formatDisplayName(u.name),
+      },
+    });
+  } catch (error) {
+    console.error('Erreur mise à jour profil chauffeur:', error);
+    return res.status(500).json({ success: false, error: 'Erreur lors de la mise à jour du profil.' });
+  }
+});
+
 // Obtenir les chauffeurs en ligne (Données anonymisées pour la carte passager)
 router.get('/online', async (req: Request, res: Response) => {
   try {

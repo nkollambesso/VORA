@@ -45,6 +45,7 @@ export default function DriverNavigation() {
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(false);
+  const [micPermissionState, setMicPermissionState] = useState<"prompt" | "granted" | "denied">("prompt");
 
   const [isChatActive, setIsChatActive] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ id: string; senderId: string; text: string; timestamp: string }>>([
@@ -382,6 +383,11 @@ export default function DriverNavigation() {
       }
     };
 
+    const rideCallEndedEvent = currentRideId ? `webrtc-call-ended:${currentRideId}` : "";
+    const rideAnsweredEvent = currentRideId ? `webrtc-call-answered:${currentRideId}` : "";
+    const rideIncomingCallEvent = currentRideId ? `webrtc-incoming-call:${currentRideId}` : "";
+    const rideAudioChunkEvent = currentRideId ? `webrtc-audio-chunk:${currentRideId}` : "";
+
     socket.on("receive-chat-message", handleIncomingChatMessage);
     socket.on("webrtc-call-answered", handleCallAnswered);
     socket.on("webrtc-answer-ride", handleCallAnswered);
@@ -390,6 +396,11 @@ export default function DriverNavigation() {
     socket.on("webrtc-offer-ride", handleOffer);
     socket.on("webrtc-ice-candidate-ride", handleIceCandidate);
     socket.on("webrtc-audio-chunk", handleAudioChunk);
+
+    if (rideCallEndedEvent) socket.on(rideCallEndedEvent, handleCallEnded);
+    if (rideAnsweredEvent) socket.on(rideAnsweredEvent, handleCallAnswered);
+    if (rideIncomingCallEvent) socket.on(rideIncomingCallEvent, handleIncomingCall);
+    if (rideAudioChunkEvent) socket.on(rideAudioChunkEvent, handleAudioChunk);
 
     return () => {
       callAudio.stopRinging();
@@ -401,6 +412,11 @@ export default function DriverNavigation() {
       socket!.off("webrtc-offer-ride", handleOffer);
       socket!.off("webrtc-ice-candidate-ride", handleIceCandidate);
       socket!.off("webrtc-audio-chunk", handleAudioChunk);
+
+      if (rideCallEndedEvent) socket!.off(rideCallEndedEvent, handleCallEnded);
+      if (rideAnsweredEvent) socket!.off(rideAnsweredEvent, handleCallAnswered);
+      if (rideIncomingCallEvent) socket!.off(rideIncomingCallEvent, handleIncomingCall);
+      if (rideAudioChunkEvent) socket!.off(rideAudioChunkEvent, handleAudioChunk);
     };
   }, [rideId, ride?.id, user?.id]);
 
@@ -417,26 +433,32 @@ export default function DriverNavigation() {
     }
 
     const currentRideId = (rideId || ride?.id || "").toString();
+    const targetUserId = (ride?.rider_id || "").toString();
+
     if (currentRideId && socket) {
       voraSocket.joinRide(currentRideId);
+
+      // Lance la transmission vocale micro réelle et récupère l'offre WebRTC
+      const { offer } = await voraVoIP.startCall(socket, currentRideId, targetUserId || undefined);
+      setMicPermissionState(voraVoIP.micStatus === "denied" ? "denied" : "granted");
+
       socket.emit("webrtc-call-ride", {
         rideId: currentRideId,
         callerId: user?.id || "driver_me",
         callerName: user?.fullName || "Votre Chauffeur VORA",
+        targetUserId: targetUserId || undefined,
+        offer,
       });
 
-      // Lance la transmission vocale micro réelle
-      await voraVoIP.startCall(socket, currentRideId);
-    }
-
-    const targetUserId = ride?.rider_id;
-    if (targetUserId && socket) {
-      socket.emit("webrtc-call-user", {
-        targetUserId: targetUserId.toString(),
-        callerId: user?.id || "driver_me",
-        callerName: user?.fullName || "Votre Chauffeur VORA",
-        offer: { type: "offer", sdp: "sdp-audio-stream" },
-      });
+      if (targetUserId) {
+        socket.emit("webrtc-call-user", {
+          targetUserId,
+          callerId: user?.id || "driver_me",
+          callerName: user?.fullName || "Votre Chauffeur VORA",
+          offer,
+          rideId: currentRideId,
+        });
+      }
     }
 
     // Auto-connecter après 3s si pas de réponse (simulation VoIP)
@@ -457,15 +479,15 @@ export default function DriverNavigation() {
     voraVoIP.cleanup();
     const socket = voraSocket.getSocket();
     const currentRideId = (rideId || ride?.id || "").toString();
-    const targetUserId = ride?.rider_id;
+    const targetUserId = (ride?.rider_id || "").toString();
     if (currentRideId && socket) {
       socket.emit("webrtc-hangup-ride", {
         rideId: currentRideId,
-        targetUserId: targetUserId ? targetUserId.toString() : undefined,
+        targetUserId: targetUserId || undefined,
       });
     }
     if (targetUserId && socket) {
-      socket.emit("webrtc-hangup", { targetUserId: targetUserId.toString() });
+      socket.emit("webrtc-hangup", { targetUserId });
     }
     setCallStatus("ended");
     setTimeout(() => {
@@ -757,6 +779,30 @@ export default function DriverNavigation() {
                   : "Appel terminé"}
               </Text>
             </View>
+
+            {/* Si permission micro bloquée ou demande d'activation */}
+            {micPermissionState === "denied" && (
+              <TouchableOpacity
+                onPress={async () => {
+                  const res = await voraVoIP.initMicrophone();
+                  if (res) setMicPermissionState("granted");
+                }}
+                style={{
+                  backgroundColor: "rgba(239, 68, 68, 0.2)",
+                  borderColor: "#EF4444",
+                  borderWidth: 1,
+                  borderRadius: 12,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  marginBottom: 16,
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ color: "#FCA5A5", fontSize: 11, fontWeight: "700", textAlign: "center" }}>
+                  ⚠️ Micro bloqué : Touchez ici pour autoriser le microphone
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {/* Contrôles de l'Appel */}
             <View style={styles.callControlsRow}>

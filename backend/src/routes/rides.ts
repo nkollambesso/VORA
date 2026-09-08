@@ -232,7 +232,8 @@ router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const result = await query(
-      `SELECT r.*, d.vehicle_model, d.license_plate, d.color, d.vehicle_image, d.rating as driver_rating,
+      `SELECT r.*, d.user_id as driver_user_id, r.rider_id as rider_user_id,
+              d.vehicle_model, d.license_plate, d.color, d.vehicle_image, d.rating as driver_rating,
               u.name as driver_name, u.phone as driver_phone, u.avatar_url as driver_avatar
        FROM rides r
        LEFT JOIN drivers d ON r.driver_id = d.id

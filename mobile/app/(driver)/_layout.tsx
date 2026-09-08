@@ -27,6 +27,7 @@ export default function DriverLayout() {
       <Stack.Screen name="ride-request" options={{ headerShown: false, presentation: "transparentModal" }} />
       <Stack.Screen name="navigation" options={{ headerShown: false }} />
       <Stack.Screen name="earnings" options={{ headerShown: false }} />
+      <Stack.Screen name="profile" options={{ headerShown: false }} />
     </Stack>
   );
 }

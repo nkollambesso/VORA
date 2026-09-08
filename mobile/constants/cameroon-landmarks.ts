@@ -230,6 +230,54 @@ export const CAMEROON_LANDMARKS: CameroonLandmark[] = [
   },
 ];
 
+export const CAMEROON_CITIES = [
+  { name: "Yaoundé", lat: 3.8667, lng: 11.5167 },
+  { name: "Douala", lat: 4.0511, lng: 9.7679 },
+  { name: "Bafoussam", lat: 5.4778, lng: 10.4176 },
+  { name: "Garoua", lat: 9.3000, lng: 13.4000 },
+  { name: "Maroua", lat: 10.5900, lng: 14.3200 },
+  { name: "Bamenda", lat: 5.9600, lng: 10.1500 },
+  { name: "Kribi", lat: 2.9400, lng: 9.9100 },
+  { name: "Buea", lat: 4.1500, lng: 9.2400 },
+  { name: "Limbe", lat: 4.0200, lng: 9.2100 },
+];
+
+export function detectCityFromCoords(
+  lat?: number | null,
+  lng?: number | null,
+  address?: string | null
+): string {
+  // 1. Détection via l'adresse textuelle si disponible
+  if (address) {
+    const addrLower = address.toLowerCase();
+    for (const city of CAMEROON_CITIES) {
+      if (addrLower.includes(city.name.toLowerCase())) {
+        return city.name;
+      }
+    }
+  }
+
+  // 2. Détection par calcul de distance GPS vers le centre urbain le plus proche
+  if (typeof lat === "number" && typeof lng === "number" && !isNaN(lat) && !isNaN(lng)) {
+    let closestCity = "Yaoundé";
+    let minDistance = Infinity;
+
+    for (const city of CAMEROON_CITIES) {
+      const dLat = lat - city.lat;
+      const dLng = lng - city.lng;
+      const distSq = dLat * dLat + dLng * dLng;
+      if (distSq < minDistance) {
+        minDistance = distSq;
+        closestCity = city.name;
+      }
+    }
+    return closestCity;
+  }
+
+  // Par défaut capitale politique
+  return "Yaoundé";
+}
+
 function normalize(str: string): string {
   return str
     .toLowerCase()
@@ -238,18 +286,25 @@ function normalize(str: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
-export function searchLandmarks(query: string): CameroonLandmark[] {
+export function searchLandmarks(query: string, cityFilter?: string): CameroonLandmark[] {
   if (!query || query.trim().length < 1) return [];
   const qNorm = normalize(query);
+  const cityNorm = cityFilter ? normalize(cityFilter) : null;
+
   return CAMEROON_LANDMARKS.filter((item) => {
+    // Si un filtre de ville est actif, exclure impérativement toute autre ville
+    if (cityNorm && normalize(item.city) !== cityNorm) {
+      return false;
+    }
+
     const nameNorm = normalize(item.name);
     const zoneNorm = normalize(item.zone);
-    const cityNorm = normalize(item.city);
+    const cityItemNorm = normalize(item.city);
     const descNorm = normalize(item.description);
     return (
       nameNorm.includes(qNorm) ||
       zoneNorm.includes(qNorm) ||
-      cityNorm.includes(qNorm) ||
+      cityItemNorm.includes(qNorm) ||
       descNorm.includes(qNorm)
     );
   });

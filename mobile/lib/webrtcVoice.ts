@@ -3,7 +3,7 @@
  * 
  * Assure la transmission réelle bidirectionnelle de la voix entre le passager et le chauffeur.
  * Utilise l'API WebRTC native (RTCPeerConnection + STUN Google) et dispose d'un fallback
- * de streaming de fragments audio haute fidélité (Opus/WebM) via Socket.io.
+ * de streaming de fragments audio autonomes haute fidélité (Opus/WebM/WAV) via Socket.io.
  */
 
 import { Socket } from "socket.io-client";
@@ -12,11 +12,15 @@ class WebRTCVoiceManager {
   private pc: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
   private remoteAudio: HTMLAudioElement | null = null;
-  private mediaRecorder: any = null;
+  private isStreamingAudio = false;
+  private currentRecorder: any = null;
   private isMuted = false;
   private isConnected = false;
   private currentRideId: string | null = null;
   private socket: Socket | null = null;
+  private audioQueue: string[] = [];
+  private isPlayingQueue = false;
+  public micStatus: "granted" | "denied" | "prompt" | "unsupported" = "prompt";
 
   private iceServers = [
     { urls: "stun:stun.l.google.com:19302" },
@@ -25,11 +29,35 @@ class WebRTCVoiceManager {
   ];
 
   /**
+   * Déverrouille les restrictions de lecture audio du navigateur (Autoplay policy)
+   */
+  public unlockAudio() {
+    if (typeof window === "undefined") return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        if (ctx.state === "suspended") {
+          ctx.resume();
+        }
+        const buffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+      }
+    } catch (e) {
+      console.warn("[VoIP] unlockAudio:", e);
+    }
+  }
+
+  /**
    * Initialise le microphone local de l'utilisateur
    */
   public async initMicrophone(): Promise<MediaStream | null> {
     if (typeof window === "undefined" || !navigator?.mediaDevices?.getUserMedia) {
       console.warn("[VoIP] getUserMedia non supporté dans cet environnement.");
+      this.micStatus = "unsupported";
       return null;
     }
 
@@ -37,6 +65,8 @@ class WebRTCVoiceManager {
       if (this.localStream) {
         this.stopLocalStream();
       }
+
+      this.unlockAudio();
 
       this.localStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -47,10 +77,14 @@ class WebRTCVoiceManager {
         video: false,
       });
 
+      this.micStatus = "granted";
       console.log("🎤 [VoIP] Microphone capturé avec succès :", this.localStream.getAudioTracks().length, "pistes");
       return this.localStream;
-    } catch (err) {
+    } catch (err: any) {
       console.warn("⚠️ [VoIP] Erreur d'accès au microphone :", err);
+      if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
+        this.micStatus = "denied";
+      }
       return null;
     }
   }
@@ -75,13 +109,16 @@ class WebRTCVoiceManager {
   /**
    * Démarre une session d'appel WebRTC en tant qu'Appelant
    */
-  public async startCall(socket: Socket, rideId: string) {
+  public async startCall(socket: Socket, rideId: string, targetUserId?: string): Promise<{ offer?: any }> {
     this.socket = socket;
     this.currentRideId = rideId;
     this.isConnected = false;
 
+    this.unlockAudio();
     await this.initMicrophone();
-    this.setupPeerConnection();
+    this.setupPeerConnection(targetUserId);
+
+    let createdOffer: any = null;
 
     if (this.pc && this.localStream) {
       this.localStream.getTracks().forEach((track) => {
@@ -89,15 +126,16 @@ class WebRTCVoiceManager {
       });
 
       try {
-        const offer = await this.pc.createOffer({
+        createdOffer = await this.pc.createOffer({
           offerToReceiveAudio: true,
           offerToReceiveVideo: false,
         });
-        await this.pc.setLocalDescription(offer);
+        await this.pc.setLocalDescription(createdOffer);
 
         socket.emit("webrtc-offer-ride", {
           rideId,
-          offer,
+          offer: createdOffer,
+          targetUserId,
         });
         console.log("📤 [VoIP] Offre WebRTC émise pour la course", rideId);
       } catch (err) {
@@ -105,19 +143,22 @@ class WebRTCVoiceManager {
       }
     }
 
-    // Démarre le streaming audio de secours via WebSocket
-    this.startAudioChunkStreaming(socket, rideId);
+    // Démarre le streaming audio continu par fragments autonomes (garantit l'audio 100%)
+    this.startAutonomousAudioChunkStreaming(socket, rideId, targetUserId);
+
+    return { offer: createdOffer };
   }
 
   /**
    * Répond à un appel WebRTC entrant
    */
-  public async answerCall(socket: Socket, rideId: string, offer?: any) {
+  public async answerCall(socket: Socket, rideId: string, offer?: any, targetUserId?: string) {
     this.socket = socket;
     this.currentRideId = rideId;
 
+    this.unlockAudio();
     await this.initMicrophone();
-    this.setupPeerConnection();
+    this.setupPeerConnection(targetUserId);
 
     if (this.pc && this.localStream) {
       this.localStream.getTracks().forEach((track) => {
@@ -134,6 +175,7 @@ class WebRTCVoiceManager {
         socket.emit("webrtc-answer-ride", {
           rideId,
           answer,
+          targetUserId,
         });
         console.log("📤 [VoIP] Réponse WebRTC émise pour la course", rideId);
       } catch (err) {
@@ -141,8 +183,8 @@ class WebRTCVoiceManager {
       }
     }
 
-    // Démarre le streaming audio de secours via WebSocket
-    this.startAudioChunkStreaming(socket, rideId);
+    // Démarre le streaming audio continu par fragments autonomes (garantit l'audio 100%)
+    this.startAutonomousAudioChunkStreaming(socket, rideId, targetUserId);
   }
 
   /**
@@ -175,7 +217,7 @@ class WebRTCVoiceManager {
   /**
    * Configure l'instance RTCPeerConnection
    */
-  private setupPeerConnection() {
+  private setupPeerConnection(targetUserId?: string) {
     if (typeof window === "undefined" || !window.RTCPeerConnection) {
       console.warn("[VoIP] RTCPeerConnection non supporté.");
       return;
@@ -189,6 +231,7 @@ class WebRTCVoiceManager {
           this.socket.emit("webrtc-ice-candidate-ride", {
             rideId: this.currentRideId,
             candidate: event.candidate,
+            targetUserId,
           });
         }
       };
@@ -215,60 +258,116 @@ class WebRTCVoiceManager {
   }
 
   /**
-   * Streaming direct des paquets audio par WebSocket (Garantie de son même si WebRTC NAT bloque)
+   * Enregistre en continu des segments audio complets et autonomes (avec entêtes complètes)
+   * pour une retransmission vocale fluide et sans échec de décodage.
    */
-  private startAudioChunkStreaming(socket: Socket, rideId: string) {
+  private startAutonomousAudioChunkStreaming(socket: Socket, rideId: string, targetUserId?: string) {
     if (typeof window === "undefined" || !this.localStream) return;
 
-    try {
-      // @ts-ignore
-      const MediaRecorderClass = window.MediaRecorder;
-      if (!MediaRecorderClass) return;
+    // @ts-ignore
+    const MediaRecorderClass = window.MediaRecorder;
+    if (!MediaRecorderClass) return;
 
-      const mimeType = MediaRecorderClass.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : MediaRecorderClass.isTypeSupported("audio/ogg;codecs=opus")
-        ? "audio/ogg;codecs=opus"
-        : "";
+    this.isStreamingAudio = true;
 
-      this.mediaRecorder = mimeType
-        ? new MediaRecorderClass(this.localStream, { mimeType })
-        : new MediaRecorderClass(this.localStream);
+    const mimeType = MediaRecorderClass.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus"
+      : MediaRecorderClass.isTypeSupported("audio/ogg;codecs=opus")
+      ? "audio/ogg;codecs=opus"
+      : "";
 
-      this.mediaRecorder.ondataavailable = (event: any) => {
-        if (event.data && event.data.size > 0 && socket && !this.isMuted) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64data = reader.result as string;
-            socket.emit("webrtc-audio-chunk", {
-              rideId,
-              audioBase64: base64data,
-            });
-          };
-          reader.readAsDataURL(event.data);
-        }
-      };
+    const captureChunk = () => {
+      if (!this.isStreamingAudio || !this.localStream) return;
 
-      // Émet un paquet audio toutes les 350ms pour une transmission continue et fluide
-      this.mediaRecorder.start(350);
-      console.log("🎙️ [VoIP] Enregistrement & retransmission vocale continue actif (350ms chunks)");
-    } catch (err) {
-      console.warn("⚠️ [VoIP] Échec initialisation MediaRecorder:", err);
-    }
+      try {
+        const recorder = mimeType
+          ? new MediaRecorderClass(this.localStream, { mimeType })
+          : new MediaRecorderClass(this.localStream);
+
+        this.currentRecorder = recorder;
+
+        recorder.ondataavailable = (event: any) => {
+          if (event.data && event.data.size > 200 && socket && !this.isMuted) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const base64data = reader.result as string;
+              socket.emit("webrtc-audio-chunk", {
+                rideId,
+                audioBase64: base64data,
+                targetUserId,
+              });
+            };
+            reader.readAsDataURL(event.data);
+          }
+        };
+
+        recorder.start();
+
+        // Stoppe après 450ms pour finaliser un fichier audio WebM/Opus complet avec header
+        setTimeout(() => {
+          try {
+            if (recorder.state === "recording") {
+              recorder.stop();
+            }
+          } catch {}
+
+          if (this.isStreamingAudio) {
+            captureChunk();
+          }
+        }, 450);
+      } catch (err) {
+        console.warn("⚠️ [VoIP] Erreur capture chunk audio :", err);
+      }
+    };
+
+    captureChunk();
+    console.log("🎙️ [VoIP] Retransmission vocale haute fidélité active (450ms discrete segments)");
   }
 
   /**
-   * Joue un fragment audio reçu via WebSocket (Fallback direct)
+   * Joue un fragment audio reçu via une file d'attente séquentielle (zéro coupure ni conflit)
    */
   public playAudioChunk(audioBase64: string) {
     if (!audioBase64 || typeof document === "undefined") return;
 
+    this.unlockAudio();
+    this.audioQueue.push(audioBase64);
+
+    if (!this.isPlayingQueue) {
+      this.processAudioQueue();
+    }
+  }
+
+  private processAudioQueue() {
+    if (this.audioQueue.length === 0) {
+      this.isPlayingQueue = false;
+      return;
+    }
+
+    this.isPlayingQueue = true;
+    const chunkData = this.audioQueue.shift()!;
+
     try {
-      const audio = new Audio(audioBase64);
+      const audio = new Audio(chunkData);
       audio.volume = 1.0;
-      audio.play().catch(() => {});
-    } catch (e) {
-      // Erreur de lecture silencieuse
+
+      const advance = () => {
+        audio.onended = null;
+        audio.onerror = null;
+        this.processAudioQueue();
+      };
+
+      audio.onended = advance;
+      audio.onerror = advance;
+
+      const promise = audio.play();
+      if (promise !== undefined) {
+        promise.catch(() => {
+          advance();
+        });
+      }
+    } catch {
+      this.processAudioQueue();
     }
   }
 
@@ -308,13 +407,16 @@ class WebRTCVoiceManager {
    */
   public cleanup() {
     console.log("🛑 [VoIP] Clôture et libération des ressources audio WebRTC.");
+    this.isStreamingAudio = false;
     this.stopLocalStream();
 
-    if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
+    if (this.currentRecorder) {
       try {
-        this.mediaRecorder.stop();
-      } catch (e) {}
-      this.mediaRecorder = null;
+        if (this.currentRecorder.state !== "inactive") {
+          this.currentRecorder.stop();
+        }
+      } catch {}
+      this.currentRecorder = null;
     }
 
     if (this.pc) {
@@ -333,6 +435,8 @@ class WebRTCVoiceManager {
       this.remoteAudio = null;
     }
 
+    this.audioQueue = [];
+    this.isPlayingQueue = false;
     this.isConnected = false;
     this.currentRideId = null;
     this.socket = null;

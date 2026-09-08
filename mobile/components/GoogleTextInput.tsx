@@ -3,9 +3,10 @@ import React, { useState } from "react";
 import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 import { icons } from "@/constants";
-import { searchLandmarks, CameroonLandmark } from "@/constants/cameroon-landmarks";
+import { searchLandmarks, CameroonLandmark, detectCityFromCoords } from "@/constants/cameroon-landmarks";
 import { parseInformalCameroonianLocation, parseWithGeminiAI, AILocationResult } from "@/lib/aiLocationParser";
 import { GoogleInputProps } from "@/types/type";
+import { useLocationStore } from "@/store";
 
 const geoapifyKey = process.env.EXPO_PUBLIC_GEOAPIFY_API_KEY || process.env.EXPO_PUBLIC_PLACES_API_KEY;
 
@@ -16,6 +17,9 @@ const GoogleTextInput = ({
   textInputBackgroundColor,
   handlePress,
 }: GoogleInputProps) => {
+  const { userLatitude, userLongitude, userAddress } = useLocationStore();
+  const currentCity = detectCityFromCoords(userLatitude, userLongitude, userAddress);
+
   const [inputText, setInputText] = useState("");
   const [landmarkMatches, setLandmarkMatches] = useState<CameroonLandmark[]>([]);
   const [geoapifyMatches, setGeoapifyMatches] = useState<any[]>([]);
@@ -27,12 +31,29 @@ const GoogleTextInput = ({
       return;
     }
     try {
+      const proximity = (userLongitude && userLatitude) ? `&bias=proximity:${userLongitude},${userLatitude}` : "";
       const res = await fetch(
-        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(text)}&filter=countrycode:cm&apiKey=${geoapifyKey}`
+        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(text)}&filter=countrycode:cm${proximity}&apiKey=${geoapifyKey}`
       );
       const data = await res.json();
       if (data?.features && Array.isArray(data.features)) {
-        setGeoapifyMatches(data.features.slice(0, 5));
+        // Filtrage strict : les courses VORA ne sortent pas de la ville actuelle !
+        const cityNorm = currentCity.toLowerCase();
+        const filtered = data.features.filter((f: any) => {
+          const p = f.properties || {};
+          const cityProp = (p.city || p.county || p.state || "").toLowerCase();
+          const formatted = (p.formatted || "").toLowerCase();
+
+          // Rejeter formellement si le résultat appartient à une autre grande ville camerounaise
+          const otherCities = ["yaounde", "yaoundé", "douala", "bafoussam", "garoua", "maroua", "kribi", "bamenda", "limbe", "buea"];
+          for (const oc of otherCities) {
+            if (oc !== cityNorm && (cityProp.includes(oc) || formatted.includes(oc))) {
+              return false;
+            }
+          }
+          return true;
+        });
+        setGeoapifyMatches(filtered.slice(0, 5));
       }
     } catch (e) {
       // ignore network error
@@ -48,17 +69,33 @@ const GoogleTextInput = ({
       return;
     }
 
+    const cityNorm = currentCity.toLowerCase();
+
     // 1. Local IA Natural Language Parser (0ms)
     const localParsed = parseInformalCameroonianLocation(text);
-    setAiMatch(localParsed);
+    if (localParsed) {
+      const sub = (localParsed.subtitle || "").toLowerCase();
+      const otherCities = ["yaounde", "yaoundé", "douala", "bafoussam", "garoua", "kribi"];
+      const isOtherCity = otherCities.some((oc) => oc !== cityNorm && sub.includes(oc));
+      if (!isOtherCity) {
+        setAiMatch(localParsed);
+      }
+    }
 
     // 2. Google Gemini API Call (live LLM)
     parseWithGeminiAI(text).then((geminiResult) => {
-      if (geminiResult) setAiMatch(geminiResult);
+      if (geminiResult) {
+        const sub = (geminiResult.subtitle || "").toLowerCase();
+        const otherCities = ["yaounde", "yaoundé", "douala", "bafoussam", "garoua", "kribi"];
+        const isOtherCity = otherCities.some((oc) => oc !== cityNorm && sub.includes(oc));
+        if (!isOtherCity) {
+          setAiMatch(geminiResult);
+        }
+      }
     });
 
-    // 3. Local Cameroon Landmarks
-    const matches = searchLandmarks(text);
+    // 3. Local Cameroon Landmarks (Strictement filtré par la ville actuelle de l'usager)
+    const matches = searchLandmarks(text, currentCity);
     setLandmarkMatches(matches);
 
     // 4. Geoapify API

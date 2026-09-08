@@ -479,6 +479,14 @@ export default function DriverDashboard() {
             </TouchableOpacity>
 
             <TouchableOpacity
+              onPress={() => router.push("/(driver)/profile" as any)}
+              style={[styles.earningsBtn, { backgroundColor: "rgba(14,165,233,0.2)", borderColor: "rgba(14,165,233,0.5)" }]}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.earningsBtnText, { color: "#38bdf8" }]}>Mon Profil</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               onPress={() => router.push("/(driver)/earnings" as any)}
               style={styles.earningsBtn}
               activeOpacity={0.8}
@@ -523,7 +531,7 @@ export default function DriverDashboard() {
             </View>
             <TouchableOpacity
               style={styles.editVehicleBtn}
-              onPress={() => setIsRegisterModalOpen(true)}
+              onPress={() => router.push("/(driver)/profile" as any)}
             >
               <Text style={styles.editVehicleBtnText}>
                 {driverProfile ? "Modifier le Véhicule" : "Enregistrer Véhicule"}
