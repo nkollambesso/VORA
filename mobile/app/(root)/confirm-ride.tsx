@@ -322,11 +322,6 @@ export default function ConfirmRide() {
       }
     };
 
-    const rideCallEndedEvent = currentRideId ? `webrtc-call-ended:${currentRideId}` : "";
-    const rideAnsweredEvent = currentRideId ? `webrtc-call-answered:${currentRideId}` : "";
-    const rideIncomingCallEvent = currentRideId ? `webrtc-incoming-call:${currentRideId}` : "";
-    const rideAudioChunkEvent = currentRideId ? `webrtc-audio-chunk:${currentRideId}` : "";
-
     socket.on("receive-chat-message", handleIncomingChatMessage);
     socket.on("webrtc-call-answered", handleCallAnswered);
     socket.on("webrtc-answer-ride", handleCallAnswered);
@@ -335,11 +330,6 @@ export default function ConfirmRide() {
     socket.on("webrtc-offer-ride", handleOffer);
     socket.on("webrtc-ice-candidate-ride", handleIceCandidate);
     socket.on("webrtc-audio-chunk", handleAudioChunk);
-
-    if (rideCallEndedEvent) socket.on(rideCallEndedEvent, handleCallEnded);
-    if (rideAnsweredEvent) socket.on(rideAnsweredEvent, handleCallAnswered);
-    if (rideIncomingCallEvent) socket.on(rideIncomingCallEvent, handleIncomingCall);
-    if (rideAudioChunkEvent) socket.on(rideAudioChunkEvent, handleAudioChunk);
 
     return () => {
       callAudio.stopRinging();
@@ -351,11 +341,6 @@ export default function ConfirmRide() {
       socket!.off("webrtc-offer-ride", handleOffer);
       socket!.off("webrtc-ice-candidate-ride", handleIceCandidate);
       socket!.off("webrtc-audio-chunk", handleAudioChunk);
-
-      if (rideCallEndedEvent) socket!.off(rideCallEndedEvent, handleCallEnded);
-      if (rideAnsweredEvent) socket!.off(rideAnsweredEvent, handleCallAnswered);
-      if (rideIncomingCallEvent) socket!.off(rideIncomingCallEvent, handleIncomingCall);
-      if (rideAudioChunkEvent) socket!.off(rideAudioChunkEvent, handleAudioChunk);
     };
   }, [rideId, user?.id, ride?.id]);
 

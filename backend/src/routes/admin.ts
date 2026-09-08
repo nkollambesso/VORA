@@ -1,19 +1,17 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../db';
 import * as crypto from 'crypto';
+import bcrypt from 'bcrypt';
 
 const router = Router();
 
-// ─── Environment Fallbacks ──────────────────────────────────────────────────
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@vora.cm').trim().toLowerCase();
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'VoraAdmin2025!';
+// ─── Environment Configuration ──────────────────────────────────────────────
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const ADMIN_COMMISSION_RATE = parseFloat(process.env.ADMIN_COMMISSION_RATE || '0.10');
 
 const activeSessions = new Map<string, { email: string; expiresAt: number }>();
 
-function sha256(input: string): string {
-  return crypto.createHash('sha256').update(input).digest('hex');
-}
 function generateSessionToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
@@ -27,8 +25,12 @@ async function ensureAdminTables() {
     await query(`CREATE TABLE IF NOT EXISTS support_calls (id SERIAL PRIMARY KEY, user_id VARCHAR(255), user_name VARCHAR(255), user_role VARCHAR(50), reason TEXT NOT NULL, status VARCHAR(50) DEFAULT 'PENDING', assigned_to VARCHAR(255), ride_id VARCHAR(100) REFERENCES rides(id) ON DELETE SET NULL, created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, resolved_at TIMESTAMP WITH TIME ZONE);`);
     await query(`ALTER TABLE support_calls DROP CONSTRAINT IF EXISTS support_calls_user_id_fkey;`);
     await query(`DELETE FROM drivers WHERE user_id IN ('driver-user-1', 'driver-user-2'); DELETE FROM users WHERE id IN ('driver-user-1', 'driver-user-2');`);
-    await query(`INSERT INTO admin_accounts (email, password_hash, name, role) VALUES ($1, $2, 'Super Administrateur VORA', 'SUPER_ADMIN') ON CONFLICT (email) DO NOTHING;`, [ADMIN_EMAIL, sha256(ADMIN_PASSWORD)]);
-    await query(`INSERT INTO admin_wallet (admin_email, total_commissions, commission_rate) VALUES ($1, 0, $2) ON CONFLICT (admin_email) DO NOTHING;`, [ADMIN_EMAIL, ADMIN_COMMISSION_RATE]);
+    // Insérer l'admin par défaut uniquement si les credentials sont configurés
+    if (ADMIN_EMAIL && ADMIN_PASSWORD) {
+      const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+      await query(`INSERT INTO admin_accounts (email, password_hash, name, role) VALUES ($1, $2, 'Super Administrateur VORA', 'SUPER_ADMIN') ON CONFLICT (email) DO NOTHING;`, [ADMIN_EMAIL, passwordHash]);
+    }
+    await query(`INSERT INTO admin_wallet (admin_email, total_commissions, commission_rate) VALUES ($1, 0, $2) ON CONFLICT (admin_email) DO NOTHING;`, [ADMIN_EMAIL || 'admin@vora.cm', ADMIN_COMMISSION_RATE]);
     console.log('[ADMIN DB] Tables initialisees.');
   } catch (err) { console.error('[ADMIN DB] Erreur init:', err); }
 }
@@ -43,12 +45,23 @@ async function isKnownAdminEmail(email: string): Promise<boolean> {
 
 async function authenticateAdmin(email: string, password: string): Promise<{ valid: boolean; adminRecord?: any }> {
   const clean = email.trim().toLowerCase();
-  const passwordHash = sha256(password);
   try {
     const res = await query('SELECT * FROM admin_accounts WHERE LOWER(email) = $1', [clean]);
-    if (res.rows.length > 0) { const admin = res.rows[0]; if (admin.password_hash === passwordHash) return { valid: true, adminRecord: admin }; return { valid: false }; }
+    if (res.rows.length > 0) {
+      const admin = res.rows[0];
+      // Vérifier avec bcrypt si le hash est un bcrypt hash, sinon fallback sha256 pour migration
+      if (admin.password_hash.startsWith('$2')) {
+        const match = await bcrypt.compare(password, admin.password_hash);
+        if (match) return { valid: true, adminRecord: admin };
+      } else {
+        // Legacy sha256 — accepter mais on ne stocke plus en sha256
+        const crypto = await import('crypto');
+        const sha256 = (input: string) => crypto.createHash('sha256').update(input).digest('hex');
+        if (admin.password_hash === sha256(password)) return { valid: true, adminRecord: admin };
+      }
+      return { valid: false };
+    }
   } catch {}
-  if (clean === ADMIN_EMAIL && password === ADMIN_PASSWORD) return { valid: true, adminRecord: { email: ADMIN_EMAIL, name: 'Super Admin', role: 'SUPER_ADMIN' } };
   return { valid: false };
 }
 
@@ -107,7 +120,8 @@ router.post('/admins', requireAdminAuth, async (req: Request, res: Response) => 
     const cleanEmail = email.trim().toLowerCase();
     const existing = await query('SELECT id FROM admin_accounts WHERE LOWER(email) = $1', [cleanEmail]);
     if (existing.rows.length > 0) return res.status(400).json({ success: false, error: 'Email deja utilise.' });
-    const result = await query(`INSERT INTO admin_accounts (email, password_hash, name, role) VALUES ($1, $2, $3, $4) RETURNING id, email, name, role, created_at`, [cleanEmail, sha256(password), name?.trim() || 'Administrateur VORA', safeRole]);
+    const passwordHash = await bcrypt.hash(password, 10);
+    const result = await query(`INSERT INTO admin_accounts (email, password_hash, name, role) VALUES ($1, $2, $3, $4) RETURNING id, email, name, role, created_at`, [cleanEmail, passwordHash, name?.trim() || 'Administrateur VORA', safeRole]);
     return res.status(201).json({ success: true, admin: result.rows[0] });
   } catch { return res.status(500).json({ success: false, error: 'Erreur creation.' }); }
 });
@@ -155,7 +169,8 @@ router.put('/change-password', requireAdminAuth, async (req: Request, res: Respo
     if (newPassword.length < 8) return res.status(400).json({ success: false, error: 'Min 8 caracteres.' });
     const authResult = await authenticateAdmin(currentAdminEmail, currentPassword);
     if (!authResult.valid) return res.status(401).json({ success: false, error: 'Mot de passe actuel incorrect.' });
-    await query(`UPDATE admin_accounts SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE LOWER(email) = $2`, [sha256(newPassword), currentAdminEmail]);
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    await query(`UPDATE admin_accounts SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE LOWER(email) = $2`, [newPasswordHash, currentAdminEmail]);
     return res.json({ success: true, message: 'Mot de passe modifie.' });
   } catch { return res.status(500).json({ success: false, error: 'Erreur changement mot de passe.' }); }
 });
@@ -186,10 +201,11 @@ router.get('/wallet', requireAdminAuth, async (req: Request, res: Response) => {
     const adminEmail = (req as any).adminEmail;
     let walletRes = await query('SELECT * FROM admin_wallet WHERE admin_email = $1', [adminEmail]);
     if (walletRes.rows.length === 0) walletRes = await query('SELECT * FROM admin_wallet ORDER BY id ASC LIMIT 1');
-    const rate = walletRes.rows[0]?.commission_rate || ADMIN_COMMISSION_RATE;
-    const recent = await query(`SELECT r.id, r.fare_fcfa, r.created_at, u.name as rider_name, ROUND(r.fare_fcfa * $1) as commission_amount FROM rides r LEFT JOIN users u ON u.id = r.rider_id WHERE r.status = 'COMPLETED' AND r.payment_status = 'PAID' ORDER BY r.created_at DESC LIMIT 20`, [rate]);
-    return res.json({ success: true, wallet: walletRes.rows[0] || { total_commissions: 0, commission_rate: ADMIN_COMMISSION_RATE }, recent_commissions: recent.rows });
-  } catch { return res.status(500).json({ success: false, error: 'Erreur portefeuille.' }); }
+    const rate = parseFloat(walletRes.rows[0]?.commission_rate) || ADMIN_COMMISSION_RATE;
+    const recent = await query(`SELECT r.id, r.fare_fcfa, r.created_at, u.name as rider_name FROM rides r LEFT JOIN users u ON u.id = r.rider_id WHERE r.status = 'COMPLETED' AND r.payment_status = 'PAID' ORDER BY r.created_at DESC LIMIT 20`);
+    const recentWithCommission = recent.rows.map((r: any) => ({ ...r, commission_amount: Math.round((r.fare_fcfa || 0) * rate) }));
+    return res.json({ success: true, wallet: walletRes.rows[0] || { total_commissions: 0, commission_rate: ADMIN_COMMISSION_RATE }, recent_commissions: recentWithCommission });
+  } catch (err: any) { console.error('[ADMIN WALLET] Erreur:', err?.message); return res.status(500).json({ success: false, error: 'Erreur portefeuille.' }); }
 });
 
 router.put('/wallet/rate', requireAdminAuth, async (req: Request, res: Response) => {

@@ -15,20 +15,27 @@ router.post('/auth-ticket', async (req: Request, res: Response) => {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // STRICTEMENT réservé au chauffeur test officiel VORA
-    if (cleanEmail === 'driver@vora.cm' && password === 'VoraDriver2025!') {
-      const clerkSecret = process.env.CLERK_SECRET_KEY || 'sk_test_RUUzP93YfXl0woft7amjpHxWp0N7KB83AGIkazGFyX';
+    // Compte chauffeur de test — identifiants via variables d'environnement
+    const testDriverEmail = process.env.TEST_DRIVER_EMAIL || '';
+    const testDriverPassword = process.env.TEST_DRIVER_PASSWORD || '';
+    const testDriverUserId = process.env.TEST_DRIVER_USER_ID || '';
+    if (testDriverEmail && testDriverPassword && testDriverUserId &&
+        cleanEmail === testDriverEmail.toLowerCase() && password === testDriverPassword) {
+      const clerkSecret = process.env.CLERK_SECRET_KEY;
+      if (!clerkSecret) {
+        return res.status(500).json({ success: false, error: 'CLERK_SECRET_KEY non configuré.' });
+      }
       const clerkRes = await fetch('https://api.clerk.com/v1/sign_in_tokens', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${clerkSecret}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ user_id: 'user_3J0e6Cia2ik2J0ThgjtinPV8ySe' }),
+        body: JSON.stringify({ user_id: testDriverUserId }),
       });
       const data: any = await clerkRes.json();
       if (data.token) {
-        return res.json({ success: true, ticket: data.token, userId: 'user_3J0e6Cia2ik2J0ThgjtinPV8ySe' });
+        return res.json({ success: true, ticket: data.token, userId: testDriverUserId });
       }
     }
 

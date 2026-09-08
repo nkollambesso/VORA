@@ -358,17 +358,9 @@ export function setupSocketIO(io: any) {
         offer: data.offer,
         rideId: data.rideId,
       });
-      if (data.rideId) {
-        io.emit(`webrtc-incoming-call:${data.rideId}`, {
-          callerId: data.callerId,
-          callerName: data.callerName,
-          offer: data.offer,
-          rideId: data.rideId,
-        });
-      }
     });
 
-    // Approche 2 : ciblage par rideId (le + fiable — broadcast room + événement direct + lookup DB)
+    // Approche 2 : ciblage par rideId (le + fiable — room + lookup DB)
     socket.on('webrtc-call-ride', async (data: { rideId: string; callerId: string; callerName: string; targetUserId?: string; offer?: any }) => {
       const payload = {
         callerId: data.callerId,
@@ -377,18 +369,15 @@ export function setupSocketIO(io: any) {
         offer: data.offer,
       };
 
-      // 1. Room de la course
-      socket.to(`ride:${data.rideId}`).emit('webrtc-incoming-call', payload);
-
-      // 2. Événement dédié pour synchronisation instantanée
-      io.emit(`webrtc-incoming-call:${data.rideId}`, payload);
-
-      // 3. Destinataire direct si spécifié
+      // 1. Destinataire direct si spécifié
       if (data.targetUserId) {
         io.to(data.targetUserId).emit('webrtc-incoming-call', payload);
       }
 
-      // 4. Lookup en base pour garantir la transmission au passager ou au chauffeur
+      // 2. Room de la course (sauf l'émetteur)
+      socket.to(`ride:${data.rideId}`).emit('webrtc-incoming-call', payload);
+
+      // 3. Lookup en base pour garantir la transmission au passager ou au chauffeur
       try {
         const rideRes = await query(
           `SELECT r.rider_id, d.user_id as driver_user_id 
@@ -413,65 +402,59 @@ export function setupSocketIO(io: any) {
 
     // Échange d'Offre WebRTC Audio
     socket.on('webrtc-offer-ride', (data: { rideId: string; offer: any; callerId?: string; targetUserId?: string }) => {
-      socket.to(`ride:${data.rideId}`).emit('webrtc-offer-ride', data);
-      io.emit(`webrtc-offer-ride:${data.rideId}`, data);
       if (data.targetUserId) {
         io.to(data.targetUserId).emit('webrtc-offer-ride', data);
+      } else {
+        socket.to(`ride:${data.rideId}`).emit('webrtc-offer-ride', data);
       }
     });
 
     // Réponse à l'appel WebRTC Audio (par rideId)
     socket.on('webrtc-answer-ride', async (data: { rideId: string; answer?: any; callerId?: string; targetUserId?: string }) => {
+      // Envoyer la réponse au caller original via la room
       socket.to(`ride:${data.rideId}`).emit('webrtc-call-answered', data);
       socket.to(`ride:${data.rideId}`).emit('webrtc-answer-ride', data);
-      io.emit(`webrtc-call-answered:${data.rideId}`, data);
+      // Also target directly
       if (data.targetUserId) {
         io.to(data.targetUserId).emit('webrtc-call-answered', data);
+        io.to(data.targetUserId).emit('webrtc-answer-ride', data);
       }
       if (data.callerId) {
         io.to(data.callerId).emit('webrtc-call-answered', data);
+        io.to(data.callerId).emit('webrtc-answer-ride', data);
       }
-      try {
-        const rideRes = await query(
-          `SELECT r.rider_id, d.user_id as driver_user_id 
-           FROM rides r 
-           LEFT JOIN drivers d ON r.driver_id = d.id 
-           WHERE r.id = $1`,
-          [data.rideId]
-        );
-        if (rideRes.rows.length > 0) {
-          const r = rideRes.rows[0];
-          io.to(r.rider_id).emit('webrtc-call-answered', data);
-          if (r.driver_user_id) io.to(r.driver_user_id).emit('webrtc-call-answered', data);
-        }
-      } catch {}
     });
 
     // Échange ICE Candidate (connexion P2P directe)
     socket.on('webrtc-ice-candidate-ride', (data: { rideId: string; candidate: any; targetUserId?: string }) => {
-      socket.to(`ride:${data.rideId}`).emit('webrtc-ice-candidate-ride', data);
-      io.emit(`webrtc-ice-candidate-ride:${data.rideId}`, data);
       if (data.targetUserId) {
         io.to(data.targetUserId).emit('webrtc-ice-candidate-ride', data);
+      } else {
+        socket.to(`ride:${data.rideId}`).emit('webrtc-ice-candidate-ride', data);
       }
     });
 
     // Streaming de fragments audio en direct (Fallback fiable 100%)
     socket.on('webrtc-audio-chunk', (data: { rideId: string; audioBase64: string; targetUserId?: string }) => {
-      socket.to(`ride:${data.rideId}`).emit('webrtc-audio-chunk', data);
-      io.emit(`webrtc-audio-chunk:${data.rideId}`, data);
+      // Transmettre UNIQUEMENT au destinataire ciblé pour éviter les doublons
       if (data.targetUserId) {
         io.to(data.targetUserId).emit('webrtc-audio-chunk', data);
+      } else {
+        // Fallback : envoyer à la room de la course (sauf l'émetteur)
+        socket.to(`ride:${data.rideId}`).emit('webrtc-audio-chunk', data);
       }
     });
 
-    // Raccrochage universel (diffuse à la room de la course, événement direct et utilisateurs)
+    // Raccrochage universel (diffuse à la room de la course et au destinataire direct)
     socket.on('webrtc-hangup-ride', async (data: { rideId: string; targetUserId?: string }) => {
-      socket.to(`ride:${data.rideId}`).emit('webrtc-call-ended', { rideId: data.rideId });
-      io.emit(`webrtc-call-ended:${data.rideId}`, { rideId: data.rideId });
+      const hangupPayload = { rideId: data.rideId };
+      // Envoyer à la room sauf l'émetteur
+      socket.to(`ride:${data.rideId}`).emit('webrtc-call-ended', hangupPayload);
+      // Envoyer au destinataire direct
       if (data.targetUserId) {
-        io.to(data.targetUserId).emit('webrtc-call-ended', { rideId: data.rideId });
+        io.to(data.targetUserId).emit('webrtc-call-ended', hangupPayload);
       }
+      // Lookup DB pour double garantie
       try {
         const rideRes = await query(
           `SELECT r.rider_id, d.user_id as driver_user_id 
@@ -482,8 +465,12 @@ export function setupSocketIO(io: any) {
         );
         if (rideRes.rows.length > 0) {
           const r = rideRes.rows[0];
-          io.to(r.rider_id).emit('webrtc-call-ended', { rideId: data.rideId });
-          if (r.driver_user_id) io.to(r.driver_user_id).emit('webrtc-call-ended', { rideId: data.rideId });
+          if (r.rider_id && r.rider_id !== data.targetUserId) {
+            io.to(r.rider_id).emit('webrtc-call-ended', hangupPayload);
+          }
+          if (r.driver_user_id && r.driver_user_id !== data.targetUserId) {
+            io.to(r.driver_user_id).emit('webrtc-call-ended', hangupPayload);
+          }
         }
       } catch {}
       console.log(`📴 [CALL] Raccrochage dans la course ${data.rideId}`);

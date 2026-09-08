@@ -131,8 +131,12 @@ const Welcome = () => {
   const flatRef = useRef<any>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  // Tablet/Desktop OR Landscape mode threshold
-  const isWide = width >= 768 || (width > height && height < 550);
+  // Sur Web dans le simulateur mobile (414px) ou écran mobile, containerWidth reflète la vraie largeur d'affichage
+  const initialWidth = Platform.OS === "web" && width > 500 ? 390 : width;
+  const [containerWidth, setContainerWidth] = useState(initialWidth);
+
+  // Mode large 2 colonnes UNIQUEMENT si le conteneur lui-même fait >= 768px (vrai écran tablette ou plein écran)
+  const isWide = containerWidth >= 768;
   const isLast = activeIndex === onboarding.length - 1;
 
   const currentSlide = onboarding[activeIndex];
@@ -146,7 +150,7 @@ const Welcome = () => {
       const next = activeIndex + 1;
       if (!isWide) {
         flatRef.current?.scrollToOffset({
-          offset: next * width,
+          offset: next * containerWidth,
           animated: true,
         });
       }
@@ -155,8 +159,8 @@ const Welcome = () => {
   };
 
   const onScroll = (e: any) => {
-    if (width <= 0) return;
-    const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+    if (containerWidth <= 0) return;
+    const idx = Math.round(e.nativeEvent.contentOffset.x / containerWidth);
     if (idx >= 0 && idx < onboarding.length && idx !== activeIndex) {
       setActiveIndex(idx);
     }
@@ -165,7 +169,15 @@ const Welcome = () => {
   return (
     <SafeAreaView style={isWide ? styles.rootWide : styles.rootMobile}>
       {/* Centered card for Wide view vs Full screen for Mobile view */}
-      <View style={isWide ? styles.cardWrapperWide : styles.containerMobile}>
+      <View
+        onLayout={(e) => {
+          const w = e.nativeEvent.layout.width;
+          if (w > 0 && Math.abs(w - containerWidth) > 5) {
+            setContainerWidth(w);
+          }
+        }}
+        style={isWide ? styles.cardWrapperWide : styles.containerMobile}
+      >
         {/* Header bar: Logo + Skip */}
         <View style={styles.header}>
           <View style={styles.logoBadge}>
@@ -242,7 +254,7 @@ const Welcome = () => {
                 data={onboarding}
                 keyExtractor={(item) => item.id.toString()}
                 renderItem={({ item, index }) => (
-                  <View style={[styles.slideMobile, { width: width }]}>
+                  <View style={[styles.slideMobile, { width: containerWidth }]}>
                     {/* Driver Card Badge */}
                     <View style={styles.mobileDriverWrapper}>
                       <OnboardingDriverCard
@@ -281,8 +293,8 @@ const Welcome = () => {
                 scrollEventThrottle={16}
                 style={styles.flatListMobile}
                 getItemLayout={(_, index) => ({
-                  length: width,
-                  offset: width * index,
+                  length: containerWidth,
+                  offset: containerWidth * index,
                   index,
                 })}
               />

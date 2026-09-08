@@ -260,6 +260,7 @@ class WebRTCVoiceManager {
   /**
    * Enregistre en continu des segments audio complets et autonomes (avec entêtes complètes)
    * pour une retransmission vocale fluide et sans échec de décodage.
+   * Utilise timeslice pour des callbacks réguliers et un flux continu.
    */
   private startAutonomousAudioChunkStreaming(socket: Socket, rideId: string, targetUserId?: string) {
     if (typeof window === "undefined" || !this.localStream) return;
@@ -276,62 +277,97 @@ class WebRTCVoiceManager {
       ? "audio/ogg;codecs=opus"
       : "";
 
-    const captureChunk = () => {
+    let recorder: any = null;
+
+    const sendChunk = (blob: Blob) => {
+      if (!blob || blob.size < 100 || !socket || this.isMuted) return;
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64data = reader.result as string;
+        if (base64data && socket.connected) {
+          socket.emit("webrtc-audio-chunk", {
+            rideId,
+            audioBase64: base64data,
+            targetUserId,
+          });
+        }
+      };
+      reader.readAsDataURL(blob);
+    };
+
+    const startRecording = () => {
       if (!this.isStreamingAudio || !this.localStream) return;
 
       try {
-        const recorder = mimeType
+        recorder = mimeType
           ? new MediaRecorderClass(this.localStream, { mimeType })
           : new MediaRecorderClass(this.localStream);
 
         this.currentRecorder = recorder;
 
         recorder.ondataavailable = (event: any) => {
-          if (event.data && event.data.size > 200 && socket && !this.isMuted) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              const base64data = reader.result as string;
-              socket.emit("webrtc-audio-chunk", {
-                rideId,
-                audioBase64: base64data,
-                targetUserId,
-              });
-            };
-            reader.readAsDataURL(event.data);
+          if (event.data && event.data.size > 100) {
+            sendChunk(event.data);
           }
         };
 
-        recorder.start();
+        recorder.onstop = () => {
+          // Redémarrer immédiatement pour un flux continu
+          if (this.isStreamingAudio) {
+            startRecording();
+          }
+        };
 
-        // Stoppe après 450ms pour finaliser un fichier audio WebM/Opus complet avec header
+        recorder.onerror = () => {
+          if (this.isStreamingAudio) {
+            setTimeout(startRecording, 200);
+          }
+        };
+
+        // Utilise timeslice=300ms pour des callbacks réguliers
+        // puis stop pour finaliser le fichier audio avec header complet
+        recorder.start(300);
+
+        // Stoppe après 600ms pour finaliser un fichier audio complet
         setTimeout(() => {
           try {
-            if (recorder.state === "recording") {
+            if (recorder && recorder.state === "recording") {
               recorder.stop();
             }
           } catch {}
-
-          if (this.isStreamingAudio) {
-            captureChunk();
-          }
-        }, 450);
+        }, 600);
       } catch (err) {
         console.warn("⚠️ [VoIP] Erreur capture chunk audio :", err);
+        if (this.isStreamingAudio) {
+          setTimeout(startRecording, 300);
+        }
       }
     };
 
-    captureChunk();
-    console.log("🎙️ [VoIP] Retransmission vocale haute fidélité active (450ms discrete segments)");
+    startRecording();
+    console.log("🎙️ [VoIP] Retransmission vocale continue active (chunks 600ms)");
   }
 
   /**
-   * Joue un fragment audio reçu via une file d'attente séquentielle (zéro coupure ni conflit)
+   * Joue un fragment audio reçu avec lecture chevauchée et limitation de file.
+   * Les chunks obsolètes sont abandonnés pour éviter la latence croissante.
    */
   public playAudioChunk(audioBase64: string) {
     if (!audioBase64 || typeof document === "undefined") return;
 
     this.unlockAudio();
-    this.audioQueue.push(audioBase64);
+
+    // Si la file déborde (> 3 chunks en attente), abandonner les plus anciens
+    // pour garder la latence minimale (< ~1.5s)
+    const MAX_QUEUE = 3;
+    if (this.audioQueue.length >= MAX_QUEUE) {
+      // Vider les chunks obsolètes, ne garder que le dernier
+      const lastChunk = audioBase64;
+      this.audioQueue = [];
+      this.audioQueue.push(lastChunk);
+    } else {
+      this.audioQueue.push(audioBase64);
+    }
 
     if (!this.isPlayingQueue) {
       this.processAudioQueue();
@@ -350,11 +386,13 @@ class WebRTCVoiceManager {
     try {
       const audio = new Audio(chunkData);
       audio.volume = 1.0;
+      audio.preload = "auto";
 
       const advance = () => {
         audio.onended = null;
         audio.onerror = null;
-        this.processAudioQueue();
+        // Léger délai pour permettre le chevauchement avec le chunk suivant
+        setTimeout(() => this.processAudioQueue(), 50);
       };
 
       audio.onended = advance;

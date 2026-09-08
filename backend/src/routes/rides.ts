@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { query } from '../db';
+import { query, withTransaction } from '../db';
 import { calculateAllCategories, calculateVoraFare, validateMotoCapacity } from '../utils/pricing';
 import { validateIntraCity } from '../utils/geofence';
 
@@ -118,62 +118,66 @@ router.post('/', async (req: Request, res: Response) => {
       [effectiveRiderId, `${effectiveRiderId}@vora.cm`]
     );
 
-    // Si paiement par Portefeuille (WALLET), vérifier et déduire le solde
-    let paymentStatus = 'PENDING';
-    if (payment_method === 'WALLET') {
-      const uRes = await query(`SELECT wallet_balance FROM users WHERE id = $1`, [effectiveRiderId]);
-      const balance = Number(uRes.rows[0]?.wallet_balance) || 0;
-      if (balance < fare_fcfa) {
-        return res.status(400).json({
-          success: false,
-          error: `Solde portefeuille insuffisant (${balance.toLocaleString()} FCFA). Le montant requis est de ${fare_fcfa.toLocaleString()} FCFA. Veuillez recharger votre portefeuille ou choisir un autre moyen de paiement.`,
-        });
+    // Utiliser une transaction pour garantir l'atomicité wallet + création course
+    const result = await withTransaction(async (txQuery) => {
+      // Si paiement par Portefeuille (WALLET), vérifier et déduire le solde
+      let paymentStatus = 'PENDING';
+      if (payment_method === 'WALLET') {
+        const uRes = await txQuery(`SELECT wallet_balance FROM users WHERE id = $1`, [effectiveRiderId]);
+        const balance = Number(uRes.rows[0]?.wallet_balance) || 0;
+        if (balance < fare_fcfa) {
+          throw new Error(`Solde portefeuille insuffisant (${balance.toLocaleString()} FCFA). Le montant requis est de ${fare_fcfa.toLocaleString()} FCFA.`);
+        }
+        await txQuery(`UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2`, [fare_fcfa, effectiveRiderId]);
+        paymentStatus = 'PAID';
       }
-      await query(`UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2`, [fare_fcfa, effectiveRiderId]);
-      paymentStatus = 'PAID';
-    }
 
-    const rideId = `VORA-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
+      const rideId = `VORA-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    const insertQuery = `
-      INSERT INTO rides (
-        id, rider_id, origin_address, destination_address,
-        origin_lat, origin_lng, dest_lat, dest_lng,
-        vehicle_type, passenger_count, luggage_count,
-        booked_for_other, passenger_name, passenger_phone,
-        fare_fcfa, multiplier, surge_multiplier, surge_reason, 
-        payment_method, payment_status, otp_code, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, 'SEARCHING')
-      RETURNING *;
-    `;
+      const insertQuery = `
+        INSERT INTO rides (
+          id, rider_id, origin_address, destination_address,
+          origin_lat, origin_lng, dest_lat, dest_lng,
+          vehicle_type, passenger_count, luggage_count,
+          booked_for_other, passenger_name, passenger_phone,
+          fare_fcfa, multiplier, surge_multiplier, surge_reason, 
+          payment_method, payment_status, otp_code, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, 'SEARCHING')
+        RETURNING *;
+      `;
 
-    const result = await query(insertQuery, [
-      rideId,
-      effectiveRiderId,
-      origin_address || 'Carrefour Mokolo, Yaoundé',
-      destination_address || 'Quartier Bastos, Yaoundé',
-      origin_lat || 3.8667,
-      origin_lng || 11.5167,
-      dest_lat || 3.875,
-      dest_lng || 11.52,
-      vehicle_type || 'taxi',
-      passenger_count,
-      luggage_count,
-      !!booked_for_other,
-      passenger_name || null,
-      passenger_phone || null,
-      fare_fcfa || 1500,
-      multiplier || 1.0,
-      surge_multiplier,
-      surge_reason || null,
-      payment_method,
-      paymentStatus,
-      otpCode,
-    ]);
+      return await txQuery(insertQuery, [
+        rideId,
+        effectiveRiderId,
+        origin_address || 'Carrefour Mokolo, Yaoundé',
+        destination_address || 'Quartier Bastos, Yaoundé',
+        origin_lat || 3.8667,
+        origin_lng || 11.5167,
+        dest_lat || 3.875,
+        dest_lng || 11.52,
+        vehicle_type || 'taxi',
+        passenger_count,
+        luggage_count,
+        !!booked_for_other,
+        passenger_name || null,
+        passenger_phone || null,
+        fare_fcfa || 1500,
+        multiplier || 1.0,
+        surge_multiplier,
+        surge_reason || null,
+        payment_method,
+        paymentStatus,
+        otpCode,
+      ]);
+    });
 
     return res.status(201).json({ success: true, ride: result.rows[0] });
-  } catch (error) {
+  } catch (error: any) {
+    // Erreurs métier (validation) → 400
+    if (error?.message?.includes('Solde portefeuille insuffisant')) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
     console.error('Erreur création course:', error);
     return res.status(500).json({ success: false, error: 'Erreur lors de la création de la course' });
   }
@@ -475,36 +479,6 @@ router.post('/:id/cancel', async (req: Request, res: Response) => {
   }
 });
 
-// Récupérer les détails d'une course par ID avec infos chauffeur
-router.get('/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const rideRes = await query(
-      `SELECT r.*, 
-              d.user_id as driver_user_id,
-              u.name as driver_name,
-              u.public_id as driver_public_id,
-              d.vehicle_model,
-              d.vehicle_plate,
-              d.vehicle_image,
-              u.avatar_url as driver_avatar,
-              d.rating as driver_rating,
-              u.phone as driver_phone
-       FROM rides r
-       LEFT JOIN drivers d ON r.driver_id = d.id
-       LEFT JOIN users u ON d.user_id = u.id
-       WHERE r.id = $1`,
-      [id]
-    );
-    if (rideRes.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Course introuvable' });
-    }
-    return res.json({ success: true, ride: rideRes.rows[0] });
-  } catch (err) {
-    console.error('Erreur get ride:', err);
-    return res.status(500).json({ success: false, error: 'Erreur serveur' });
-  }
-});
 
 // Récupérer la course active d'un passager
 router.get('/active/rider/:riderId', async (req: Request, res: Response) => {
