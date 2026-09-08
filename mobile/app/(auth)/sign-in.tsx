@@ -115,6 +115,16 @@ const SignIn = () => {
       }
     }
 
+    // 0. Purger toute session résiduelle : une déconnexion faite dans un
+    //    autre onglet (ou un signOut qui a échoué) laisse une session
+    //    active côté Clerk, et tout nouveau signIn.create échoue alors
+    //    avec « You're already signed in ».
+    try {
+      await signOut();
+    } catch {
+      // Aucune session active — on continue simplement.
+    }
+
     if (!isLoaded || !signIn) {
       setSubmitting(false);
       setErrors({ general: "Le service d'authentification n'est pas encore prêt." });
@@ -143,6 +153,17 @@ const SignIn = () => {
             router.replace("/(driver)/dashboard" as any);
             return;
           }
+        } else if (!ticketRes.ok) {
+          // Ticket refusé (ex. identifiants de test incorrects) — on signale
+          // au lieu de tomber silencieusement sur le flux standard qui peut
+          // buter sur le 2FA.
+          const msg =
+            ticketData?.error ||
+            "Ticket chauffeur refusé. Vérifiez vos identifiants de test.";
+          setErrors({ general: msg });
+          Alert.alert("Connexion chauffeur", msg);
+          setSubmitting(false);
+          return;
         }
       } catch (e) {
         console.warn("Driver ticket auth fallback to standard sign-in:", e);
@@ -168,16 +189,36 @@ const SignIn = () => {
       }
     } catch (err: any) {
       console.error("Sign in error:", err);
+      const rawMsg =
+        err?.errors?.[0]?.longMessage || err?.message || "";
+
+      // Session résiduelle détectée côté serveur : purge puis un seul essai de plus
+      if (rawMsg.toLowerCase().includes("already signed in")) {
+        try {
+          await signOut();
+          const retry = await signIn.create({
+            identifier: emailTrimmed,
+            password: passwordTrimmed,
+          });
+          if (retry.status === "complete") {
+            await setActive({ session: retry.createdSessionId });
+            router.replace(targetRoute as any);
+            return;
+          }
+        } catch {
+          // Le nouvel essai a échoué — message générique ci-dessous.
+        }
+      }
+
       const errMsg =
-        err?.errors?.[0]?.longMessage ||
-        err?.message ||
+        rawMsg ||
         "Identifiants incorrects. Veuillez vérifier votre email et mot de passe.";
       setErrors({ general: errMsg });
       Alert.alert("Échec de connexion", errMsg);
     } finally {
       setSubmitting(false);
     }
-  }, [isLoaded, form, role, signIn, setActive]);
+  }, [isLoaded, form, role, signIn, setActive, signOut]);
 
   return (
     <View style={isWide ? styles.rootWide : styles.rootMobile}>
