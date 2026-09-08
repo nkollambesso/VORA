@@ -19,6 +19,43 @@
 
 ---
 
+## 🚀 Quick Start — Pour les Testeurs (pas besoin d'être expert)
+
+> **Vous voulez juste tester l'application ?** Suivez ces étapes simples.
+
+### Option A : Méthode la plus simple (Docker)
+
+> [!TIP]
+> **Aucune installation technique requise.** Docker fait tout automatiquement.
+
+1. **Installer Docker Desktop** (une seule fois) :
+   - Windows : https://www.docker.com/products/docker-desktop
+   - Mac / Linux : https://docs.docker.com/get-docker/
+2. **Double-cliquer** sur `docker/launch.bat` (Windows) ou `./docker/launch.sh` (Linux/Mac)
+3. **Attendre** la construction automatique (~5-10 min la première fois)
+4. **Ouvrir** le lien affiché dans le navigateur de votre téléphone
+
+### Option B : Méthode sans Docker (Node.js requis)
+
+> [!TIP]
+> **Un seul clic** pour démarrer tout le projet sur votre réseau local.
+
+1. **Installer Node.js** (une seule fois) : https://nodejs.org (version LTS)
+2. **Double-cliquer** sur `demarrer.bat` (Windows) ou `./start` (Linux/Mac)
+3. **Attendre** l'installation automatique (~3-5 min)
+4. **Copier le lien affiché** dans le navigateur Chrome/Safari de votre téléphone
+
+### Option C : Méthode avancée (pour développeurs)
+
+```bash
+cd backend && npm install && npm run dev     # Backend (port 5000)
+cd ../mobile && npm install --legacy-peer-deps && npx expo start --web --port 8081
+```
+
+> **Problème ?** Vérifiez que Node.js v18+ est installé (`node --version`), puis relancez le script.
+
+---
+
 ## Presentation du Projet
 
 **VORA** est une plateforme moderne de transport urbain (VTC / Moto-taxi / Voiture) spécifiquement conçue pour le contexte africain et camerounais. Elle résout les défis majeurs des métropoles africaines :
@@ -204,6 +241,15 @@ VORA/
 │   ├── package.json
 │   └── tsconfig.json
 │
+├── docker/
+│   ├── Dockerfile.backend     # Conteneur Backend Node.js
+│   ├── Dockerfile.web         # Conteneur Frontend Expo
+│   ├── launch.bat             # Lanceur Windows (double-clic)
+│   └── launch.sh              # Lanceur Linux/Mac
+├── docker-compose.yml         # Orchestration Docker (Backend + Frontend)
+├── start.sh                   # Script de démarrage bash (toutes plateformes)
+├── demarrer.bat               # Lanceur Windows (double-clic)
+├── start                      # Lanceur Linux/Mac
 ├── .gitignore
 └── README.md
 ```

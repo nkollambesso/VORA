@@ -95,6 +95,21 @@ echo.
 echo  [5/5] Demarrage des serveurs...
 echo.
 echo  ============================================================
+echo   Choisissez le mode d'acces :
+echo.
+echo   [1] Reseau local (Wi-Fi)    - Accessible sur le meme reseau
+echo   [2] Tunnel public            - Accessible depuis n'importe ou (internet)
+echo.
+echo   Entrez 1 ou 2 : 
+set /p TUNNEL_CHOICE=""
+if "%TUNNEL_CHOICE%"=="2" (
+    echo.
+    echo  [INFO] Installation de localtunnel pour l'acces distant...
+    call npm install -g localtunnel
+    echo  [OK] localtunnel installe.
+)
+echo.
+echo  ============================================================
 echo   Le serveur Backend va demarrer dans une nouvelle fenetre.
 echo   Le serveur Frontend (Expo) va demarrer dans cette fenetre.
 echo.
@@ -152,6 +167,21 @@ echo.
 
 echo  Demarrage du Frontend Expo (cela peut prendre quelques secondes)...
 echo.
+if "%TUNNEL_CHOICE%"=="2" (
+    echo  ============================================================
+echo.
+echo   Mode TUNNEL PUBLIC - accessible depuis n'importe ou :
+echo.
+echo   En attente du tunnel public...
+echo.
+    start /b cmd /c "lt --port 8081 --print-requests > %~dp0logs\tunnel.log 2>&1"
+    timeout /t 15 /nobreak >nul
+    for /f "tokens=*" %%i in ('type %~dp0logs\tunnel.log ^| findstr /r "https://"') do set TUNNEL_URL=%%i
+    echo   Copiez ce lien dans le navigateur de votre telephone :
+echo.
+echo     %TUNNEL_URL%
+echo.
+) else (
 echo  ============================================================
 echo.
 echo   SUR VOTRE TELEPHONE :
@@ -160,6 +190,7 @@ echo.
 echo     http://%LOCAL_IP%:8081
 echo.
 echo   OU scannez le QR code qui va apparaitre ci-dessous.
+)
 echo.
 echo  ============================================================
 echo.

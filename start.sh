@@ -13,6 +13,20 @@
 
 set -euo pipefail
 
+# ─── Flags ──────────────────────────────────────────────────────────────────
+USE_TUNNEL=false
+for arg in "$@"; do
+    case $arg in
+        --remote|-r|--tunnel) USE_TUNNEL=true ;;
+        --help|-h)
+            echo "Usage: ./start.sh [--remote|--tunnel]"
+            echo "  --remote, -r, --tunnel   Activer un tunnel public (localtunnel)"
+            echo "                          pour accéder depuis un téléphone hors du réseau local"
+            exit 0
+            ;;
+    esac
+done
+
 # ─── Couleurs & style ───────────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -275,6 +289,51 @@ start_backend() {
     exit 1
 }
 
+# ─── Tunnel public (localtunnel) ────────────────────────────────────────────
+TUNNEL_URL=""
+
+install_localtunnel() {
+    step "Installation de localtunnel (tunnel public)"
+    if command -v lt &>/dev/null; then
+        ok "localtunnel déjà installé"
+        return 0
+    fi
+    info "Installation de localtunnel..."
+    npm install -g localtunnel > /dev/null 2>&1
+    if ! command -v lt &>/dev/null; then
+        fail "Impossible d'installer localtunnel. Installation manuelle :"
+        echo -e "  ${CYAN}npm install -g localtunnel${RESET}"
+        return 1
+    fi
+    ok "localtunnel installé !"
+}
+
+start_tunnel() {
+    step "Démarrage du tunnel public (localtunnel)"
+    info "Création d'un tunnel HTTPS public vers le frontend..."
+    
+    # Démarrer lt en arrière-plan, capturer l'URL
+    lt --port "$FRONTEND_PORT" --print-requests > "$LOG_DIR/tunnel.log" 2>&1 &
+    TUNNEL_PID=$!
+    
+    # Attendre que l'URL du tunnel soit disponible
+    local attempts=0
+    while [ $attempts -lt 30 ]; do
+        if grep -oE 'https://[a-z0-9-]+\.l\.tunnel\.dev' "$LOG_DIR/tunnel.log" >/dev/null 2>&1; then
+            TUNNEL_URL=$(grep -oE 'https://[a-z0-9-]+\.l\.tunnel\.dev' "$LOG_DIR/tunnel.log" | head -1)
+            ok "Tunnel public actif !"
+            return 0
+        fi
+        sleep 1
+        attempts=$((attempts + 1))
+        printf "\r  ${CYAN}⠋${RESET} Création du tunnel... %ds " $attempts
+    done
+    
+    echo ""
+    warn "Le tunnel met du temps à démarrer. Essayez : lt --port $FRONTEND_PORT"
+    return 0
+}
+
 # ─── Démarrage du Frontend ───────────────────────────────────────────────────
 start_frontend() {
     step "Démarrage du Frontend Expo (port $FRONTEND_PORT)"
@@ -326,11 +385,21 @@ show_links() {
     local lan_url="http://$LOCAL_IP:$FRONTEND_PORT"
     local localhost_url="http://localhost:$FRONTEND_PORT"
     
-    echo -e "  ${BOLD}${CYAN}📱  OUVRIR SUR TÉLÉPHONE :${RESET}"
+    echo -e "  ${BOLD}${CYAN}📱  OUVRIR SUR TÉLÉPHONE (même réseau Wi-Fi) :${RESET}"
     echo -e "  ┌─────────────────────────────────────────────────────────┐"
     echo -e "  │  ${BOLD}$lan_url${RESET}"
     echo -e "  └─────────────────────────────────────────────────────────┘"
     echo ""
+    
+    # Afficher l'URL du tunnel si disponible
+    if [ -n "$TUNNEL_URL" ]; then
+        echo -e "  ${BOLD}${CYAN}🌍  OUVRIR DEPUIS N'IMPORTE OÙ (tunnel public) :${RESET}"
+        echo -e "  ┌─────────────────────────────────────────────────────────┐"
+        echo -e "  │  ${BOLD}$TUNNEL_URL${RESET}"
+        echo -e "  └─────────────────────────────────────────────────────────┘"
+        echo ""
+    fi
+    
     echo -e "  ${BOLD}${CYAN}💻  OUVRIR SUR ORDINATEUR :${RESET}"
     echo -e "  ┌─────────────────────────────────────────────────────────┐"
     echo -e "  │  ${BOLD}$localhost_url${RESET}"
@@ -417,10 +486,16 @@ ENVEOF
     # 7. Démarrage Frontend
     start_frontend
     
-    # 8. Affichage des liens
+    # 8. Tunnel public (optionnel)
+    if [ "$USE_TUNNEL" = true ]; then
+        install_localtunnel
+        start_tunnel
+    fi
+    
+    # 9. Affichage des liens
     show_links
     
-    # 9. Garder le script actif
+    # 10. Garder le script actif
     wait
 }
 
