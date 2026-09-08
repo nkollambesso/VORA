@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# ============================================================================
+#  VORA — Lanceur rapide (Linux / macOS)
+#
+#  Utilisation :
+#    chmod +x start && ./start
+# ============================================================================
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT="$SCRIPT_DIR/start.sh"
+
+if [ ! -f "$SCRIPT" ]; then
+    echo "Erreur : start.sh introuvable dans $SCRIPT_DIR"
+    exit 1
+fi
+
+chmod +x "$SCRIPT"
+exec "$SCRIPT" "$@"
