@@ -12,3 +12,4 @@ mobile/ios/
 # Portable Node.js (auto-downloaded, not tracked)
 node-win-x64/
 node-linux-x64/
+.tools/ 
