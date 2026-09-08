@@ -35,13 +35,13 @@
 3. **Attendre** la construction automatique (~5-10 min la première fois)
 4. **Ouvrir** le lien affiché dans le navigateur de votre téléphone
 
-### Option B : Méthode sans Docker (Node.js requis)
+### Option B : Méthode sans Docker (tout automatique)
 
 > [!TIP]
-> **Un seul clic** pour démarrer tout le projet sur votre réseau local.
+> **Aucune installation requise.** Le script telecharge Node.js automatiquement au premier lancement.
 
-1. **Installer Node.js** (une seule fois) : https://nodejs.org (version LTS)
-2. **Double-cliquer** sur `demarrer.bat` (Windows) ou `./start` (Linux/Mac)
+1. **Double-cliquer** sur `demarrer.bat` (Windows) ou `./start` (Linux/Mac)
+2. Le script telecharge Node.js portable si absent (~1-2 min, premiere fois)
 3. **Attendre** l'installation automatique (~3-5 min)
 4. **Copier le lien affiché** dans le navigateur Chrome/Safari de votre téléphone
 
@@ -70,7 +70,18 @@ Elle combine un **Frontend Web & Mobile sous React Native & Expo Router** (`/mob
 
 ---
 
-## Fonctionnalités Majeures & Innovations VANGUARD
+## Branches du Depots
+
+| Branche | Description | Statut |
+| :--- | :--- | :--- |
+| **`main`** (branche par defaut) | **Version Fonctionnelle (v1)** — Contient l'ensemble des fonctionnalites core du projet : geolocalisation IA, dispatch sequentiel, VoIP in-app, geofencing, paiement Mobile Money, gestion admin, appels d'aide, etc. Cote backend et frontend, toutes les routes API, les socket events et les ecrans mobile sont operationnels. | **Fonctionnelle — Tests fonctions OK** |
+| **`ux-refont`** (ou branche secondaire) | **Refonte UX/UI (v2)** — Branche de refonte visuelle et d'amelioration de l'experience utilisateur. Devises et composants UI reworkes, animations fluidifiees, layout mobile optimise. Les deux branches sont fonctionnelles et testables independamment. Faute de temps pendant le hackathon, cette branche n'a pas ete mergeee dans main, mais elle est accessible et testable. | **Fonctionnelle — Non mergee** |
+
+> **Note** : Les deux branches sont fonctionnelles et testables. La branche `main` est la version complete avec toutes les fonctionnalites. La branche secondaire ameliore le design et l'UX mais n'a pas ete integree dans `main` en raison des contraintes de temps du hackathon.
+
+---
+
+## Fonctionnalites Majeures & Innovations VANGUARD
 
 ### 1. Geolocalisation par IA & Reperes Informels Camerounais
 - Au Cameroun, l'adressage formel par numéros de rue est quasi-inexistant. Les résidents utilisent des repères informels (*"derrière la pharmacie Mvog-Ada"*, *"en face de la boulangerie à Bastos"*, *"au carrefour Mokolo"*).
