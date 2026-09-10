@@ -32,6 +32,7 @@ export const LocationPhotoPicker: React.FC<LocationPhotoPickerProps> = ({
   const [inputPlaceName, setInputPlaceName] = useState(placeName);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [nearbyPhotos, setNearbyPhotos] = useState<any[]>([]);
+  const [matchedPhoto, setMatchedPhoto] = useState<any | null>(null);
 
   // Keep the field synced when the parent resolves the actual user address (async geo)
   useEffect(() => {
@@ -55,9 +56,23 @@ export const LocationPhotoPicker: React.FC<LocationPhotoPickerProps> = ({
     }
   };
 
+  const fetchMatchedPhoto = async () => {
+    try {
+      const backendUrl = getBackendUrl();
+      const params = new URLSearchParams({ lat: String(currentLat), lng: String(currentLng) });
+      if (placeName.trim()) params.append("place_name", placeName.trim());
+      const res = await fetch(`${backendUrl}/api/location-photos/match?${params.toString()}`);
+      const data = await res.json();
+      setMatchedPhoto(data.success && data.photo ? data.photo : null);
+    } catch (err) {
+      console.error("Erreur recherche photo du lieu:", err);
+    }
+  };
+
   useEffect(() => {
     fetchNearbyPhotos();
-  }, [currentLat, currentLng]);
+    fetchMatchedPhoto();
+  }, [currentLat, currentLng, placeName]);
 
   const handlePickPhoto = async () => {
     try {
@@ -119,6 +134,7 @@ export const LocationPhotoPicker: React.FC<LocationPhotoPickerProps> = ({
         setSelectedImage(null);
         setIsModalOpen(false);
         fetchNearbyPhotos();
+        fetchMatchedPhoto();
       } else {
         Alert.alert("Erreur", data.error || "Impossible de sauvegarder la photo.");
       }
@@ -130,8 +146,55 @@ export const LocationPhotoPicker: React.FC<LocationPhotoPickerProps> = ({
     }
   };
 
+  const formatDistance = (meters: number) => {
+    if (meters < 1000) return `${meters} m`;
+    return `${(meters / 1000).toFixed(1)} km`;
+  };
+
+  const formatDate = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+    } catch {
+      return "";
+    }
+  };
+
   return (
     <View style={styles.container}>
+      {/* Photo déjà assignée à ce lieu : affichée avec les infos du lieu */}
+      {matchedPhoto ? (
+        <View style={styles.matchedCard}>
+          <Image source={{ uri: matchedPhoto.image_url }} style={styles.matchedImage} />
+          <View style={styles.matchedInfo}>
+            <View style={styles.matchedBadge}>
+              <Ionicons name="checkmark-circle" size={12} color="#059669" />
+              <Text style={styles.matchedBadgeText}>Repère vérifié - ce lieu a déjà une photo</Text>
+            </View>
+            <Text style={styles.matchedPlaceName} numberOfLines={2}>
+              {matchedPhoto.place_name}
+            </Text>
+            <View style={styles.matchedMetaRow}>
+              <Ionicons name="person-circle-outline" size={12} color="#64748B" />
+              <Text style={styles.matchedMetaText} numberOfLines={1}>
+                {matchedPhoto.uploader_name || "Membre de la communauté"}
+              </Text>
+              {typeof matchedPhoto.distance_m === "number" ? (
+                <>
+                  <Ionicons name="location-outline" size={12} color="#64748B" />
+                  <Text style={styles.matchedMetaText}>{formatDistance(matchedPhoto.distance_m)}</Text>
+                </>
+              ) : null}
+              {matchedPhoto.created_at ? (
+                <>
+                  <Ionicons name="calendar-outline" size={12} color="#64748B" />
+                  <Text style={styles.matchedMetaText}>{formatDate(matchedPhoto.created_at)}</Text>
+                </>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      ) : null}
+
       {/* Bouton pour ajouter un repère visuel */}
       <TouchableOpacity
         style={styles.addLandmarkBtn}
@@ -260,6 +323,56 @@ export const LocationPhotoPicker: React.FC<LocationPhotoPickerProps> = ({
 const styles = StyleSheet.create({
   container: {
     marginVertical: 8,
+  },
+  matchedCard: {
+    flexDirection: "row",
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#059669",
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 10,
+    gap: 12,
+  },
+  matchedImage: {
+    width: 96,
+    height: 96,
+    borderRadius: 10,
+    backgroundColor: "#E2E8F0",
+  },
+  matchedInfo: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  matchedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 4,
+  },
+  matchedBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#059669",
+    letterSpacing: 0.3,
+  },
+  matchedPlaceName: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 4,
+  },
+  matchedMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 4,
+  },
+  matchedMetaText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#64748B",
+    marginRight: 6,
   },
   addLandmarkBtn: {
     backgroundColor: "#F0F9FF",
